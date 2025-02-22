@@ -257,3 +257,113 @@ impl LogManager {
         self.latest_lsn
     }
 }
+
+struct Buffer {
+    page: Page,
+    block_id: Option<BlockId>,
+    tx_num: Option<i32>,
+    lsn: Option<i32>,
+    pin_count: i32,
+}
+
+impl Buffer {
+    fn new() -> Buffer {
+        let page = Page::new(400);
+        let pin_count = 0;
+
+        Buffer {
+            page,
+            block_id: None,
+            tx_num: None,
+            pin_count,
+            lsn: None,
+        }
+    }
+
+    fn content(&self) -> &Page {
+        &self.page
+    }
+
+    fn block_id(&self) -> &Option<BlockId> {
+        &self.block_id
+    }
+
+    fn isPinned(&self) -> bool {
+        self.pin_count > 0
+    }
+
+    fn get_tx_num(&self) -> Option<i32> {
+        self.tx_num
+    }
+
+    fn assign_to_block(&mut self, file_manager: &mut FileManager, block_id: BlockId) {
+        file_manager.read(&block_id, &mut self.page);
+        self.block_id = Some(block_id);
+        self.pin_count = 0;
+    }
+
+    fn flush(&mut self, file_manager: &mut FileManager) {
+        if self.tx_num.is_some() && self.block_id.is_some() {
+            let block_id = self.block_id.as_ref().unwrap();
+            file_manager.write(&block_id, &mut self.page);
+            self.tx_num = None;
+        }
+    }
+
+    fn pin(&mut self) {
+        self.pin_count += 1;
+    }
+
+    fn unpin(&mut self) {
+        self.pin_count -= 1;
+    }
+}
+
+struct BufferManager {
+    buffer_pool: Vec<Buffer>,
+    number_of_buffer: i32,
+    file_manager: FileManager,
+    log_manager: LogManager,
+}
+
+impl BufferManager {
+    fn new(
+        file_manager: FileManager,
+        log_manager: LogManager,
+        number_of_buffer: i32,
+    ) -> BufferManager {
+        let mut buffer_pool = Vec::new();
+        for _ in 0..number_of_buffer {
+            buffer_pool.push(Buffer::new());
+        }
+
+        BufferManager {
+            buffer_pool,
+            number_of_buffer,
+            file_manager,
+            log_manager,
+        }
+    }
+
+    fn try_to_pin(&mut self, block_id: BlockId) {
+        let buffer = self
+            .buffer_pool
+            .iter_mut()
+            .find(|buffer| !buffer.isPinned());
+        if buffer.is_some() {
+            buffer
+                .unwrap()
+                .assign_to_block(&mut self.file_manager, block_id);
+        }
+    }
+
+    fn find_existing_buffer(&self, block_id: BlockId) -> Option<&Buffer> {
+        self.buffer_pool.iter().find(|buffer| {
+            buffer.block_id().is_some() && buffer.block_id().as_ref().unwrap().equals(&block_id)
+        })
+    }
+
+    fn pin(&mut self, block_id: BlockId) {
+        self.try_to_pin(block_id);
+    }
+}
