@@ -10,22 +10,32 @@ use std::{
 fn main() {
     println!("Hello, world!");
 
-    let block = BlockId::new("./data/test.txt".to_string(), 0);
+    // let block = BlockId::new("./data/test.txt".to_string(), 0);
 
-    let mut page = Page::new(400);
-    page.set_string(88, "Hello, world! from page");
+    // let mut page = Page::new(400);
 
-    let mut file_manager = FileManager::new(Path::new("data"), 400);
+    // page.set_string(88, "Hello, world! from page");
 
-    file_manager.write(&block, &mut page);
+    let file_manager = FileManager::new(Path::new("data"), 400);
 
-    let mut page2 = Page::new(400);
+    // file_manager.write(&block, &mut page);
 
-    file_manager.read(&block, &mut page2);
+    // let mut page2 = Page::new(400);
 
-    println!("{}", page2.get_string(88));
+    // file_manager.read(&block, &mut page2);
+
+    // println!("{}", page2.get_string(88));
 
     // let mut file = file_manager.get_file("./data/test.txt");
+
+    let mut log_manager = LogManager::new(file_manager, "data/log".to_string());
+
+    for i in 0..10 {
+        let message = format!("Hello, world! from log {}", i);
+        let lsn = log_manager.append_record(message.as_bytes());
+    }
+
+    log_manager.flush();
 }
 
 struct BlockId {
@@ -206,6 +216,8 @@ impl LogManager {
 
         if log_size == 0 {
             block_id = file_manager.append(&log_file);
+            log_page.set_integer(0, file_manager.block_size as i32);
+            file_manager.write(&block_id, &mut log_page);
         } else {
             block_id = BlockId::new(log_file.to_string(), log_size as u64 - 1);
             file_manager.read(&block_id, &mut log_page);
@@ -232,6 +244,7 @@ impl LogManager {
 
     fn append_new_block(&mut self) -> BlockId {
         let block_id = self.file_manager.append(&self.log_file);
+        self.log_page = Page::new(400);
         self.log_page
             .set_integer(0, self.file_manager.block_size as i32);
         self.file_manager.write(&block_id, &mut self.log_page);
@@ -255,6 +268,47 @@ impl LogManager {
         self.log_page.set_bytes(offset, record);
         self.latest_lsn += 1;
         self.latest_lsn
+    }
+}
+
+struct LogIterator {
+    current_block_id: BlockId,
+    current_offset: usize,
+    log_page: Page,
+}
+
+impl LogIterator {
+    fn new(file_manager: &mut FileManager, block_id: BlockId) -> LogIterator {
+        let mut log_page = Page::new(400);
+        file_manager.read(&block_id, &mut log_page);
+        let current_offset = log_page.get_integer(0) as usize;
+
+        LogIterator {
+            current_block_id: block_id,
+            current_offset,
+            log_page,
+        }
+    }
+
+    fn has_next(&self, file_manager: &FileManager) -> bool {
+        self.current_offset < file_manager.block_size
+            || self.current_block_id.get_block_number() > 0
+    }
+
+    fn next(&mut self, file_manager: &mut FileManager) -> Vec<u8> {
+        let block_size = file_manager.block_size;
+        if block_size == self.current_offset {
+            self.current_block_id = BlockId::new(
+                self.current_block_id.get_file_name().to_string(),
+                self.current_block_id.get_block_number() - 1,
+            );
+            file_manager.read(&self.current_block_id, &mut self.log_page);
+            self.current_offset = self.log_page.get_integer(0) as usize;
+        }
+
+        let record = self.log_page.get_bytes(self.current_offset);
+        self.current_offset += 4 + record.len() as usize;
+        record
     }
 }
 
@@ -288,7 +342,7 @@ impl Buffer {
         &self.block_id
     }
 
-    fn isPinned(&self) -> bool {
+    fn is_pinned(&self) -> bool {
         self.pin_count > 0
     }
 
@@ -345,20 +399,38 @@ impl BufferManager {
         }
     }
 
-    fn try_to_pin(&mut self, block_id: BlockId) {
-        let buffer = self
-            .buffer_pool
-            .iter_mut()
-            .find(|buffer| !buffer.isPinned());
-        if buffer.is_some() {
-            buffer
-                .unwrap()
-                .assign_to_block(&mut self.file_manager, block_id);
+    fn try_to_pin(&mut self, block_id: BlockId) -> Option<&mut Buffer> {
+        let mut iter_mut = self.buffer_pool.iter_mut();
+        let buffer = iter_mut.find(|buffer| {
+            buffer.block_id().is_some() && buffer.block_id().as_ref().unwrap().equals(&block_id)
+        });
+
+        if let Some(buffer) = buffer {
+            if !buffer.is_pinned() {
+                self.number_of_buffer = self.number_of_buffer - 1;
+            }
+
+            buffer.pin();
+            return Some(buffer);
+        } else {
+            let buffer = iter_mut.find(|buffer| !buffer.is_pinned());
+
+            if let Some(buffer) = buffer {
+                buffer.assign_to_block(&mut self.file_manager, block_id);
+                if !buffer.is_pinned() {
+                    self.number_of_buffer = self.number_of_buffer - 1;
+                }
+
+                buffer.pin();
+                return Some(buffer);
+            } else {
+                None
+            }
         }
     }
 
-    fn find_existing_buffer(&self, block_id: BlockId) -> Option<&Buffer> {
-        self.buffer_pool.iter().find(|buffer| {
+    fn find_existing_buffer(&mut self, block_id: &BlockId) -> Option<&mut Buffer> {
+        self.buffer_pool.iter_mut().find(|buffer| {
             buffer.block_id().is_some() && buffer.block_id().as_ref().unwrap().equals(&block_id)
         })
     }
