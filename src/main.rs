@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     collections::HashMap,
     fs::{self, File},
     io::Write,
@@ -34,16 +35,17 @@ fn main() {
 
     let block_id = BlockId::new("data/test.txt".to_string(), 0);
 
-    let mut buffer = buffer_manager.pin(block_id);
+    let buffer = buffer_manager.pin(block_id);
 
     if let Some(buffer) = buffer {
-        let mut page = buffer.content();
+        let mut buffer_ref = buffer.borrow_mut();
+        let page = buffer_ref.content();
         let integer_1 = page.get_integer(80);
         println!("{}", integer_1);
-
         page.set_integer(80, integer_1 + 1);
+        buffer_ref.set_modified(1, 0);
 
-        buffer.set_modified(1, 0);
+        drop(buffer_ref);
 
         buffer_manager.flush_all(1);
     }
@@ -405,7 +407,7 @@ impl Buffer {
 }
 
 struct BufferManager {
-    buffer_pool: Vec<Buffer>,
+    buffer_pool: Vec<Rc<RefCell<Buffer>>>,
     number_of_buffer: i32,
     file_manager: FileManager,
     log_manager: LogManager,
@@ -419,7 +421,7 @@ impl BufferManager {
     ) -> BufferManager {
         let mut buffer_pool = Vec::new();
         for _ in 0..number_of_buffer {
-            buffer_pool.push(Buffer::new());
+            buffer_pool.push(Rc::new(RefCell::new(Buffer::new())));
         }
 
         BufferManager {
@@ -431,49 +433,57 @@ impl BufferManager {
     }
 
     fn flush_all(&mut self, tx_num: i32) {
-        for buffer in self.buffer_pool.iter_mut() {
+        for buffer in self.buffer_pool.iter() {
+            let mut buffer = buffer.borrow_mut();
             if buffer.tx_num.is_some() && buffer.tx_num.unwrap() == tx_num {
                 buffer.flush(&mut self.file_manager);
             }
         }
     }
 
-    fn try_to_pin(&mut self, block_id: BlockId) -> Option<&mut Buffer> {
-        let buffer = self.buffer_pool.iter_mut().find(|buffer| {
+    fn try_to_pin(&mut self, block_id: BlockId) -> Option<&Rc<RefCell<Buffer>>> {
+        let buffer = self.buffer_pool.iter().find(|buffer| {
+            let buffer = buffer.borrow();
             (buffer.block_id().is_some() && buffer.block_id().as_ref().unwrap().equals(&block_id))
                 || (!buffer.is_pinned())
         });
 
         if let Some(buffer) = buffer {
-            if buffer.block_id().is_some() && buffer.block_id().as_ref().unwrap().equals(&block_id)
+            let mut buffer_mut = buffer.borrow_mut();
+            if buffer_mut.block_id().is_some()
+                && buffer_mut.block_id().as_ref().unwrap().equals(&block_id)
             {
-                if !buffer.is_pinned() {
+                if !buffer_mut.is_pinned() {
                     self.number_of_buffer = self.number_of_buffer - 1;
+                    buffer_mut.pin();
+                    buffer_mut.assign_to_block(&mut self.file_manager, block_id);
+                    if !buffer_mut.is_pinned() {
+                        self.number_of_buffer = self.number_of_buffer - 1;
+                    }
+                    buffer_mut.pin();
+                    return Some(buffer);
+                    // !buffer.is_pinned()の場合の処理
                 }
-                buffer.pin();
-            } else {
-                buffer.assign_to_block(&mut self.file_manager, block_id);
-                if !buffer.is_pinned() {
-                    self.number_of_buffer = self.number_of_buffer - 1;
-                }
-
-                buffer.pin();
                 return Some(buffer);
-                // !buffer.is_pinned()の場合の処理
             }
-            return Some(buffer);
         }
 
         return None;
     }
 
-    fn find_existing_buffer(&mut self, block_id: &BlockId) -> Option<&mut Buffer> {
+    fn find_existing_buffer(&mut self, block_id: &BlockId) -> Option<&mut Rc<RefCell<Buffer>>> {
         self.buffer_pool.iter_mut().find(|buffer| {
-            buffer.block_id().is_some() && buffer.block_id().as_ref().unwrap().equals(&block_id)
+            buffer.borrow_mut().block_id().is_some()
+                && buffer
+                    .borrow_mut()
+                    .block_id()
+                    .as_ref()
+                    .unwrap()
+                    .equals(&block_id)
         })
     }
 
-    fn pin(&mut self, block_id: BlockId) -> Option<&mut Buffer> {
+    fn pin(&mut self, block_id: BlockId) -> Option<&Rc<RefCell<Buffer>>> {
         return self.try_to_pin(block_id);
     }
 }
@@ -488,7 +498,7 @@ impl LockTable {
         LockTable { locks }
     }
 
-    fn s_lock(&mut self, block_id: BlockId, tx_num: i32) {
+    fn s_lock(&mut self, block_id: BlockId) {
         if self.has_xlock(&block_id) {
             panic!("lock conflict");
         }
@@ -536,5 +546,130 @@ impl LockTable {
         }
 
         return 0;
+    }
+}
+
+struct ConcurrencyManager {
+    locks: HashMap<BlockId, String>,
+}
+impl ConcurrencyManager {
+    fn new() -> ConcurrencyManager {
+        let locks: HashMap<BlockId, String> = HashMap::new();
+        ConcurrencyManager { locks }
+    }
+
+    fn s_lock(&mut self, block_id: BlockId, lock_table: &mut LockTable) {
+        let lock_value = self.locks.get(&block_id);
+        if lock_value.is_none() {
+            lock_table.s_lock(block_id.clone());
+            self.locks.insert(block_id, "S".to_string());
+        }
+    }
+
+    fn x_lock(&mut self, block_id: BlockId, lock_table: &mut LockTable) {
+        if !self.has_xlock(&block_id) {
+            self.s_lock(block_id.clone(), lock_table);
+            lock_table.x_lock(block_id.clone());
+            self.locks.insert(block_id, "X".to_string());
+        }
+    }
+
+    fn has_xlock(&self, block_id: &BlockId) -> bool {
+        let lock_value = self.locks.get(block_id);
+
+        if let Some(lock_value) = lock_value {
+            if lock_value == "X" {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    fn release(&mut self, lock_table: &mut LockTable) {
+        for (key, value) in self.locks.iter() {
+            lock_table.unlock(key);
+        }
+        self.locks.clear();
+    }
+}
+
+struct BufferList {
+    buffer_manager: BufferManager,
+    buffers: HashMap<BlockId, Rc<RefCell<Buffer>>>,
+    pins: Vec<BlockId>,
+}
+
+impl BufferList {
+    fn new(buffer_manager: BufferManager) -> BufferList {
+        BufferList {
+            buffer_manager,
+            buffers: HashMap::new(),
+            pins: Vec::new(),
+        }
+    }
+
+    fn pin(&mut self, block_id: BlockId) {
+        if let Some(buffer) = self.buffer_manager.pin(block_id.clone()) {
+            self.buffers.insert(block_id.clone(), Rc::clone(&buffer));
+            self.pins.push(block_id);
+        }
+    }
+
+    fn get_buffer(&mut self, block_id: BlockId) -> Option<&Rc<RefCell<Buffer>>> {
+        let buffer = self.buffers.get(&block_id);
+        return buffer;
+    }
+}
+
+struct Transaction {
+    tx_num: i32,
+    buffer_manager: BufferManager,
+    log_manager: LogManager,
+    lock_table: LockTable,
+    concurrency_manager: ConcurrencyManager,
+}
+
+impl Transaction {
+    fn new(
+        tx_num: i32,
+        buffer_manager: BufferManager,
+        log_manager: LogManager,
+        lock_table: LockTable,
+        concurrency_manager: ConcurrencyManager,
+    ) -> Transaction {
+        Transaction {
+            tx_num,
+            buffer_manager,
+            log_manager,
+            lock_table,
+            concurrency_manager,
+        }
+    }
+
+    fn pin(&mut self, block_id: BlockId) {
+        self.buffer_manager.pin(block_id);
+    }
+
+    fn read(&mut self, block_id: BlockId) {
+        self.concurrency_manager
+            .s_lock(block_id.clone(), &mut self.lock_table);
+        self.pin(block_id);
+    }
+
+    fn write(&mut self, block_id: BlockId) {
+        self.concurrency_manager
+            .x_lock(block_id.clone(), &mut self.lock_table);
+        self.pin(block_id);
+    }
+
+    fn commit(&mut self) {
+        self.log_manager
+            .flush(&mut self.buffer_manager.file_manager);
+        self.concurrency_manager.release(&mut self.lock_table);
+    }
+
+    fn rollback(&mut self) {
+        self.concurrency_manager.release(&mut self.lock_table);
     }
 }
