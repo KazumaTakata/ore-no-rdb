@@ -16,7 +16,7 @@ fn main() {
 
     // page.set_string(88, "Hello, world! from page");
 
-    let file_manager = FileManager::new(Path::new("data"), 400);
+    let mut file_manager = FileManager::new(Path::new("data"), 400);
 
     // file_manager.write(&block, &mut page);
 
@@ -28,19 +28,47 @@ fn main() {
 
     // let mut file = file_manager.get_file("./data/test.txt");
 
-    let mut log_manager = LogManager::new(file_manager, "data/log".to_string());
+    let mut log_manager = LogManager::new(&mut file_manager, "data/log".to_string());
 
-    for i in 0..10 {
-        let message = format!("Hello, world! from log {}", i);
-        let lsn = log_manager.append_record(message.as_bytes());
+    let mut buffer_manager = BufferManager::new(file_manager, log_manager, 10);
+
+    let block_id = BlockId::new("data/test.txt".to_string(), 0);
+
+    let mut buffer = buffer_manager.pin(block_id);
+
+    if let Some(buffer) = buffer {
+        let mut page = buffer.content();
+        let integer_1 = page.get_integer(80);
+        println!("{}", integer_1);
+
+        page.set_integer(80, integer_1 + 1);
+
+        buffer.set_modified(1, 0);
+
+        buffer_manager.flush_all(1);
     }
 
-    log_manager.flush();
+    // for i in 0..10 {
+    //     let message = format!("Hello, world! from log {}", i);
+    //     let lsn = log_manager.append_record(message.as_bytes());
+    // }
+
+    // log_manager.flush();
 }
 
+use std::hash::{Hash, Hasher};
+
+#[derive(Eq, PartialEq, Clone, Debug)]
 struct BlockId {
     file_name: String,
     block_number: u64,
+}
+
+impl Hash for BlockId {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.file_name.hash(state);
+        self.block_number.hash(state);
+    }
 }
 
 impl BlockId {
@@ -198,7 +226,6 @@ impl FileManager {
 }
 
 struct LogManager {
-    file_manager: FileManager,
     current_block_id: BlockId,
     log_file: String,
     log_page: Page,
@@ -207,7 +234,7 @@ struct LogManager {
 }
 
 impl LogManager {
-    fn new(mut file_manager: FileManager, log_file: String) -> LogManager {
+    fn new(file_manager: &mut FileManager, log_file: String) -> LogManager {
         let log_size = file_manager.length(&log_file);
 
         let mut log_page = Page::new(400);
@@ -227,7 +254,6 @@ impl LogManager {
         let latest_saved_lsn = 0;
 
         LogManager {
-            file_manager,
             current_block_id: block_id,
             log_file,
             log_page,
@@ -236,30 +262,28 @@ impl LogManager {
         }
     }
 
-    fn flush(&mut self) {
-        self.file_manager
-            .write(&self.current_block_id, &mut self.log_page);
+    fn flush(&mut self, file_manager: &mut FileManager) {
+        file_manager.write(&self.current_block_id, &mut self.log_page);
         self.latest_saved_lsn = self.latest_lsn;
     }
 
-    fn append_new_block(&mut self) -> BlockId {
-        let block_id = self.file_manager.append(&self.log_file);
+    fn append_new_block(&mut self, file_manager: &mut FileManager) -> BlockId {
+        let block_id = file_manager.append(&self.log_file);
         self.log_page = Page::new(400);
-        self.log_page
-            .set_integer(0, self.file_manager.block_size as i32);
-        self.file_manager.write(&block_id, &mut self.log_page);
+        self.log_page.set_integer(0, file_manager.block_size as i32);
+        file_manager.write(&block_id, &mut self.log_page);
         block_id
     }
 
-    fn append_record(&mut self, record: &[u8]) -> i32 {
+    fn append_record(&mut self, record: &[u8], file_manager: &mut FileManager) -> i32 {
         let record_length = record.len();
         let mut boundary = self.log_page.get_integer(0);
 
         let bytes_needed = 4 + record_length;
 
         if (boundary as usize) < bytes_needed + 4 {
-            self.flush();
-            self.current_block_id = self.append_new_block();
+            self.flush(file_manager);
+            self.current_block_id = self.append_new_block(file_manager);
             boundary = self.log_page.get_integer(0);
         }
 
@@ -334,8 +358,15 @@ impl Buffer {
         }
     }
 
-    fn content(&self) -> &Page {
-        &self.page
+    fn content(&mut self) -> &mut Page {
+        &mut self.page
+    }
+
+    fn set_modified(&mut self, tx_num: i32, lsn: i32) {
+        self.tx_num = Some(tx_num);
+        if lsn >= 0 {
+            self.lsn = Some(lsn);
+        }
     }
 
     fn block_id(&self) -> &Option<BlockId> {
@@ -399,23 +430,28 @@ impl BufferManager {
         }
     }
 
+    fn flush_all(&mut self, tx_num: i32) {
+        for buffer in self.buffer_pool.iter_mut() {
+            if buffer.tx_num.is_some() && buffer.tx_num.unwrap() == tx_num {
+                buffer.flush(&mut self.file_manager);
+            }
+        }
+    }
+
     fn try_to_pin(&mut self, block_id: BlockId) -> Option<&mut Buffer> {
-        let mut iter_mut = self.buffer_pool.iter_mut();
-        let buffer = iter_mut.find(|buffer| {
-            buffer.block_id().is_some() && buffer.block_id().as_ref().unwrap().equals(&block_id)
+        let buffer = self.buffer_pool.iter_mut().find(|buffer| {
+            (buffer.block_id().is_some() && buffer.block_id().as_ref().unwrap().equals(&block_id))
+                || (!buffer.is_pinned())
         });
 
         if let Some(buffer) = buffer {
-            if !buffer.is_pinned() {
-                self.number_of_buffer = self.number_of_buffer - 1;
-            }
-
-            buffer.pin();
-            return Some(buffer);
-        } else {
-            let buffer = iter_mut.find(|buffer| !buffer.is_pinned());
-
-            if let Some(buffer) = buffer {
+            if buffer.block_id().is_some() && buffer.block_id().as_ref().unwrap().equals(&block_id)
+            {
+                if !buffer.is_pinned() {
+                    self.number_of_buffer = self.number_of_buffer - 1;
+                }
+                buffer.pin();
+            } else {
                 buffer.assign_to_block(&mut self.file_manager, block_id);
                 if !buffer.is_pinned() {
                     self.number_of_buffer = self.number_of_buffer - 1;
@@ -423,10 +459,12 @@ impl BufferManager {
 
                 buffer.pin();
                 return Some(buffer);
-            } else {
-                None
+                // !buffer.is_pinned()の場合の処理
             }
+            return Some(buffer);
         }
+
+        return None;
     }
 
     fn find_existing_buffer(&mut self, block_id: &BlockId) -> Option<&mut Buffer> {
@@ -435,7 +473,68 @@ impl BufferManager {
         })
     }
 
-    fn pin(&mut self, block_id: BlockId) {
-        self.try_to_pin(block_id);
+    fn pin(&mut self, block_id: BlockId) -> Option<&mut Buffer> {
+        return self.try_to_pin(block_id);
+    }
+}
+
+struct LockTable {
+    locks: HashMap<BlockId, i32>,
+}
+
+impl LockTable {
+    fn new() -> LockTable {
+        let locks: HashMap<BlockId, i32> = HashMap::new();
+        LockTable { locks }
+    }
+
+    fn s_lock(&mut self, block_id: BlockId, tx_num: i32) {
+        if self.has_xlock(&block_id) {
+            panic!("lock conflict");
+        }
+
+        let lock = self.get_lock_value(&block_id);
+        self.locks.insert(block_id, lock + 1);
+    }
+
+    fn x_lock(&mut self, block_id: BlockId) {
+        if self.has_other_slock(&block_id) || self.has_xlock(&block_id) {
+            panic!("lock conflict");
+        }
+        self.locks.insert(block_id, -1);
+    }
+
+    fn has_xlock(&self, block_id: &BlockId) -> bool {
+        let lock_value = self.locks.get(block_id);
+
+        if let Some(lock_value) = lock_value {
+            return *lock_value < 0;
+        }
+
+        return false;
+    }
+
+    fn has_other_slock(&self, block_id: &BlockId) -> bool {
+        return self.get_lock_value(block_id) > 1;
+    }
+
+    fn unlock(&mut self, block_id: &BlockId) {
+        let val = self.get_lock_value(block_id);
+
+        if (val > 1) {
+            self.locks.insert(block_id.clone(), val - 1);
+        } else {
+            self.locks.remove(block_id);
+        }
+    }
+
+    fn get_lock_value(&self, block_id: &BlockId) -> i32 {
+        let lock_value = self.locks.get(block_id);
+
+        if let Some(lock_value) = lock_value {
+            return *lock_value;
+        }
+
+        return 0;
     }
 }
