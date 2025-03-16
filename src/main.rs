@@ -29,26 +29,24 @@ fn main() {
 
     // let mut file = file_manager.get_file("./data/test.txt");
 
-    let mut log_manager = LogManager::new(&mut file_manager, "data/log".to_string());
+    // let mut log_manager = LogManager::new(&mut file_manager, "data/log".to_string());
 
-    let mut buffer_manager = BufferManager::new(file_manager, log_manager, 10);
+    // let block_id = BlockId::new("data/test.txt".to_string(), 0);
 
-    let block_id = BlockId::new("data/test.txt".to_string(), 0);
+    // let buffer = buffer_manager.pin(block_id);
 
-    let buffer = buffer_manager.pin(block_id);
+    // if let Some(buffer) = buffer {
+    //     let mut buffer_ref = buffer.borrow_mut();
+    //     let page = buffer_ref.content();
+    //     let integer_1 = page.get_integer(80);
+    //     println!("{}", integer_1);
+    //     page.set_integer(80, integer_1 + 1);
+    //     buffer_ref.set_modified(1, 0);
 
-    if let Some(buffer) = buffer {
-        let mut buffer_ref = buffer.borrow_mut();
-        let page = buffer_ref.content();
-        let integer_1 = page.get_integer(80);
-        println!("{}", integer_1);
-        page.set_integer(80, integer_1 + 1);
-        buffer_ref.set_modified(1, 0);
+    //     drop(buffer_ref);
 
-        drop(buffer_ref);
-
-        buffer_manager.flush_all(1);
-    }
+    //     buffer_manager.flush_all(1);
+    // }
 
     // for i in 0..10 {
     //     let message = format!("Hello, world! from log {}", i);
@@ -75,6 +73,11 @@ impl Hash for BlockId {
 
 impl BlockId {
     fn new(file_name: String, block_number: u64) -> BlockId {
+        // ファイルが存在していなければ作成
+        if !Path::new(&file_name).exists() {
+            File::create(&file_name).unwrap();
+        }
+
         BlockId {
             file_name,
             block_number,
@@ -237,6 +240,11 @@ struct LogManager {
 
 impl LogManager {
     fn new(file_manager: &mut FileManager, log_file: String) -> LogManager {
+        // ログファイルが存在していなければ作成
+        if !Path::new(&log_file).exists() {
+            File::create(&log_file).unwrap();
+        }
+
         let log_size = file_manager.length(&log_file);
 
         let mut log_page = Page::new(400);
@@ -409,16 +417,10 @@ impl Buffer {
 struct BufferManager {
     buffer_pool: Vec<Rc<RefCell<Buffer>>>,
     number_of_buffer: i32,
-    file_manager: FileManager,
-    log_manager: LogManager,
 }
 
 impl BufferManager {
-    fn new(
-        file_manager: FileManager,
-        log_manager: LogManager,
-        number_of_buffer: i32,
-    ) -> BufferManager {
+    fn new(number_of_buffer: i32) -> BufferManager {
         let mut buffer_pool = Vec::new();
         for _ in 0..number_of_buffer {
             buffer_pool.push(Rc::new(RefCell::new(Buffer::new())));
@@ -427,45 +429,54 @@ impl BufferManager {
         BufferManager {
             buffer_pool,
             number_of_buffer,
-            file_manager,
-            log_manager,
         }
     }
 
-    fn flush_all(&mut self, tx_num: i32) {
+    fn flush_all(&mut self, file_manager: &mut FileManager, tx_num: i32) {
         for buffer in self.buffer_pool.iter() {
             let mut buffer = buffer.borrow_mut();
             if buffer.tx_num.is_some() && buffer.tx_num.unwrap() == tx_num {
-                buffer.flush(&mut self.file_manager);
+                buffer.flush(file_manager);
             }
         }
     }
 
-    fn try_to_pin(&mut self, block_id: BlockId) -> Option<&Rc<RefCell<Buffer>>> {
-        let buffer = self.buffer_pool.iter().find(|buffer| {
+    fn try_to_pin(
+        &mut self,
+        file_manager: &mut FileManager,
+        block_id: BlockId,
+    ) -> Option<&Rc<RefCell<Buffer>>> {
+        let mut buffer = self.buffer_pool.iter().find(|buffer| {
             let buffer = buffer.borrow();
-            (buffer.block_id().is_some() && buffer.block_id().as_ref().unwrap().equals(&block_id))
-                || (!buffer.is_pinned())
+            return buffer.block_id().is_some()
+                && buffer.block_id().as_ref().unwrap().equals(&block_id);
         });
+
+        if buffer.is_none() {
+            buffer = self.buffer_pool.iter().find(|buffer| {
+                let buffer = buffer.borrow();
+                !buffer.is_pinned()
+            });
+
+            if buffer.is_none() {
+                return None;
+            }
+
+            if buffer.is_some() {
+                let mut buffer = buffer.unwrap().borrow_mut();
+                self.number_of_buffer = self.number_of_buffer - 1;
+                buffer.assign_to_block(file_manager, block_id);
+            }
+        }
 
         if let Some(buffer) = buffer {
             let mut buffer_mut = buffer.borrow_mut();
-            if buffer_mut.block_id().is_some()
-                && buffer_mut.block_id().as_ref().unwrap().equals(&block_id)
-            {
-                if !buffer_mut.is_pinned() {
-                    self.number_of_buffer = self.number_of_buffer - 1;
-                    buffer_mut.pin();
-                    buffer_mut.assign_to_block(&mut self.file_manager, block_id);
-                    if !buffer_mut.is_pinned() {
-                        self.number_of_buffer = self.number_of_buffer - 1;
-                    }
-                    buffer_mut.pin();
-                    return Some(buffer);
-                    // !buffer.is_pinned()の場合の処理
-                }
-                return Some(buffer);
+            if !buffer_mut.is_pinned() {
+                self.number_of_buffer = self.number_of_buffer - 1;
             }
+            buffer_mut.pin();
+
+            return Some(buffer);
         }
 
         return None;
@@ -483,8 +494,12 @@ impl BufferManager {
         })
     }
 
-    fn pin(&mut self, block_id: BlockId) -> Option<&Rc<RefCell<Buffer>>> {
-        return self.try_to_pin(block_id);
+    fn pin(
+        &mut self,
+        file_manager: &mut FileManager,
+        block_id: BlockId,
+    ) -> Option<&Rc<RefCell<Buffer>>> {
+        return self.try_to_pin(file_manager, block_id);
     }
 }
 
@@ -595,22 +610,25 @@ impl ConcurrencyManager {
 }
 
 struct BufferList {
-    buffer_manager: BufferManager,
     buffers: HashMap<BlockId, Rc<RefCell<Buffer>>>,
     pins: Vec<BlockId>,
 }
 
 impl BufferList {
-    fn new(buffer_manager: BufferManager) -> BufferList {
+    fn new() -> BufferList {
         BufferList {
-            buffer_manager,
             buffers: HashMap::new(),
             pins: Vec::new(),
         }
     }
 
-    fn pin(&mut self, block_id: BlockId) {
-        if let Some(buffer) = self.buffer_manager.pin(block_id.clone()) {
+    fn pin(
+        &mut self,
+        block_id: BlockId,
+        file_manager: &mut FileManager,
+        buffer_manager: &mut BufferManager,
+    ) {
+        if let Some(buffer) = buffer_manager.pin(file_manager, block_id.clone()) {
             self.buffers.insert(block_id.clone(), Rc::clone(&buffer));
             self.pins.push(block_id);
         }
@@ -624,52 +642,165 @@ impl BufferList {
 
 struct Transaction {
     tx_num: i32,
-    buffer_manager: BufferManager,
-    log_manager: LogManager,
-    lock_table: LockTable,
     concurrency_manager: ConcurrencyManager,
 }
 
 impl Transaction {
-    fn new(
-        tx_num: i32,
-        buffer_manager: BufferManager,
-        log_manager: LogManager,
-        lock_table: LockTable,
-        concurrency_manager: ConcurrencyManager,
-    ) -> Transaction {
+    fn new(tx_num: i32, concurrency_manager: ConcurrencyManager) -> Transaction {
         Transaction {
             tx_num,
-            buffer_manager,
-            log_manager,
-            lock_table,
             concurrency_manager,
         }
     }
 
-    fn pin(&mut self, block_id: BlockId) {
-        self.buffer_manager.pin(block_id);
+    fn pin(
+        &mut self,
+        file_manager: &mut FileManager,
+        buffer_list: &mut BufferList,
+        buffer_manager: &mut BufferManager,
+        block_id: BlockId,
+    ) {
+        buffer_list.pin(block_id, file_manager, buffer_manager);
     }
 
-    fn read(&mut self, block_id: BlockId) {
-        self.concurrency_manager
-            .s_lock(block_id.clone(), &mut self.lock_table);
-        self.pin(block_id);
+    fn commit(
+        &mut self,
+        log_manager: &mut LogManager,
+        file_manager: &mut FileManager,
+        lock_table: &mut LockTable,
+        buffer_manager: &mut BufferManager,
+    ) {
+        log_manager.flush(file_manager);
+        self.concurrency_manager.release(lock_table);
+        buffer_manager.flush_all(file_manager, self.tx_num);
     }
 
-    fn write(&mut self, block_id: BlockId) {
-        self.concurrency_manager
-            .x_lock(block_id.clone(), &mut self.lock_table);
-        self.pin(block_id);
+    fn rollback(&mut self, lock_table: &mut LockTable) {
+        self.concurrency_manager.release(lock_table);
     }
 
-    fn commit(&mut self) {
-        self.log_manager
-            .flush(&mut self.buffer_manager.file_manager);
-        self.concurrency_manager.release(&mut self.lock_table);
+    fn set_integer(
+        &mut self,
+        buffer_list: &mut BufferList,
+        block_id: BlockId,
+        offset: usize,
+        value: i32,
+    ) {
+        let buffer = buffer_list.get_buffer(block_id).unwrap();
+        let mut buffer = buffer.borrow_mut();
+        let page = buffer.content();
+        page.set_integer(offset, value);
+        buffer.set_modified(self.tx_num, -1);
     }
 
-    fn rollback(&mut self) {
-        self.concurrency_manager.release(&mut self.lock_table);
+    fn set_string(
+        &mut self,
+        buffer_list: &mut BufferList,
+        block_id: BlockId,
+        offset: usize,
+        value: &str,
+    ) {
+        let buffer = buffer_list.get_buffer(block_id).unwrap();
+        let mut buffer = buffer.borrow_mut();
+        let page = buffer.content();
+        page.set_string(offset, value);
+        buffer.set_modified(self.tx_num, -1);
+    }
+
+    fn get_integer(
+        &mut self,
+        buffer_list: &mut BufferList,
+        block_id: BlockId,
+        offset: usize,
+    ) -> i32 {
+        let buffer = buffer_list.get_buffer(block_id).unwrap();
+        let mut buffer = buffer.borrow_mut();
+        let page = buffer.content();
+        page.get_integer(offset)
+    }
+
+    fn get_string(
+        &mut self,
+        buffer_list: &mut BufferList,
+        block_id: BlockId,
+        offset: usize,
+    ) -> String {
+        let buffer = buffer_list.get_buffer(block_id).unwrap();
+        let mut buffer = buffer.borrow_mut();
+        let page = buffer.content();
+        page.get_string(offset)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    // FileManagerのテスト
+    #[test]
+    fn test_file_manager_read_write() {
+        let test_dir = Path::new("data");
+        let block_size = 400;
+        let mut file_manager = FileManager::new(test_dir, block_size);
+
+        // テスト用のBlockIdとPageを作成
+        let block_id = BlockId::new("data/test_file.txt".to_string(), 0);
+        let mut page = Page::new(block_size);
+
+        // データを書き込む
+        page.set_integer(0, 42);
+        page.set_string(4, "Hello, Test World!");
+
+        // ファイルに書き込む
+        file_manager.write(&block_id, &mut page);
+
+        // 別のページを作成して読み込む
+        let mut page2 = Page::new(block_size);
+        file_manager.read(&block_id, &mut page2);
+
+        // 読み込んだデータを検証
+        assert_eq!(page2.get_integer(0), 42);
+        assert_eq!(page2.get_string(4), "Hello, Test World!");
+
+        // // テスト後にディレクトリを削除
+        // std::fs::remove_dir_all(test_dir).unwrap_or_default();
+    }
+
+    // transactionのテスト
+    #[test]
+    fn test_transaction() {
+        let test_dir = Path::new("data");
+        let block_size = 400;
+        let mut file_manager = FileManager::new(test_dir, block_size);
+        let mut buffer_manager = BufferManager::new(10);
+        let mut lock_table = LockTable::new();
+        let mut log_manager = LogManager::new(&mut file_manager, "data/log".to_string());
+        let mut buffer_list = BufferList::new();
+        let mut transaction = Transaction::new(1, ConcurrencyManager::new());
+
+        let block_id = BlockId::new("data/test_file.txt".to_string(), 0);
+        let offset = 0;
+
+        transaction.pin(
+            &mut file_manager,
+            &mut buffer_list,
+            &mut buffer_manager,
+            block_id.clone(),
+        );
+        transaction.set_integer(&mut buffer_list, block_id.clone(), offset, 42);
+        transaction.commit(
+            &mut log_manager,
+            &mut file_manager,
+            &mut lock_table,
+            &mut buffer_manager,
+        );
+
+        let mut transaction2 = Transaction::new(2, ConcurrencyManager::new());
+
+        let value = transaction2.get_integer(&mut buffer_list, block_id.clone(), offset);
+        assert_eq!(value, 42);
+
+        // std::fs::remove_dir_all(test_dir).unwrap_or_default();
     }
 }
