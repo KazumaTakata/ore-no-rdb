@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{BlockId, BufferList, FileManager, Transaction};
+use crate::buffer_manager::BufferList;
+use crate::transaction::Transaction;
+use crate::{BlockId, FileManager};
 
 #[derive(Clone)]
 struct TableFieldInfo {
