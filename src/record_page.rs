@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 
+use crate::{BlockId, BufferList, FileManager, Transaction};
+
 #[derive(Clone)]
 struct TableFieldInfo {
     field_type: TableFieldType,
     field_length: i32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 enum TableFieldType {
     INTEGER,
     VARCHAR,
@@ -124,5 +126,231 @@ impl Layout {
 
     fn has_field(&self, field_name: String) -> bool {
         self.schema.has_field(field_name)
+    }
+}
+
+#[derive(Copy, Clone)]
+enum RecordType {
+    EMPTY = 0,
+    USED = 1,
+}
+
+struct RecordPage {
+    layout: Layout,
+    transaction: Transaction,
+    block_id: BlockId,
+}
+
+impl RecordPage {
+    fn new(layout: Layout, transaction: Transaction, block_id: BlockId) -> RecordPage {
+        RecordPage {
+            layout,
+            block_id,
+            transaction,
+        }
+    }
+
+    fn get_integer(
+        &self,
+        field_name: String,
+        slot_id: i32,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> Option<i32> {
+        if !self.layout.has_field(field_name.clone()) {
+            return None;
+        }
+
+        let offset = self.layout.get_offset(field_name.clone()).unwrap();
+        let record_offset = self.get_offset_of_record(slot_id);
+        let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
+
+        if field_type != TableFieldType::INTEGER {
+            return None;
+        }
+
+        let result = transaction.get_integer(
+            buffer_list,
+            self.block_id.clone(),
+            (record_offset + offset) as usize,
+        );
+
+        Some(result)
+    }
+
+    fn set_integer(
+        &self,
+        field_name: String,
+        slot_id: i32,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        value: i32,
+    ) {
+        if !self.layout.has_field(field_name.clone()) {
+            return;
+        }
+
+        let offset = self.layout.get_offset(field_name.clone()).unwrap();
+        let record_offset = self.get_offset_of_record(slot_id);
+        let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
+
+        if field_type != TableFieldType::INTEGER {
+            return;
+        }
+
+        transaction.set_integer(
+            buffer_list,
+            self.block_id.clone(),
+            (record_offset + offset) as usize,
+            value,
+        );
+    }
+
+    fn delete(&self, slot_id: i32, transaction: &mut Transaction, buffer_list: &mut BufferList) {
+        let record_offset = self.get_offset_of_record(slot_id);
+        transaction.set_integer(
+            buffer_list,
+            self.block_id.clone(),
+            record_offset as usize,
+            RecordType::EMPTY as i32,
+        );
+    }
+
+    fn set_string(
+        &self,
+        field_name: String,
+        slot_id: i32,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        value: String,
+    ) {
+        if !self.layout.has_field(field_name.clone()) {
+            return;
+        }
+
+        let offset = self.layout.get_offset(field_name.clone()).unwrap();
+        let record_offset = self.get_offset_of_record(slot_id);
+        let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
+
+        if field_type != TableFieldType::VARCHAR {
+            return;
+        }
+
+        transaction.set_string(
+            buffer_list,
+            self.block_id.clone(),
+            (record_offset + offset) as usize,
+            value.as_str(),
+        );
+    }
+
+    fn search_after(
+        &self,
+        slot_id: i32,
+        file_manager: &FileManager,
+        target_record_type: RecordType,
+        buffer_list: &mut BufferList,
+        transaction: &mut Transaction,
+    ) -> Option<i32> {
+        let mut next_slot_id = slot_id + 1;
+        while self.is_valid_slot_id(slot_id, file_manager) {
+            let record_offset = self.get_offset_of_record(next_slot_id);
+            let record_type =
+                transaction.get_integer(buffer_list, self.block_id.clone(), record_offset as usize);
+
+            if record_type == target_record_type as i32 {
+                return Some(next_slot_id);
+            }
+
+            next_slot_id += 1;
+        }
+
+        return None;
+    }
+
+    fn get_string(
+        &self,
+        field_name: String,
+        slot_id: i32,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> Option<String> {
+        if !self.layout.has_field(field_name.clone()) {
+            return None;
+        }
+
+        let offset = self.layout.get_offset(field_name.clone()).unwrap();
+        let record_offset = self.get_offset_of_record(slot_id);
+        let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
+
+        if field_type != TableFieldType::VARCHAR {
+            return None;
+        }
+
+        let result = transaction.get_string(
+            buffer_list,
+            self.block_id.clone(),
+            (record_offset + offset) as usize,
+        );
+
+        Some(result)
+    }
+
+    fn set_flag(
+        &self,
+        slot_id: i32,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        record_type: RecordType,
+    ) {
+        let record_offset = self.get_offset_of_record(slot_id);
+        transaction.set_integer(
+            buffer_list,
+            self.block_id.clone(),
+            record_offset as usize,
+            record_type as i32,
+        );
+    }
+
+    fn is_valid_slot_id(&self, slot_id: i32, file_manager: &FileManager) -> bool {
+        return self.get_offset_of_record(slot_id) < file_manager.block_size as i32;
+    }
+
+    fn get_offset_of_record(&self, slot_id: i32) -> i32 {
+        slot_id * self.layout.get_slot_size()
+    }
+
+    fn find_next_after_slot_id(
+        &self,
+        slot_id: i32,
+        file_manager: &FileManager,
+        buffer_list: &mut BufferList,
+        transaction: &mut Transaction,
+    ) -> Option<i32> {
+        return self.search_after(
+            slot_id,
+            file_manager,
+            RecordType::USED,
+            buffer_list,
+            transaction,
+        );
+    }
+
+    fn insert_after_slot_id(
+        &self,
+        slot_id: i32,
+        file_manager: &FileManager,
+        buffer_list: &mut BufferList,
+        transaction: &mut Transaction,
+    ) -> Option<i32> {
+        let next_slot_id =
+            self.find_next_after_slot_id(slot_id, file_manager, buffer_list, transaction);
+
+        if let Some(next_slot_id) = next_slot_id {
+            self.set_flag(next_slot_id, transaction, buffer_list, RecordType::USED);
+            return Some(next_slot_id);
+        }
+
+        return None;
     }
 }
