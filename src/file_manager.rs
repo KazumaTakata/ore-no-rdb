@@ -61,6 +61,12 @@ impl FileManager {
     }
 
     pub fn write(&mut self, block_id: &BlockId, page: &mut Page) {
+        // もし、ファイルが存在しない場合は作成
+        let file_path = self.directory_path.join(&block_id.get_file_name());
+        if !Path::new(&file_path).exists() {
+            File::create(&file_path).unwrap();
+        }
+
         let block_size = self.block_size;
         let file = self.get_file(block_id.get_file_name());
         let offset = block_id.get_block_number() as usize * block_size;
@@ -102,7 +108,7 @@ mod tests {
 
         page.set_string(offset_2, "Hello, Test World!");
 
-        let offset_3 = page.get_max_length("Hello, Test World!".len() as u32) + offset_2;
+        let offset_3 = Page::get_max_length("Hello, Test World!".len() as u32) + offset_2;
 
         page.set_integer(offset_3, 23333);
 

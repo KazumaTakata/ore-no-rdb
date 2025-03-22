@@ -9,6 +9,11 @@ impl Page {
         }
     }
 
+    // log_managerのtestで使用
+    pub fn from(data: Vec<u8>) -> Page {
+        Page { data }
+    }
+
     pub fn set_integer(&mut self, offset: usize, value: i32) {
         let integer_bytes = value.to_be_bytes();
         self.data[offset..offset + 4].copy_from_slice(&integer_bytes);
@@ -40,7 +45,7 @@ impl Page {
         String::from_utf8(self.get_bytes(offset)).unwrap()
     }
 
-    pub fn get_max_length(&self, string_length: u32) -> usize {
+    pub fn get_max_length(string_length: u32) -> usize {
         // string型のlengthをi32 = 4byteで表現 + 文字列の長さ * utf-8の最大バイト数(4byte)
         return 4 + string_length as usize * 4;
     }

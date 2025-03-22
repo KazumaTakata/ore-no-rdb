@@ -14,44 +14,45 @@ use crate::file_manager::FileManager;
 use crate::page::Page;
 pub struct LogManager {
     current_block_id: BlockId,
-    log_file: String,
+    log_file_name: String,
     log_page: Page,
     latest_lsn: i32,
     latest_saved_lsn: i32,
 }
 
 impl LogManager {
-    pub fn new(file_manager: &mut FileManager, log_file: String) -> LogManager {
-        // ログファイルが存在していなければ作成
-        if !Path::new(&log_file).exists() {
-            File::create(&log_file).unwrap();
-        }
-
-        let log_size = file_manager.length(&log_file);
+    pub fn new(file_manager: &mut FileManager, log_file_name: String) -> LogManager {
+        let log_size = file_manager.length(&log_file_name);
 
         let mut log_page = Page::new(400);
 
         let block_id;
 
         if log_size == 0 {
-            block_id = file_manager.append(&log_file);
-            log_page.set_integer(0, file_manager.block_size as i32);
-            file_manager.write(&block_id, &mut log_page);
+            block_id = LogManager::_append_new_block(file_manager, &log_file_name, &mut log_page);
         } else {
-            block_id = BlockId::new(log_file.to_string(), log_size as u64 - 1);
+            block_id = BlockId::new(log_file_name.to_string(), log_size as u64 - 1);
             file_manager.read(&block_id, &mut log_page);
         }
 
-        let latest_lsn = 0;
-        let latest_saved_lsn = 0;
-
         LogManager {
             current_block_id: block_id,
-            log_file,
+            log_file_name,
             log_page,
-            latest_lsn,
-            latest_saved_lsn,
+            latest_lsn: 0,
+            latest_saved_lsn: 0,
         }
+    }
+
+    fn _append_new_block(
+        file_manager: &mut FileManager,
+        log_file: &String,
+        log_page: &mut Page,
+    ) -> BlockId {
+        let block_id = file_manager.append(&log_file);
+        log_page.set_integer(0, file_manager.block_size as i32);
+        file_manager.write(&block_id, log_page);
+        block_id
     }
 
     pub fn flush(&mut self, file_manager: &mut FileManager) {
@@ -60,7 +61,7 @@ impl LogManager {
     }
 
     pub fn append_new_block(&mut self, file_manager: &mut FileManager) -> BlockId {
-        let block_id = file_manager.append(&self.log_file);
+        let block_id = file_manager.append(&self.log_file_name);
         self.log_page = Page::new(400);
         self.log_page.set_integer(0, file_manager.block_size as i32);
         file_manager.write(&block_id, &mut self.log_page);
@@ -125,5 +126,50 @@ impl LogIterator {
         let record = self.log_page.get_bytes(self.current_offset);
         self.current_offset += 4 + record.len() as usize;
         record
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{fmt::format, path::Path};
+
+    // LogManagerのテスト
+    #[test]
+    fn test_log_manager_append_record() {
+        let test_dir = Path::new("data");
+        let block_size = 400;
+        let mut file_manager = FileManager::new(test_dir, block_size);
+        let log_file = "test_log_manager_append_record.txt".to_string();
+        let mut log_manager = LogManager::new(&mut file_manager, log_file);
+
+        let record = vec![1, 2, 3, 4];
+        let lsn = log_manager.append_record(&record, &mut file_manager);
+        assert_eq!(lsn, 1);
+
+        let record = vec![5, 6, 7, 8];
+        let lsn = log_manager.append_record(&record, &mut file_manager);
+        assert_eq!(lsn, 2);
+    }
+
+    fn create_record(log_manager: &mut LogManager, file_manager: &mut FileManager) {
+        for i in 0..100 {
+            let test_string = format!("test_sting_{}", i);
+            let record = create_log_record(test_string, i);
+            let lsn = log_manager.append_record(&record, file_manager);
+            print!("lsn: {}\n", lsn);
+        }
+    }
+
+    fn create_log_record(test_string: String, test_integer: i32) -> Vec<u8> {
+        let offset = Page::get_max_length(test_string.len() as u32);
+        // i32(4byte) + 文字列の長さ * utf-8の最大バイト数(4byte)
+        let test_vector = vec![0; offset + 4];
+
+        let mut page = Page::from(test_vector);
+        page.set_string(0, &test_string);
+        page.set_integer(offset, test_integer);
+
+        return page.get_data().to_vec();
     }
 }
