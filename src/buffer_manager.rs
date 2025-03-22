@@ -59,6 +59,7 @@ impl Buffer {
     }
 
     fn assign_to_block(&mut self, file_manager: &mut FileManager, block_id: BlockId) {
+        self.flush(file_manager);
         file_manager.read(&block_id, &mut self.page);
         self.block_id = Some(block_id);
         self.pin_count = 0;
@@ -83,7 +84,7 @@ impl Buffer {
 
 pub struct BufferManager {
     buffer_pool: Vec<Rc<RefCell<Buffer>>>,
-    number_of_buffer: i32,
+    number_of_available: i32,
 }
 
 impl BufferManager {
@@ -95,7 +96,15 @@ impl BufferManager {
 
         BufferManager {
             buffer_pool,
-            number_of_buffer,
+            number_of_available: number_of_buffer,
+        }
+    }
+
+    pub fn unpin(&mut self, buffer: &mut Buffer) {
+        buffer.unpin();
+        if buffer.is_pinned() {
+            self.number_of_available = self.number_of_available + 1;
+            return;
         }
     }
 
@@ -131,7 +140,7 @@ impl BufferManager {
 
             if buffer.is_some() {
                 let mut buffer = buffer.unwrap().borrow_mut();
-                self.number_of_buffer = self.number_of_buffer - 1;
+                self.number_of_available = self.number_of_available - 1;
                 buffer.assign_to_block(file_manager, block_id);
             }
         }
@@ -139,7 +148,7 @@ impl BufferManager {
         if let Some(buffer) = buffer {
             let mut buffer_mut = buffer.borrow_mut();
             if !buffer_mut.is_pinned() {
-                self.number_of_buffer = self.number_of_buffer - 1;
+                self.number_of_available = self.number_of_available - 1;
             }
             buffer_mut.pin();
 
@@ -198,5 +207,66 @@ impl BufferList {
     pub fn get_buffer(&mut self, block_id: BlockId) -> Option<&Rc<RefCell<Buffer>>> {
         let buffer = self.buffers.get(&block_id);
         return buffer;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::page;
+
+    use super::*;
+
+    #[test]
+    fn test_buffer() {
+        let mut file_manager = FileManager::new(Path::new("data"), 400);
+        let buffer_manager = Rc::new(RefCell::new(BufferManager::new(3)));
+
+        let buffer_manager_ref1 = Rc::clone(&buffer_manager);
+
+        let block_id = BlockId::new("test.txt".to_string(), 1);
+
+        let mut buffer_mut_1 = {
+            let mut buffer_manager_mut_ref_1 = buffer_manager_ref1.borrow_mut();
+            let buffer_1 = buffer_manager_mut_ref_1.pin(&mut file_manager, block_id.clone());
+            let mut buffer_mut_1 = buffer_1.unwrap().borrow_mut();
+            let page_1 = buffer_mut_1.content();
+            let test_integer = page_1.get_integer(80);
+            page_1.set_integer(80, test_integer + 1);
+
+            buffer_mut_1.set_modified(1, 0);
+
+            Rc::clone(buffer_1.unwrap())
+        };
+        {
+            let mut buffer_manager_mut_ref_2 = buffer_manager_ref1.borrow_mut();
+            buffer_manager_mut_ref_2.unpin(&mut buffer_mut_1.borrow_mut());
+        }
+        {
+            let block_id = BlockId::new("test.txt".to_string(), 2);
+            let mut buffer_manager_mut_ref_3 = buffer_manager_ref1.borrow_mut();
+            let buffer_2 = buffer_manager_mut_ref_3.pin(&mut file_manager, block_id.clone());
+        }
+
+        {
+            let block_id = BlockId::new("test.txt".to_string(), 3);
+            let mut buffer_manager_mut_ref_3 = buffer_manager_ref1.borrow_mut();
+            let buffer_2 = buffer_manager_mut_ref_3.pin(&mut file_manager, block_id.clone());
+        }
+
+        // {
+        //     let block_id = BlockId::new("test.txt".to_string(), 4);
+        //     let mut buffer_manager_mut_ref_3 = buffer_manager_ref1.borrow_mut();
+        //     let buffer_2 = buffer_manager_mut_ref_3.pin(&mut file_manager, block_id.clone());
+        // }
+
+        // let block_id = BlockId::new("test.txt".to_string(), 3);
+
+        // let mut buffer_manager_mut_ref_3 = buffer_manager.borrow_mut();
+        // let buffer_3 = buffer_manager_mut_ref_3.pin(&mut file_manager, block_id.clone());
+
+        // let block_id = BlockId::new("test.txt".to_string(), 4);
+
+        // let mut buffer_manager_mut_ref_3 = buffer_manager.borrow_mut();
+        // let buffer_3 = buffer_manager_mut_ref_3.pin(&mut file_manager, block_id.clone());
     }
 }
