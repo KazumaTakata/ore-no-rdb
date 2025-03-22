@@ -41,6 +41,7 @@ impl Page {
     }
 
     pub fn get_max_length(&self, string_length: u32) -> usize {
+        // string型のlengthをi32 = 4byteで表現 + 文字列の長さ * utf-8の最大バイト数(4byte)
         return 4 + string_length as usize * 4;
     }
 

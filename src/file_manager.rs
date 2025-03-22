@@ -1,12 +1,8 @@
 use std::{
-    cell::RefCell,
     collections::HashMap,
     fs::{self, File},
-    io::Write,
-    iter::Map,
     os::unix::fs::FileExt,
-    path::Path,
-    rc::Rc,
+    path::{Path, PathBuf},
 };
 
 use crate::BlockId;
@@ -15,6 +11,7 @@ use crate::Page;
 pub struct FileManager {
     pub block_size: usize,
     open_files: HashMap<String, File>,
+    directory_path: PathBuf,
 }
 
 impl FileManager {
@@ -23,12 +20,19 @@ impl FileManager {
         let open_files: HashMap<String, File> = HashMap::new();
 
         FileManager {
+            directory_path: directory_path.to_path_buf(),
             block_size,
             open_files,
         }
     }
 
+    pub fn get_block_size(&self) -> usize {
+        self.block_size
+    }
+
     pub fn get_file(&mut self, file_name: &str) -> &File {
+        let file_path = self.directory_path.join(file_name);
+
         let result = self
             .open_files
             .entry(file_name.to_string())
@@ -36,7 +40,7 @@ impl FileManager {
                 File::options()
                     .read(true)
                     .write(true)
-                    .open(file_name)
+                    .open(file_path)
                     .unwrap()
             });
         result
@@ -72,5 +76,49 @@ impl FileManager {
         file.write_at(&byte_array, offset as u64).unwrap();
 
         return BlockId::new(file_name.to_string(), block_number as u64);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    // FileManagerのテスト
+    #[test]
+    fn test_file_manager_read_write() {
+        let test_dir = Path::new("data");
+        let block_size = 400;
+        let mut file_manager = FileManager::new(test_dir, block_size);
+
+        // テスト用のBlockIdとPageを作成
+        let block_id = BlockId::new("test_file.txt".to_string(), 0);
+        let mut page = Page::new(file_manager.get_block_size());
+
+        // データを書き込む
+        page.set_integer(0, 42);
+
+        let offset_2 = 4;
+
+        page.set_string(offset_2, "Hello, Test World!");
+
+        let offset_3 = page.get_max_length("Hello, Test World!".len() as u32) + offset_2;
+
+        page.set_integer(offset_3, 23333);
+
+        // ファイルに書き込む
+        file_manager.write(&block_id, &mut page);
+
+        // 別のページを作成して読み込む
+        let mut page2 = Page::new(file_manager.get_block_size());
+        file_manager.read(&block_id, &mut page2);
+
+        // 読み込んだデータを検証
+        assert_eq!(page2.get_integer(0), 42);
+        assert_eq!(page2.get_string(offset_2), "Hello, Test World!");
+        assert_eq!(page2.get_integer(offset_3), 23333);
+
+        // // テスト後にディレクトリを削除
+        // std::fs::remove_dir_all(test_dir).unwrap_or_default();
     }
 }
