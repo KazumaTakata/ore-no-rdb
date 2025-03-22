@@ -33,6 +33,11 @@ impl FileManager {
     pub fn get_file(&mut self, file_name: &str) -> &File {
         let file_path = self.directory_path.join(file_name);
 
+        // ファイルが存在しない場合は作成
+        if !Path::new(&file_path).exists() {
+            File::create(&file_path).unwrap();
+        }
+
         let result = self
             .open_files
             .entry(file_name.to_string())

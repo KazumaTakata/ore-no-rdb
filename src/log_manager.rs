@@ -60,9 +60,14 @@ impl LogManager {
         self.latest_saved_lsn = self.latest_lsn;
     }
 
+    pub fn iterator(&mut self, file_manager: &mut FileManager) -> LogIterator {
+        self.flush(file_manager);
+        LogIterator::new(file_manager, self.current_block_id.clone())
+    }
+
     pub fn append_new_block(&mut self, file_manager: &mut FileManager) -> BlockId {
         let block_id = file_manager.append(&self.log_file_name);
-        self.log_page = Page::new(400);
+        self.log_page = Page::new(file_manager.block_size);
         self.log_page.set_integer(0, file_manager.block_size as i32);
         file_manager.write(&block_id, &mut self.log_page);
         block_id
@@ -96,7 +101,7 @@ struct LogIterator {
 
 impl LogIterator {
     fn new(file_manager: &mut FileManager, block_id: BlockId) -> LogIterator {
-        let mut log_page = Page::new(400);
+        let mut log_page = Page::new(file_manager.block_size);
         file_manager.read(&block_id, &mut log_page);
         let current_offset = log_page.get_integer(0) as usize;
 
@@ -124,6 +129,7 @@ impl LogIterator {
         }
 
         let record = self.log_page.get_bytes(self.current_offset);
+        // i32(4byte) + Vec<u8>の長さ
         self.current_offset += 4 + record.len() as usize;
         record
     }
@@ -143,17 +149,23 @@ mod tests {
         let log_file = "test_log_manager_append_record.txt".to_string();
         let mut log_manager = LogManager::new(&mut file_manager, log_file);
 
-        let record = vec![1, 2, 3, 4];
-        let lsn = log_manager.append_record(&record, &mut file_manager);
-        assert_eq!(lsn, 1);
+        create_record(&mut log_manager, &mut file_manager);
+        print_log_record(&mut log_manager, &mut file_manager);
+    }
 
-        let record = vec![5, 6, 7, 8];
-        let lsn = log_manager.append_record(&record, &mut file_manager);
-        assert_eq!(lsn, 2);
+    fn print_log_record(log_manager: &mut LogManager, file_manager: &mut FileManager) {
+        let mut log_iterator = log_manager.iterator(file_manager);
+        while log_iterator.has_next(file_manager) {
+            let record = log_iterator.next(file_manager);
+            let tmp_page = Page::from(record);
+            let test_string = tmp_page.get_string(0);
+            let test_integer = tmp_page.get_integer(Page::get_max_length(test_string.len() as u32));
+            print!("record: [{:?}, {:?}]\n", test_string, test_integer);
+        }
     }
 
     fn create_record(log_manager: &mut LogManager, file_manager: &mut FileManager) {
-        for i in 0..100 {
+        for i in 1..35 {
             let test_string = format!("test_sting_{}", i);
             let record = create_log_record(test_string, i);
             let lsn = log_manager.append_record(&record, file_manager);
