@@ -38,13 +38,7 @@ impl LockTable {
     }
 
     fn has_xlock(&self, block_id: &BlockId) -> bool {
-        let lock_value = self.locks.get(block_id);
-
-        if let Some(lock_value) = lock_value {
-            return *lock_value < 0;
-        }
-
-        return false;
+        self.get_lock_value(block_id) < 0
     }
 
     fn has_other_slock(&self, block_id: &BlockId) -> bool {
@@ -54,7 +48,7 @@ impl LockTable {
     fn unlock(&mut self, block_id: &BlockId) {
         let val = self.get_lock_value(block_id);
 
-        if (val > 1) {
+        if val > 1 {
             self.locks.insert(block_id.clone(), val - 1);
         } else {
             self.locks.remove(block_id);
