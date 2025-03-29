@@ -102,7 +102,7 @@ impl BufferManager {
 
     pub fn unpin(&mut self, buffer: &mut Buffer) {
         buffer.unpin();
-        if buffer.is_pinned() {
+        if !buffer.is_pinned() {
             self.number_of_available = self.number_of_available + 1;
             return;
         }
@@ -140,7 +140,6 @@ impl BufferManager {
 
             if buffer.is_some() {
                 let mut buffer = buffer.unwrap().borrow_mut();
-                self.number_of_available = self.number_of_available - 1;
                 buffer.assign_to_block(file_manager, block_id);
             }
         }
@@ -204,6 +203,32 @@ impl BufferList {
         }
     }
 
+    pub fn unpin(&mut self, block_id: BlockId, buffer_manager: &mut BufferManager) {
+        if let Some(buffer) = self.buffers.get(&block_id) {
+            let mut buffer = buffer.borrow_mut();
+            buffer.unpin();
+            // self.pinsから始めに見つかったblock_idを削除
+            if let Some(index) = self.pins.iter().position(|x| *x == block_id) {
+                self.pins.remove(index);
+            }
+
+            if !buffer.is_pinned() {
+                buffer_manager.unpin(&mut buffer);
+            }
+        }
+    }
+
+    pub fn unpin_all(&mut self, buffer_manager: &mut BufferManager) {
+        for block_id in self.pins.iter() {
+            if let Some(buffer) = self.buffers.get(block_id) {
+                let mut buffer = buffer.borrow_mut();
+                buffer_manager.unpin(&mut buffer);
+            }
+        }
+        self.buffers.clear();
+        self.pins.clear();
+    }
+
     pub fn get_buffer(&mut self, block_id: BlockId) -> Option<&Rc<RefCell<Buffer>>> {
         let buffer = self.buffers.get(&block_id);
         return buffer;
@@ -237,10 +262,20 @@ mod tests {
 
             Rc::clone(buffer_1.unwrap())
         };
+
+        {
+            assert!(buffer_manager_ref1.borrow().number_of_available == 2);
+        }
+
         {
             let mut buffer_manager_mut_ref_2 = buffer_manager_ref1.borrow_mut();
             buffer_manager_mut_ref_2.unpin(&mut buffer_mut_1.borrow_mut());
         }
+
+        {
+            assert!(buffer_manager_ref1.borrow().number_of_available == 3);
+        }
+
         {
             let block_id = BlockId::new("test.txt".to_string(), 2);
             let mut buffer_manager_mut_ref_3 = buffer_manager_ref1.borrow_mut();
@@ -251,6 +286,10 @@ mod tests {
             let block_id = BlockId::new("test.txt".to_string(), 3);
             let mut buffer_manager_mut_ref_3 = buffer_manager_ref1.borrow_mut();
             let buffer_2 = buffer_manager_mut_ref_3.pin(&mut file_manager, block_id.clone());
+        }
+
+        {
+            assert!(buffer_manager_ref1.borrow().number_of_available == 1);
         }
 
         // {
