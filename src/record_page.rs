@@ -274,7 +274,7 @@ impl RecordPage {
         transaction: &mut Transaction,
     ) -> Option<i32> {
         let mut next_slot_id = slot_id + 1;
-        while self.is_valid_slot_id(slot_id, file_manager) {
+        while self.is_valid_slot_id(next_slot_id, file_manager) {
             let record_offset = self.get_offset_of_record(next_slot_id);
             let record_type =
                 transaction.get_integer(buffer_list, self.block_id.clone(), record_offset as usize);
@@ -334,7 +334,7 @@ impl RecordPage {
     }
 
     fn is_valid_slot_id(&self, slot_id: i32, file_manager: &FileManager) -> bool {
-        return self.get_offset_of_record(slot_id) < file_manager.block_size as i32;
+        return self.get_offset_of_record(slot_id + 1) < file_manager.block_size as i32;
     }
 
     fn get_offset_of_record(&self, slot_id: i32) -> i32 {
@@ -504,6 +504,36 @@ mod tests {
             println!("next_slot: {}", next_slot.unwrap());
 
             _slot = next_slot;
+        }
+
+        let mut next_slot = record_page.find_next_after_slot_id(
+            -1,
+            &file_manager,
+            &mut buffer_list,
+            &mut transaction,
+        );
+
+        // next_slotが存在する間は繰り返す
+        while let Some(slot) = next_slot {
+            println!("slot: {}", slot);
+
+            let id =
+                record_page.get_integer("id".to_string(), slot, &mut transaction, &mut buffer_list);
+            let name = record_page.get_string(
+                "name".to_string(),
+                slot,
+                &mut transaction,
+                &mut buffer_list,
+            );
+
+            println!("id: {}, name: {}", id.unwrap(), name.unwrap());
+
+            next_slot = record_page.find_next_after_slot_id(
+                slot,
+                &file_manager,
+                &mut buffer_list,
+                &mut transaction,
+            );
         }
 
         transaction.commit(&mut buffer_list, &mut buffer_manager_mut, &mut file_manager);
