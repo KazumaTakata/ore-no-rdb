@@ -9,25 +9,21 @@ use std::{
     rc::Rc,
 };
 
-use crate::block::BlockId;
 use crate::buffer_manager::BufferList;
 use crate::buffer_manager::BufferManager;
 use crate::concurrency_manager::ConcurrencyManager;
 use crate::concurrency_manager::LockTable;
 use crate::file_manager::FileManager;
 use crate::log_manager::LogManager;
+use crate::{block::BlockId, file_manager};
 
 pub struct Transaction {
     tx_num: i32,
-    concurrency_manager: ConcurrencyManager,
 }
 
 impl Transaction {
-    pub fn new(tx_num: i32, concurrency_manager: ConcurrencyManager) -> Transaction {
-        Transaction {
-            tx_num,
-            concurrency_manager,
-        }
+    pub fn new(tx_num: i32) -> Transaction {
+        Transaction { tx_num }
     }
 
     pub fn pin(
@@ -42,19 +38,15 @@ impl Transaction {
 
     pub fn commit(
         &mut self,
-        log_manager: &mut LogManager,
-        file_manager: &mut FileManager,
-        lock_table: &mut LockTable,
+        buffer_list: &mut BufferList,
         buffer_manager: &mut BufferManager,
+        file_manager: &mut FileManager,
     ) {
-        log_manager.flush(file_manager);
-        self.concurrency_manager.release(lock_table);
+        buffer_list.unpin_all(buffer_manager);
         buffer_manager.flush_all(file_manager, self.tx_num);
     }
 
-    fn rollback(&mut self, lock_table: &mut LockTable) {
-        self.concurrency_manager.release(lock_table);
-    }
+    fn rollback(&mut self, lock_table: &mut LockTable) {}
 
     pub fn set_integer(
         &mut self,
@@ -106,5 +98,9 @@ impl Transaction {
         let mut buffer = buffer.borrow_mut();
         let page = buffer.content();
         page.get_string(offset)
+    }
+
+    pub fn append(&mut self, file_manager: &mut FileManager, file_name: &str) -> BlockId {
+        file_manager.append(file_name)
     }
 }

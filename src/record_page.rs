@@ -48,6 +48,30 @@ impl TableSchema {
         self.add_field(field_name, TableFieldType::VARCHAR, field_length);
     }
 
+    fn fields(&self) -> &Vec<String> {
+        &self.fields
+    }
+
+    fn add_from_schema(&mut self, field_name: String, schema: TableSchema) {
+        let field_info = schema.field_infos.get(&field_name).unwrap();
+        self.add_field(
+            field_name,
+            field_info.field_type.clone(),
+            field_info.field_length,
+        );
+    }
+
+    fn add_all_from_schema(&mut self, schema: TableSchema) {
+        for field in schema.fields {
+            let field_info = schema.field_infos.get(&field).unwrap();
+            self.add_field(
+                field,
+                field_info.field_type.clone(),
+                field_info.field_length,
+            );
+        }
+    }
+
     fn get_field_type(&self, field_name: String) -> Option<TableFieldType> {
         let field_info = self.field_infos.get(&field_name);
         // field_infoが存在しない場合はNoneを返す
@@ -139,17 +163,12 @@ enum RecordType {
 
 struct RecordPage {
     layout: Layout,
-    transaction: Transaction,
     block_id: BlockId,
 }
 
 impl RecordPage {
-    fn new(layout: Layout, transaction: Transaction, block_id: BlockId) -> RecordPage {
-        RecordPage {
-            layout,
-            block_id,
-            transaction,
-        }
+    fn new(layout: Layout, block_id: BlockId) -> RecordPage {
+        RecordPage { layout, block_id }
     }
 
     fn get_integer(
@@ -345,8 +364,13 @@ impl RecordPage {
         buffer_list: &mut BufferList,
         transaction: &mut Transaction,
     ) -> Option<i32> {
-        let next_slot_id =
-            self.find_next_after_slot_id(slot_id, file_manager, buffer_list, transaction);
+        let next_slot_id = self.search_after(
+            slot_id,
+            file_manager,
+            RecordType::EMPTY,
+            buffer_list,
+            transaction,
+        );
 
         if let Some(next_slot_id) = next_slot_id {
             self.set_flag(next_slot_id, transaction, buffer_list, RecordType::USED);
@@ -354,5 +378,147 @@ impl RecordPage {
         }
 
         return None;
+    }
+
+    fn format(
+        &self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        file_manager: &FileManager,
+    ) {
+        let mut slot_id = 0;
+        while self.is_valid_slot_id(slot_id + 10, file_manager) {
+            print!(
+                "slot_id: {}, slot_size: {}",
+                slot_id,
+                self.layout.get_slot_size()
+            );
+            self.set_flag(slot_id, transaction, buffer_list, RecordType::EMPTY);
+            let schema = &self.layout.schema;
+
+            for field in schema.fields() {
+                let field_type = schema.get_field_type(field.clone()).unwrap();
+                let offset = self.layout.get_offset(field.clone()).unwrap();
+
+                match field_type {
+                    TableFieldType::INTEGER => {
+                        self.set_integer(field.clone(), slot_id, transaction, buffer_list, 0);
+                    }
+                    TableFieldType::VARCHAR => {
+                        self.set_string(
+                            field.clone(),
+                            slot_id,
+                            transaction,
+                            buffer_list,
+                            "".to_string(),
+                        );
+                    }
+                }
+            }
+
+            slot_id += 1;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, path::Path, rc::Rc};
+
+    use crate::{buffer_manager::BufferManager, page, transaction};
+
+    use rand::Rng;
+
+    use super::*;
+
+    #[test]
+    fn test_buffer() {
+        let mut file_manager = FileManager::new(Path::new("data"), 1000);
+        let mut buffer_manager = Rc::new(RefCell::new(BufferManager::new(3)));
+
+        let block_id = BlockId::new("test.txt".to_string(), 1);
+
+        let mut transaction = transaction::Transaction::new(1);
+
+        let mut schema = TableSchema::new();
+
+        schema.add_integer_field("id".to_string());
+        schema.add_string_field("name".to_string(), 10);
+
+        let layout = Layout::new(schema);
+
+        // layerのschemaをiterateしてoffsetをprintoutする
+        for field in layout.schema.fields() {
+            let offset = layout.get_offset(field.clone()).unwrap();
+            println!("{}: {}", field, offset);
+        }
+
+        let block_id = transaction.append(&mut file_manager, "test.txt");
+        let mut buffer_list = BufferList::new();
+
+        let buffer_manager_ref1 = Rc::clone(&buffer_manager);
+        let mut buffer_manager_mut = buffer_manager_ref1.borrow_mut();
+
+        transaction.pin(
+            &mut file_manager,
+            &mut buffer_list,
+            &mut buffer_manager_mut,
+            block_id.clone(),
+        );
+
+        let record_page = RecordPage::new(layout, block_id.clone());
+
+        record_page.format(&mut transaction, &mut buffer_list, &file_manager);
+
+        let mut _slot =
+            record_page.insert_after_slot_id(-1, &file_manager, &mut buffer_list, &mut transaction);
+
+        for slot in 0..4 {
+            println!("slot: {}", slot);
+
+            // 1..100までのランダムなintegerを生成
+            let random_integer = rand::thread_rng().gen_range(0..100);
+
+            record_page.set_integer(
+                "id".to_string(),
+                slot,
+                &mut transaction,
+                &mut buffer_list,
+                random_integer,
+            );
+
+            record_page.set_string(
+                "name".to_string(),
+                slot,
+                &mut transaction,
+                &mut buffer_list,
+                format!("name{}", random_integer),
+            );
+
+            let next_slot = record_page.insert_after_slot_id(
+                slot,
+                &file_manager,
+                &mut buffer_list,
+                &mut transaction,
+            );
+            println!("next_slot: {}", next_slot.unwrap());
+
+            _slot = next_slot;
+        }
+
+        transaction.commit(&mut buffer_list, &mut buffer_manager_mut, &mut file_manager);
+
+        // let mut buffer_mut_1 = {
+        //     let mut buffer_manager_mut_ref_1 = buffer_manager_ref1.borrow_mut();
+        //     let buffer_1 = buffer_manager_mut_ref_1.pin(&mut file_manager, block_id.clone());
+        //     let mut buffer_mut_1 = buffer_1.unwrap().borrow_mut();
+        //     let page_1 = buffer_mut_1.content();
+        //     let test_integer = page_1.get_integer(80);
+        //     page_1.set_integer(80, test_integer + 1);
+
+        //     buffer_mut_1.set_modified(1, 0);
+
+        //     Rc::clone(buffer_1.unwrap())
+        // };
     }
 }
