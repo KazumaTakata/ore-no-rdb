@@ -334,7 +334,7 @@ impl RecordPage {
     }
 
     fn is_valid_slot_id(&self, slot_id: i32, file_manager: &FileManager) -> bool {
-        return self.get_offset_of_record(slot_id + 1) < file_manager.block_size as i32;
+        return self.get_offset_of_record(slot_id + 1) <= file_manager.block_size as i32;
     }
 
     fn get_offset_of_record(&self, slot_id: i32) -> i32 {
@@ -387,7 +387,7 @@ impl RecordPage {
         file_manager: &FileManager,
     ) {
         let mut slot_id = 0;
-        while self.is_valid_slot_id(slot_id + 10, file_manager) {
+        while self.is_valid_slot_id(slot_id, file_manager) {
             print!(
                 "slot_id: {}, slot_size: {}",
                 slot_id,
@@ -434,9 +434,7 @@ mod tests {
     #[test]
     fn test_buffer() {
         let mut file_manager = FileManager::new(Path::new("data"), 1000);
-        let mut buffer_manager = Rc::new(RefCell::new(BufferManager::new(3)));
-
-        let block_id = BlockId::new("test.txt".to_string(), 1);
+        let buffer_manager = Rc::new(RefCell::new(BufferManager::new(3)));
 
         let mut transaction = transaction::Transaction::new(1);
 
@@ -470,11 +468,11 @@ mod tests {
 
         record_page.format(&mut transaction, &mut buffer_list, &file_manager);
 
-        let mut _slot =
+        let mut next_slot =
             record_page.insert_after_slot_id(-1, &file_manager, &mut buffer_list, &mut transaction);
 
-        for slot in 0..4 {
-            println!("slot: {}", slot);
+        while let Some(slot) = next_slot {
+            println!("slot.....: {}", slot);
 
             // 1..100までのランダムなintegerを生成
             let random_integer = rand::thread_rng().gen_range(0..100);
@@ -495,15 +493,16 @@ mod tests {
                 format!("name{}", random_integer),
             );
 
-            let next_slot = record_page.insert_after_slot_id(
+            next_slot = record_page.insert_after_slot_id(
                 slot,
                 &file_manager,
                 &mut buffer_list,
                 &mut transaction,
             );
-            println!("next_slot: {}", next_slot.unwrap());
 
-            _slot = next_slot;
+            // println!("next_slot: {}", next_slot.unwrap());
+
+            // _slot = next_slot;
         }
 
         let mut next_slot = record_page.find_next_after_slot_id(
