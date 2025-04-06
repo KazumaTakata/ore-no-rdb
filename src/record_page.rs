@@ -16,6 +16,7 @@ enum TableFieldType {
     VARCHAR,
 }
 
+#[derive(Clone)]
 pub struct TableSchema {
     fields: Vec<String>,
     field_infos: HashMap<String, TableFieldInfo>,
@@ -99,14 +100,15 @@ impl TableSchema {
     }
 }
 
-struct Layout {
+#[derive(Clone)]
+pub struct Layout {
     schema: TableSchema,
     offsets: HashMap<String, i32>,
     slot_size: i32,
 }
 
 impl Layout {
-    fn new(schema: TableSchema) -> Layout {
+    pub fn new(schema: TableSchema) -> Layout {
         let mut offsets = HashMap::new();
         // i32のサイズは4バイト
         let mut slot_size = 4;
@@ -161,13 +163,13 @@ enum RecordType {
     USED = 1,
 }
 
-struct RecordPage {
+pub struct RecordPage {
     layout: Layout,
     block_id: BlockId,
 }
 
 impl RecordPage {
-    fn new(layout: Layout, block_id: BlockId) -> RecordPage {
+    pub fn new(layout: Layout, block_id: BlockId) -> RecordPage {
         RecordPage { layout, block_id }
     }
 
@@ -197,6 +199,10 @@ impl RecordPage {
         );
 
         Some(result)
+    }
+
+    pub fn get_block_id(&self) -> BlockId {
+        self.block_id.clone()
     }
 
     fn set_integer(
@@ -380,7 +386,7 @@ impl RecordPage {
         return None;
     }
 
-    fn format(
+    pub fn format(
         &self,
         transaction: &mut Transaction,
         buffer_list: &mut BufferList,

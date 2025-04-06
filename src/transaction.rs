@@ -88,6 +88,10 @@ impl Transaction {
         page.get_integer(offset)
     }
 
+    pub fn get_size(&self, file_manager: &mut FileManager, file_name: String) -> usize {
+        return file_manager.length(&file_name);
+    }
+
     pub fn get_string(
         &mut self,
         buffer_list: &mut BufferList,
