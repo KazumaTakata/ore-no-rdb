@@ -173,7 +173,7 @@ impl RecordPage {
         RecordPage { layout, block_id }
     }
 
-    fn get_integer(
+    pub fn get_integer(
         &self,
         field_name: String,
         slot_id: i32,
@@ -205,7 +205,7 @@ impl RecordPage {
         self.block_id.clone()
     }
 
-    fn set_integer(
+    pub fn set_integer(
         &self,
         field_name: String,
         slot_id: i32,
@@ -243,7 +243,7 @@ impl RecordPage {
         );
     }
 
-    fn set_string(
+    pub fn set_string(
         &self,
         field_name: String,
         slot_id: i32,
@@ -295,7 +295,7 @@ impl RecordPage {
         return None;
     }
 
-    fn get_string(
+    pub fn get_string(
         &self,
         field_name: String,
         slot_id: i32,
@@ -323,7 +323,7 @@ impl RecordPage {
         Some(result)
     }
 
-    fn set_flag(
+    pub fn set_flag(
         &self,
         slot_id: i32,
         transaction: &mut Transaction,
@@ -339,15 +339,15 @@ impl RecordPage {
         );
     }
 
-    fn is_valid_slot_id(&self, slot_id: i32, file_manager: &FileManager) -> bool {
+    pub fn is_valid_slot_id(&self, slot_id: i32, file_manager: &FileManager) -> bool {
         return self.get_offset_of_record(slot_id + 1) <= file_manager.block_size as i32;
     }
 
-    fn get_offset_of_record(&self, slot_id: i32) -> i32 {
+    pub fn get_offset_of_record(&self, slot_id: i32) -> i32 {
         slot_id * self.layout.get_slot_size()
     }
 
-    fn find_next_after_slot_id(
+    pub fn find_next_after_slot_id(
         &self,
         slot_id: i32,
         file_manager: &FileManager,
@@ -363,7 +363,7 @@ impl RecordPage {
         );
     }
 
-    fn insert_after_slot_id(
+    pub fn insert_after_slot_id(
         &self,
         slot_id: i32,
         file_manager: &FileManager,

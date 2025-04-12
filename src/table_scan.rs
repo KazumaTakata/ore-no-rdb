@@ -99,6 +99,111 @@ impl TableScan {
         return record_page;
     }
 
+    pub fn get_integer(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> Option<i32> {
+        self.record_page.get_integer(
+            self.file_name.clone(),
+            self.current_slot,
+            transaction,
+            buffer_list,
+        )
+    }
+
+    pub fn get_string(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> Option<String> {
+        self.record_page.get_string(
+            self.file_name.clone(),
+            self.current_slot,
+            transaction,
+            buffer_list,
+        )
+    }
+
+    pub fn set_integer(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        value: i32,
+    ) {
+        self.record_page.set_integer(
+            self.file_name.clone(),
+            self.current_slot,
+            transaction,
+            buffer_list,
+            value,
+        )
+    }
+
+    pub fn set_string(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        value: String,
+    ) {
+        self.record_page.set_string(
+            self.file_name.clone(),
+            self.current_slot,
+            transaction,
+            buffer_list,
+            value,
+        )
+    }
+
+    pub fn insert(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        file_manager: &mut FileManager,
+        layout: record_page::Layout,
+    ) {
+        if self.current_slot == -1 {
+            self.current_slot = 0;
+        }
+
+        let mut current_slot = self.record_page.insert_after_slot_id(
+            self.current_slot,
+            file_manager,
+            buffer_list,
+            transaction,
+        );
+
+        // current_slotが optionalだったら、次のblockに移動する
+        while current_slot.is_none() {
+            if self.at_last_block(transaction, file_manager) {
+                self.record_page =
+                    self.move_to_new_block(transaction, file_manager, layout.clone(), buffer_list);
+            } else {
+                let block_id = block::BlockId::new(
+                    self.file_name.clone(),
+                    self.record_page.get_block_id().get_block_number() + 1,
+                );
+                self.record_page = record_page::RecordPage::new(layout.clone(), block_id);
+            }
+            current_slot =
+                self.record_page
+                    .insert_after_slot_id(-1, file_manager, buffer_list, transaction);
+        }
+    }
+
+    pub fn get_record_id(&self) -> RecordID {
+        return RecordID::new(
+            self.record_page.get_block_id().get_block_number(),
+            self.current_slot,
+        );
+    }
+
+    pub fn move_to_record_id(&mut self, layout: record_page::Layout, record_id: RecordID) {
+        let block_id = block::BlockId::new(self.file_name.clone(), record_id.get_block_number());
+        self.record_page = record_page::RecordPage::new(layout, block_id);
+        self.current_slot = record_id.get_slot_number();
+    }
+
     fn at_last_block(&self, transaction: &Transaction, file_manager: &mut FileManager) -> bool {
         let file_size = transaction.get_size(file_manager, self.file_name.clone());
         let current_block = self.record_page.get_block_id().get_block_number();
