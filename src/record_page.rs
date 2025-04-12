@@ -11,19 +11,19 @@ struct TableFieldInfo {
 }
 
 #[derive(Clone, PartialEq, Eq)]
-enum TableFieldType {
+pub enum TableFieldType {
     INTEGER,
     VARCHAR,
 }
 
 #[derive(Clone)]
 pub struct TableSchema {
-    fields: Vec<String>,
-    field_infos: HashMap<String, TableFieldInfo>,
+    pub fields: Vec<String>,
+    pub field_infos: HashMap<String, TableFieldInfo>,
 }
 
 impl TableSchema {
-    fn new() -> TableSchema {
+    pub fn new() -> TableSchema {
         TableSchema {
             fields: Vec::new(),
             field_infos: HashMap::new(),
@@ -41,11 +41,11 @@ impl TableSchema {
         );
     }
 
-    fn add_integer_field(&mut self, field_name: String) {
+    pub fn add_integer_field(&mut self, field_name: String) {
         self.add_field(field_name, TableFieldType::INTEGER, -1);
     }
 
-    fn add_string_field(&mut self, field_name: String, field_length: i32) {
+    pub fn add_string_field(&mut self, field_name: String, field_length: i32) {
         self.add_field(field_name, TableFieldType::VARCHAR, field_length);
     }
 
@@ -73,7 +73,7 @@ impl TableSchema {
         }
     }
 
-    fn get_field_type(&self, field_name: String) -> Option<TableFieldType> {
+    pub fn get_field_type(&self, field_name: String) -> Option<TableFieldType> {
         let field_info = self.field_infos.get(&field_name);
         // field_infoが存在しない場合はNoneを返す
 
@@ -84,7 +84,7 @@ impl TableSchema {
         return None;
     }
 
-    fn get_field_length(&self, field_name: String) -> Option<i32> {
+    pub fn get_field_length(&self, field_name: String) -> Option<i32> {
         let field_info = self.field_infos.get(&field_name);
         // field_infoが存在しない場合はNoneを返す
 
@@ -133,11 +133,11 @@ impl Layout {
         }
     }
 
-    fn get_slot_size(&self) -> i32 {
+    pub fn get_slot_size(&self) -> i32 {
         self.slot_size
     }
 
-    fn get_offset(&self, field_name: String) -> Option<i32> {
+    pub fn get_offset(&self, field_name: String) -> Option<i32> {
         let offset = self.offsets.get(&field_name);
         // offsetが存在しない場合はNoneを返す
 

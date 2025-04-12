@@ -16,6 +16,7 @@ mod file_manager;
 mod log_manager;
 mod page;
 mod record_page;
+mod table_manager;
 mod table_scan;
 mod transaction;
 

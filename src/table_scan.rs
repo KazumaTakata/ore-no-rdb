@@ -1,12 +1,12 @@
 use crate::{
     block,
-    buffer_manager::BufferList,
+    buffer_manager::{self, BufferList},
     file_manager::{self, FileManager},
     record_page,
     transaction::{self, Transaction},
 };
 
-struct RecordID {
+pub struct RecordID {
     block_number: u64,
     slot_number: i32,
 }
@@ -36,7 +36,7 @@ impl RecordID {
     }
 }
 
-struct TableScan {
+pub struct TableScan {
     file_name: String,
     record_page: record_page::RecordPage,
     current_slot: i32,
@@ -129,10 +129,11 @@ impl TableScan {
         &mut self,
         transaction: &mut Transaction,
         buffer_list: &mut BufferList,
+        field_name: String,
         value: i32,
     ) {
         self.record_page.set_integer(
-            self.file_name.clone(),
+            field_name,
             self.current_slot,
             transaction,
             buffer_list,
@@ -144,10 +145,11 @@ impl TableScan {
         &mut self,
         transaction: &mut Transaction,
         buffer_list: &mut BufferList,
+        field_name: String,
         value: String,
     ) {
         self.record_page.set_string(
-            self.file_name.clone(),
+            field_name,
             self.current_slot,
             transaction,
             buffer_list,
@@ -208,5 +210,14 @@ impl TableScan {
         let file_size = transaction.get_size(file_manager, self.file_name.clone());
         let current_block = self.record_page.get_block_id().get_block_number();
         current_block as usize == file_size - 1
+    }
+
+    pub fn close(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        buffer_manager: &mut buffer_manager::BufferManager,
+    ) {
+        transaction.unpin(buffer_list, buffer_manager, self.record_page.get_block_id());
     }
 }

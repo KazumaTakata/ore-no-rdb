@@ -36,6 +36,15 @@ impl Transaction {
         buffer_list.pin(block_id, file_manager, buffer_manager);
     }
 
+    pub fn unpin(
+        &mut self,
+        buffer_list: &mut BufferList,
+        buffer_manager: &mut BufferManager,
+        block_id: BlockId,
+    ) {
+        buffer_list.unpin(block_id, buffer_manager);
+    }
+
     pub fn commit(
         &mut self,
         buffer_list: &mut BufferList,
