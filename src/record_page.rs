@@ -95,7 +95,7 @@ impl TableSchema {
         return None;
     }
 
-    fn has_field(&self, field_name: String) -> bool {
+    pub fn has_field(&self, field_name: String) -> bool {
         self.field_infos.contains_key(&field_name)
     }
 }

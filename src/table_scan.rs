@@ -72,16 +72,13 @@ impl TableScan {
         }
     }
 
-    pub fn move_to_block(
-        &mut self,
-        block_number: u64,
-        layout: record_page::Layout,
-    ) -> record_page::RecordPage {
+    pub fn move_to_block(&mut self, block_number: u64, layout: record_page::Layout) {
         let block_id = block::BlockId::new(self.file_name.clone(), block_number);
-        let record_page = record_page::RecordPage::new(layout, block_id);
-        self.current_slot = -1;
+        self.record_page = record_page::RecordPage::new(layout, block_id);
+    }
 
-        return record_page;
+    pub fn move_to_before_first(&mut self, layout: record_page::Layout) {
+        self.move_to_block(0, layout)
     }
 
     pub fn move_to_new_block(
