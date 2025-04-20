@@ -1,0 +1,1 @@
+select field_a from table_a

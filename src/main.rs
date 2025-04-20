@@ -15,6 +15,7 @@ mod concurrency_manager;
 mod file_manager;
 mod log_manager;
 mod page;
+mod parser;
 mod predicate;
 mod record_page;
 mod scan;
@@ -25,9 +26,41 @@ mod transaction;
 use block::BlockId;
 use file_manager::FileManager;
 use page::Page;
+use parser::{Rule, SQLParser};
+use pest::Parser;
 
 fn main() {
     println!("Hello, world!");
+    let unparsed_file = fs::read_to_string("sample.sql").expect("cannot read file");
+
+    let file = SQLParser::parse(Rule::sql, &unparsed_file)
+        .expect("unsuccessful parse") // unwrap the parse result
+        .next()
+        .unwrap(); // get and unwrap the `file` rule; never fails
+
+    let mut field_sum: f64 = 0.0;
+    let mut record_count: u64 = 0;
+
+    let mut table_name = String::new();
+    let mut field_name = String::new();
+
+    for record in file.into_inner() {
+        match record.as_rule() {
+            Rule::table_name => {
+                table_name = record.as_str().to_string();
+            }
+            Rule::column_name => {
+                field_name = record.as_str().to_string();
+            }
+            Rule::EOI => (),
+            _ => {
+                println!("Unexpected rule: {:?}", record.as_rule());
+            }
+        }
+    }
+
+    println!("table_name: {}", table_name);
+    println!("field_name: {}", field_name);
 
     // let block = BlockId::new("./data/test.txt".to_string(), 0);
 
@@ -35,7 +68,7 @@ fn main() {
 
     // page.set_string(88, "Hello, world! from page");
 
-    let mut file_manager = FileManager::new(Path::new("data"), 400);
+    // let mut file_manager = FileManager::new(Path::new("data"), 400);
 
     // file_manager.write(&block, &mut page);
 

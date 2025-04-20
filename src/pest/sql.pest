@@ -1,0 +1,12 @@
+WHITESPACE = _{ " " | "\t" }
+select = @{ ^"select" ~ !(ASCII_ALPHANUMERIC | "_") }
+from = @{ ^"from" ~ !(ASCII_ALPHANUMERIC | "_") }
+insert = @{ ^"insert" ~ !(ASCII_ALPHANUMERIC | "_") }
+table_name = @{ (ASCII_ALPHA | "_")+ }
+column_name = @{ (ASCII_ALPHA | "_")+ }
+select_sql = { SOI ~ select ~ column_name ~ from ~ table_name ~ EOI }
+insert_sql = { SOI ~ insert ~ table_name ~ "(" ~ column_name ~ ("," ~ column_name)* ~ ")" ~ "values" ~ "(" ~ column_name ~ ("," ~ column_name)* ~ ")" ~ EOI }
+sql = { select_sql | insert_sql }
+
+
+where = { "where" }
