@@ -15,6 +15,7 @@ mod concurrency_manager;
 mod file_manager;
 mod log_manager;
 mod page;
+mod predicate;
 mod record_page;
 mod scan;
 mod table_manager;
