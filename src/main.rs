@@ -16,6 +16,7 @@ mod file_manager;
 mod log_manager;
 mod page;
 mod parser;
+mod plan;
 mod predicate;
 mod record_page;
 mod scan;
@@ -42,17 +43,43 @@ fn main() {
     let mut record_count: u64 = 0;
 
     let mut table_name = String::new();
-    let mut field_name = String::new();
+    let mut field_name_vec: Vec<String> = Vec::new();
 
     for record in file.into_inner() {
         match record.as_rule() {
-            Rule::table_name => {
-                table_name = record.as_str().to_string();
+            Rule::select_sql => {
+                // Handle SELECT SQL
+                println!("Found SELECT SQL: {:?}", record);
+                record
+                    .into_inner()
+                    .for_each(|inner_value| match inner_value.as_rule() {
+                        Rule::table_name => {
+                            table_name = inner_value.as_str().to_string();
+                        }
+                        Rule::select_list => inner_value.into_inner().for_each(|inner_value| {
+                            match inner_value.as_rule() {
+                                Rule::column_name => {
+                                    field_name_vec.push(inner_value.as_str().to_string());
+                                }
+                                _ => {}
+                            }
+                        }),
+                        _ => {}
+                    });
             }
-            Rule::column_name => {
-                field_name = record.as_str().to_string();
+            Rule::insert_sql => {
+                // Handle INSERT SQL
+                println!("Found INSERT SQL: {:?}", record);
+                record
+                    .into_inner()
+                    .for_each(|inner_value| match inner_value.as_rule() {
+                        Rule::table_name => {
+                            table_name = inner_value.as_str().to_string();
+                        }
+                        Rule::column_name => field_name_vec.push(inner_value.as_str().to_string()),
+                        _ => {}
+                    });
             }
-            Rule::EOI => (),
             _ => {
                 println!("Unexpected rule: {:?}", record.as_rule());
             }
@@ -60,7 +87,7 @@ fn main() {
     }
 
     println!("table_name: {}", table_name);
-    println!("field_name: {}", field_name);
+    println!("field_name: {}", field_name_vec.join(", "));
 
     // let block = BlockId::new("./data/test.txt".to_string(), 0);
 
