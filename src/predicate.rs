@@ -4,6 +4,7 @@ use crate::{record_page::TableSchema, scan::Scan};
 pub enum ConstantValue {
     String(String),
     Number(i32),
+    Null,
 }
 
 #[derive(Debug, Clone)]

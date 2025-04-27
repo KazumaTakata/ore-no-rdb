@@ -1,6 +1,8 @@
 use crate::{
     buffer_manager, file_manager,
     record_page::{self, TableSchema},
+    scan::Scan,
+    scan::UpdateScan,
     table_scan::TableScan,
     transaction,
 };
