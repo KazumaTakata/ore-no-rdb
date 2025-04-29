@@ -186,7 +186,12 @@ impl Scan for TableScan {
         self.current_slot = record_id.get_slot_number();
     }
 
-    fn move_to_before_first(&mut self) {
+    fn move_to_before_first(
+        &mut self,
+        file_manager: &mut FileManager,
+        buffer_list: &mut BufferList,
+        transaction: &mut Transaction,
+    ) {
         self.move_to_block(0)
     }
 
@@ -239,13 +244,12 @@ impl Scan for TableScan {
 
     fn next(
         &mut self,
-        slot_id: i32,
         file_manager: &mut FileManager,
         buffer_list: &mut BufferList,
         transaction: &mut Transaction,
     ) -> bool {
         let mut current_slot = self.record_page.find_next_after_slot_id(
-            slot_id,
+            self.current_slot,
             file_manager,
             buffer_list,
             transaction,
