@@ -1,3 +1,5 @@
+use core::panic;
+
 use crate::{
     block,
     buffer_manager::{self, BufferList},
@@ -283,5 +285,131 @@ impl Scan for TableScan {
         buffer_manager: &mut buffer_manager::BufferManager,
     ) {
         transaction.unpin(buffer_list, buffer_manager, self.record_page.get_block_id());
+    }
+}
+
+pub struct ProjectScan {
+    scan: Box<dyn Scan>,
+    field_names: Vec<String>,
+}
+
+impl ProjectScan {
+    pub fn new(scan: Box<dyn Scan>, field_names: Vec<String>) -> Self {
+        ProjectScan { scan, field_names }
+    }
+}
+
+impl Scan for ProjectScan {
+    fn has_field(&self, field_name: String) -> bool {
+        self.field_names.contains(&field_name)
+    }
+
+    fn move_to_before_first(
+        &mut self,
+        file_manager: &mut FileManager,
+        buffer_list: &mut BufferList,
+        transaction: &mut Transaction,
+    ) {
+        self.scan
+            .move_to_before_first(file_manager, buffer_list, transaction);
+    }
+
+    fn get_integer(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+    ) -> Option<i32> {
+        if self.has_field(field_name.clone()) {
+            return self.scan.get_integer(transaction, buffer_list, field_name);
+        } else {
+            panic!("Field {} not found in ProjectScan", field_name);
+        }
+    }
+
+    fn get_string(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+    ) -> Option<String> {
+        if self.has_field(field_name.clone()) {
+            return self.scan.get_string(transaction, buffer_list, field_name);
+        } else {
+            panic!("Field {} not found in ProjectScan", field_name);
+        }
+    }
+
+    fn get_value(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+    ) -> crate::predicate::ConstantValue {
+        if self.has_field(field_name.clone()) {
+            return self.scan.get_value(transaction, buffer_list, field_name);
+        } else {
+            panic!("Field {} not found in ProjectScan", field_name);
+        }
+    }
+
+    fn close(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        buffer_manager: &mut buffer_manager::BufferManager,
+    ) {
+        self.scan.close(transaction, buffer_list, buffer_manager);
+    }
+
+    fn next(
+        &mut self,
+        file_manager: &mut FileManager,
+        buffer_list: &mut BufferList,
+        transaction: &mut Transaction,
+    ) -> bool {
+        self.scan.next(file_manager, buffer_list, transaction)
+    }
+
+    fn delete(&mut self) {
+        panic!("Delete not supported in ProjectScan");
+    }
+
+    fn get_record_id(&self) -> RecordID {
+        panic!("get_record_id not supported in ProjectScan");
+    }
+
+    fn insert(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        file_manager: &mut FileManager,
+        layout: record_page::Layout,
+    ) {
+        panic!("Insert not supported in ProjectScan");
+    }
+
+    fn move_to_record_id(&mut self, layout: record_page::Layout, record_id: RecordID) {
+        panic!("move_to_record_id not supported in ProjectScan");
+    }
+
+    fn set_integer(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+        value: i32,
+    ) {
+        panic!("set_integer not supported in ProjectScan");
+    }
+
+    fn set_string(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+        value: String,
+    ) {
+        panic!("set_string not supported in ProjectScan");
     }
 }
