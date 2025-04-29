@@ -74,7 +74,7 @@ impl Plan for SelectPlan {
         buffer_list: &mut BufferList,
     ) -> Box<dyn Scan> {
         let scan = self.table_plan.open(transaction, file_manager, buffer_list);
-        return SelectScan::new(scan, self.predicate.clone());
+        return Box::new(SelectScan::new(scan, self.predicate.clone()));
     }
 
     fn get_schema(&self) -> &TableSchema {

@@ -43,9 +43,6 @@ pub trait Scan {
         buffer_manager: &mut BufferManager,
     );
     fn has_field(&self, field_name: String) -> bool;
-}
-
-pub trait UpdateScan: Scan {
     fn set_integer(
         &mut self,
         transaction: &mut Transaction,
@@ -73,13 +70,41 @@ pub trait UpdateScan: Scan {
     fn move_to_record_id(&mut self, layout: record_page::Layout, record_id: RecordID);
 }
 
+// pub trait UpdateScan: Scan {
+//     fn set_integer(
+//         &mut self,
+//         transaction: &mut Transaction,
+//         buffer_list: &mut BufferList,
+//         field_name: String,
+//         value: i32,
+//     );
+//     fn set_string(
+//         &mut self,
+//         transaction: &mut Transaction,
+//         buffer_list: &mut BufferList,
+//         field_name: String,
+//         value: String,
+//     );
+//     fn insert(
+//         &mut self,
+//         transaction: &mut Transaction,
+//         buffer_list: &mut BufferList,
+//         file_manager: &mut FileManager,
+//         layout: record_page::Layout,
+//     );
+//     fn delete(&mut self);
+
+//     fn get_record_id(&self) -> RecordID;
+//     fn move_to_record_id(&mut self, layout: record_page::Layout, record_id: RecordID);
+// }
+
 pub struct SelectScan {
-    scan: Box<dyn UpdateScan>,
+    scan: Box<dyn Scan>,
     predicate: Predicate,
 }
 
 impl SelectScan {
-    pub fn new(scan: Box<dyn UpdateScan>, predicate: Predicate) -> Self {
+    pub fn new(scan: Box<dyn Scan>, predicate: Predicate) -> Self {
         SelectScan { scan, predicate }
     }
 }
@@ -100,7 +125,10 @@ impl Scan for SelectScan {
             .scan
             .next(slot_id, file_manager, buffer_list, transaction)
         {
-            if self.predicate.is_satisfied(&mut *self.scan) {
+            if self
+                .predicate
+                .is_satisfied(&mut *self.scan, transaction, buffer_list)
+            {
                 return true;
             }
         }
@@ -145,9 +173,7 @@ impl Scan for SelectScan {
     fn has_field(&self, field_name: String) -> bool {
         self.scan.has_field(field_name)
     }
-}
 
-impl UpdateScan for SelectScan {
     fn set_integer(
         &mut self,
         transaction: &mut Transaction,
@@ -159,23 +185,37 @@ impl UpdateScan for SelectScan {
             .set_integer(transaction, buffer_list, field_name, value);
     }
 
-    fn set_string(&mut self, field_name: String, value: String) {
-        self.scan.set_string(value);
+    fn set_string(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+        value: String,
+    ) {
+        self.scan
+            .set_string(transaction, buffer_list, field_name, value);
     }
 
     fn delete(&mut self) {
         self.scan.delete();
     }
 
-    fn insert(&mut self) {
-        self.scan.insert();
+    fn insert(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        file_manager: &mut FileManager,
+        layout: record_page::Layout,
+    ) {
+        self.scan
+            .insert(transaction, buffer_list, file_manager, layout);
     }
 
     fn get_record_id(&self) -> RecordID {
         self.scan.get_record_id()
     }
 
-    fn move_to_record_id(&mut self, record_id: RecordID) {
-        self.scan.move_to_record_id(record_id);
+    fn move_to_record_id(&mut self, layout: record_page::Layout, record_id: RecordID) {
+        self.scan.move_to_record_id(layout, record_id);
     }
 }

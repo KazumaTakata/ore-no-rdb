@@ -1,4 +1,9 @@
-use crate::{record_page::TableSchema, scan::Scan};
+use crate::{
+    buffer_manager::BufferList,
+    record_page::TableSchema,
+    scan::Scan,
+    transaction::{self, Transaction},
+};
 
 #[derive(Debug, Clone)]
 pub enum ConstantValue {
@@ -28,6 +33,7 @@ impl Constant {
                     }
                 }
                 ConstantValue::Number(_n) => return false,
+                ConstantValue::Null => return false,
             },
             ConstantValue::Number(n) => match self.value {
                 ConstantValue::String(ref _str) => return false,
@@ -38,16 +44,20 @@ impl Constant {
                         return false;
                     }
                 }
+                ConstantValue::Null => return false,
             },
+            ConstantValue::Null => return false,
         }
     }
 }
 
+#[derive(Debug, Clone)]
 enum ExpressionValue {
     FieldName(String),
     Constant(Constant),
 }
 
+#[derive(Debug, Clone)]
 struct Expression {
     value: ExpressionValue,
 }
@@ -57,10 +67,15 @@ impl Expression {
         Expression { value }
     }
 
-    pub fn evaluate(&self, scan: &mut dyn Scan) -> Constant {
+    pub fn evaluate(
+        &self,
+        scan: &mut dyn Scan,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> Constant {
         match self.value {
             ExpressionValue::FieldName(ref field_name) => {
-                let value = scan.get_value(field_name.clone());
+                let value = scan.get_value(transaction, buffer_list, field_name.clone());
                 return Constant { value };
             }
             ExpressionValue::Constant(ref constant) => constant.clone(),
@@ -75,6 +90,7 @@ impl Expression {
     }
 }
 
+#[derive(Debug, Clone)]
 struct Term {
     lhs: Expression,
     rhs: Expression,
@@ -85,9 +101,14 @@ impl Term {
         Term { lhs, rhs }
     }
 
-    pub fn is_satisfied(&self, scan: &mut dyn Scan) -> bool {
-        let lhs = self.lhs.evaluate(scan);
-        let rhs = self.rhs.evaluate(scan);
+    pub fn is_satisfied(
+        &self,
+        scan: &mut dyn Scan,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> bool {
+        let lhs = self.lhs.evaluate(scan, transaction, buffer_list);
+        let rhs = self.rhs.evaluate(scan, transaction, buffer_list);
         return lhs.equals(rhs.value.clone());
     }
 
@@ -96,6 +117,7 @@ impl Term {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Predicate {
     terms: Vec<Term>,
 }
@@ -105,9 +127,14 @@ impl Predicate {
         Predicate { terms }
     }
 
-    pub fn is_satisfied(&self, scan: &mut dyn Scan) -> bool {
+    pub fn is_satisfied(
+        &self,
+        scan: &mut dyn Scan,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> bool {
         for term in &self.terms {
-            if !term.is_satisfied(scan) {
+            if !term.is_satisfied(scan, transaction, buffer_list) {
                 return false;
             }
         }

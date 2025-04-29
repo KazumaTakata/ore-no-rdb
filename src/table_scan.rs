@@ -3,7 +3,7 @@ use crate::{
     buffer_manager::{self, BufferList},
     file_manager::{self, FileManager},
     record_page,
-    scan::{Scan, UpdateScan},
+    scan::Scan,
     transaction::{self, Transaction},
 };
 
@@ -102,7 +102,7 @@ impl TableScan {
     }
 }
 
-impl UpdateScan for TableScan {
+impl Scan for TableScan {
     fn set_integer(
         &mut self,
         transaction: &mut Transaction,
@@ -185,9 +185,7 @@ impl UpdateScan for TableScan {
         self.record_page = record_page::RecordPage::new(layout, block_id);
         self.current_slot = record_id.get_slot_number();
     }
-}
 
-impl Scan for TableScan {
     fn move_to_before_first(&mut self) {
         self.move_to_block(0)
     }
