@@ -20,6 +20,7 @@ mod plan;
 mod predicate;
 mod record_page;
 mod scan;
+mod stat_manager;
 mod table_manager;
 mod table_scan;
 mod transaction;
