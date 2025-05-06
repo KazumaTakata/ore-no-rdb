@@ -1,6 +1,6 @@
 use crate::{
     buffer_manager, file_manager,
-    record_page::{self, TableSchema},
+    record_page::{self, TableFieldType, TableSchema},
     scan::Scan,
     table_scan::TableScan,
     transaction,
@@ -114,7 +114,7 @@ impl TableManager {
                 transaction,
                 buffer_list,
                 "field_type".to_string(),
-                field_type as i32,
+                field_type.into(),
             );
             field_scan.set_integer(
                 transaction,
@@ -152,35 +152,80 @@ impl TableManager {
         while table_scan.next(file_manager, buffer_list, transaction) {
             let name = table_scan.get_string(transaction, buffer_list, "table_name".to_string());
 
-            if name != table_name {
-                continue;
+            let mut slot_size: Option<usize> = None;
+
+            match name {
+                Some(name) => {
+                    if name == table_name {
+                        let size = table_scan.get_integer(
+                            transaction,
+                            buffer_list,
+                            "slot_size".to_string(),
+                        );
+
+                        match size {
+                            Some(size) => {
+                                slot_size = Some(size as usize);
+                                break;
+                            }
+                            None => continue,
+                        }
+                    }
+                }
+                None => continue,
             }
-
-            let slot_size =
-                table_scan.get_integer(transaction, buffer_list, "slot_size".to_string()) as usize;
-
-            let mut schema = TableSchema::new();
-            schema.add_integer_field("slot_size".to_string());
-
-            let layout = record_page::Layout::new(schema);
-
-            return layout;
         }
 
-        table_scan.before_first(transaction, buffer_list, table_name.clone());
+        let mut table_schema = TableSchema::new();
 
-        if !table_scan.next(transaction, buffer_list) {
-            panic!("Table not found");
+        let mut field_scan = TableScan::new(
+            "field_catalog".to_string(),
+            transaction,
+            file_manager,
+            self.field_catalog_layout.clone(),
+            buffer_list,
+        );
+
+        while field_scan.next(file_manager, buffer_list, transaction) {
+            let name = field_scan.get_string(transaction, buffer_list, "table_name".to_string());
+
+            match name {
+                Some(name) => {
+                    if name == table_name {
+                        let field_name = field_scan.get_string(
+                            transaction,
+                            buffer_list,
+                            "field_name".to_string(),
+                        );
+                        let field_type = field_scan.get_integer(
+                            transaction,
+                            buffer_list,
+                            "field_type".to_string(),
+                        );
+                        let field_length = field_scan.get_integer(
+                            transaction,
+                            buffer_list,
+                            "field_length".to_string(),
+                        );
+                        let field_offset = field_scan.get_integer(
+                            transaction,
+                            buffer_list,
+                            "field_offset".to_string(),
+                        );
+
+                        table_schema.add_field(
+                            field_name.unwrap(),
+                            TableFieldType::from(field_type.unwrap()),
+                            field_length.unwrap() as i32,
+                        );
+                    }
+                }
+                None => continue,
+            }
         }
 
-        let slot_size =
-            table_scan.get_integer(transaction, buffer_list, "slot_size".to_string()) as usize;
+        field_scan.close(transaction, buffer_list, buffer_manager);
 
-        let mut schema = TableSchema::new();
-        schema.add_integer_field("slot_size".to_string());
-
-        let layout = record_page::Layout::new(schema);
-
-        return layout;
+        return record_page::Layout::new(table_schema);
     }
 }

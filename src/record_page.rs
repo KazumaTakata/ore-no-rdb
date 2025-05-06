@@ -22,6 +22,25 @@ pub struct TableSchema {
     pub field_infos: HashMap<String, TableFieldInfo>,
 }
 
+impl Into<i32> for TableFieldType {
+    fn into(self) -> i32 {
+        match self {
+            TableFieldType::INTEGER => 0,
+            TableFieldType::VARCHAR => 1,
+        }
+    }
+}
+
+impl From<i32> for TableFieldType {
+    fn from(value: i32) -> Self {
+        match value {
+            0 => TableFieldType::INTEGER,
+            1 => TableFieldType::VARCHAR,
+            _ => panic!("Invalid field type"),
+        }
+    }
+}
+
 impl TableSchema {
     pub fn new() -> TableSchema {
         TableSchema {
@@ -30,7 +49,7 @@ impl TableSchema {
         }
     }
 
-    fn add_field(&mut self, field_name: String, field_type: TableFieldType, field_length: i32) {
+    pub fn add_field(&mut self, field_name: String, field_type: TableFieldType, field_length: i32) {
         self.fields.push(field_name.clone());
         self.field_infos.insert(
             field_name,
