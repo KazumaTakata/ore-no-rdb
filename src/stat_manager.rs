@@ -10,14 +10,14 @@ use crate::{
     transaction::Transaction,
 };
 
-struct StatManager {
+pub struct StatManager {
     table_manager: TableManager,
     table_stats: HashMap<String, StatInfo>,
     num_calls: u32,
 }
 
 #[derive(Debug, Clone)]
-struct StatInfo {
+pub struct StatInfo {
     num_records: u32,
     num_blocks: u32,
 }
