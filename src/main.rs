@@ -54,12 +54,20 @@ fn main() {
                 record
                     .into_inner()
                     .for_each(|inner_value| match inner_value.as_rule() {
-                        Rule::table_name => {
-                            table_name = inner_value.as_str().to_string();
+                        Rule::table_list => {
+                            inner_value.into_inner().for_each(|inner_value| {
+                                match inner_value.as_rule() {
+                                    Rule::id_token => {
+                                        println!("Table name: {}", inner_value.as_str());
+                                        table_name = inner_value.as_str().to_string();
+                                    }
+                                    _ => {}
+                                }
+                            });
                         }
                         Rule::select_list => inner_value.into_inner().for_each(|inner_value| {
                             match inner_value.as_rule() {
-                                Rule::column_name => {
+                                Rule::field => {
                                     field_name_vec.push(inner_value.as_str().to_string());
                                 }
                                 _ => {}

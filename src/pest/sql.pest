@@ -1,13 +1,21 @@
 WHITESPACE = _{ " " | "\t" }
+id_token = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+field = @{ id_token }
+field_list = { ( field ) ~ ("," ~ ( field ))* }
+select_list = { ( field ) ~ ("," ~ ( field ))* }
+table_list = { ( id_token ) ~ ("," ~ ( id_token ))* }
+string_token = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+int_token = @{ ASCII_DIGIT+ }
+constant = { string_token | int_token }
+constant_list = { ( constant ) ~ ("," ~ ( constant ))* }
+expression = { field | constant }
+term = { expression ~ "=" ~ expression }
+predicate = { term ~ ("and" ~ term)* }
 select = @{ ^"select" ~ !(ASCII_ALPHANUMERIC | "_") }
 from = @{ ^"from" ~ !(ASCII_ALPHANUMERIC | "_") }
 insert = @{ ^"insert" ~ !(ASCII_ALPHANUMERIC | "_") }
 table_name = @{ (ASCII_ALPHA | "_")+ }
 column_name = @{ (ASCII_ALPHA | "_")+ }
-select_list = { (column_name | "*") ~ ("," ~ (column_name | "*"))* }
-select_sql = { SOI ~ select ~ select_list ~ from ~ table_name ~ EOI }
-insert_sql = { SOI ~ insert ~ table_name ~ "(" ~ column_name ~ ("," ~ column_name)* ~ ")" ~ "values" ~ "(" ~ column_name ~ ("," ~ column_name)* ~ ")" ~ EOI }
+select_sql = { SOI ~ select ~ select_list ~ from ~ table_list ~ ( "where" ~ predicate )? ~EOI }
+insert_sql = { SOI ~ insert ~ "into" ~ id_token ~ field_list ~ "values" ~ constant_list ~ EOI }
 sql = { select_sql | insert_sql }
-
-
-where = { "where" }
