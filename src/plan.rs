@@ -86,7 +86,7 @@ impl Plan for TablePlan {
         self.stat_info.get_num_records()
     }
 
-    fn get_distinct_value(&self) -> u32 {
+    fn get_distinct_value(&self, file_name: String) -> u32 {
         self.stat_info.distinct_value()
     }
 }
@@ -125,8 +125,8 @@ impl Plan for SelectPlan {
         self.table_plan.blocks_accessed()
     }
 
-    fn get_distinct_value(&self) -> u32 {
-        self.table_plan.get_distinct_value()
+    fn get_distinct_value(&self, file_name: String) -> u32 {
+        self.table_plan.get_distinct_value(file_name)
     }
 
     fn records_output(&self) -> u32 {

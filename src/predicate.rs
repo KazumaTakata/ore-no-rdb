@@ -241,4 +241,96 @@ impl Predicate {
     pub fn conjoin_with(&mut self, predicate: Predicate) {
         self.terms.extend(predicate.terms);
     }
+
+    pub fn reduction_factor(&self, plan: &dyn Plan) -> u32 {
+        let mut reduction_factor = 1;
+        for term in &self.terms {
+            reduction_factor *= term.reduction_factor(plan);
+        }
+        return reduction_factor;
+    }
+
+    pub fn select_sub_predicate(&self, schema: TableSchema) -> Option<Predicate> {
+        let mut predicate = Predicate::new(vec![]);
+
+        for term in &self.terms {
+            if term.can_apply_to(schema.clone()) {
+                predicate.terms.push(term.clone());
+            }
+        }
+
+        if predicate.terms.len() == 0 {
+            return None;
+        } else {
+            return Some(predicate);
+        }
+    }
+
+    pub fn join_sub_predicate(
+        &self,
+        schema: TableSchema,
+        schema2: TableSchema,
+    ) -> Option<Predicate> {
+        let mut predicate = Predicate::new(vec![]);
+
+        let mut new_schema = TableSchema::new();
+        new_schema.add_all(schema.clone());
+        new_schema.add_all(schema2.clone());
+
+        for term in &self.terms {
+            if !term.can_apply_to(schema.clone())
+                && !term.can_apply_to(schema2.clone())
+                && term.can_apply_to(new_schema.clone())
+            {
+                predicate.terms.push(term.clone());
+            }
+        }
+
+        if predicate.terms.len() == 0 {
+            return None;
+        } else {
+            return Some(predicate);
+        }
+    }
+
+    pub fn equates_with_constant(
+        &self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+    ) -> Option<Constant> {
+        for term in &self.terms {
+            let constant = term.equate_with_constant(transaction, buffer_list, field_name.clone());
+            if constant.is_some() {
+                return constant;
+            }
+        }
+        return None;
+    }
+
+    pub fn equate_with_field(
+        &self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+    ) -> Option<String> {
+        for term in &self.terms {
+            let field = term.equate_with_field(transaction, buffer_list, field_name.clone());
+            if field.is_some() {
+                return field;
+            }
+        }
+        return None;
+    }
+    pub fn to_string(&self) -> String {
+        let mut result = String::new();
+        for term in &self.terms {
+            result.push_str(&term.to_string());
+            result.push_str(" AND ");
+        }
+        if result.len() > 5 {
+            result.truncate(result.len() - 5);
+        }
+        return result;
+    }
 }
