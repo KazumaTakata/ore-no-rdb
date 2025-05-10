@@ -1,5 +1,10 @@
+use std::cmp::max;
+
+use pest::pratt_parser::Op;
+
 use crate::{
     buffer_manager::BufferList,
+    plan::Plan,
     record_page::TableSchema,
     scan::Scan,
     transaction::{self, Transaction},
@@ -58,8 +63,8 @@ enum ExpressionValue {
 }
 
 #[derive(Debug, Clone)]
-struct Expression {
-    value: ExpressionValue,
+pub struct Expression {
+    pub value: ExpressionValue,
 }
 
 impl Expression {
@@ -88,10 +93,21 @@ impl Expression {
             ExpressionValue::Constant(_) => return true,
         }
     }
+
+    pub fn to_string(&self) -> String {
+        match self.value {
+            ExpressionValue::FieldName(ref field_name) => field_name.clone(),
+            ExpressionValue::Constant(ref constant) => match constant.value {
+                ConstantValue::String(ref str) => str.clone(),
+                ConstantValue::Number(n) => n.to_string(),
+                ConstantValue::Null => "NULL".to_string(),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
-struct Term {
+pub struct Term {
     lhs: Expression,
     rhs: Expression,
 }
@@ -114,6 +130,87 @@ impl Term {
 
     pub fn can_apply_to(&self, schema: TableSchema) -> bool {
         self.lhs.can_apply_to(schema.clone()) && self.rhs.can_apply_to(schema)
+    }
+
+    pub fn reduction_factor(&self, plan: &dyn Plan) -> u32 {
+        match self.lhs.value {
+            ExpressionValue::FieldName(ref field_name) => match self.rhs.value {
+                ExpressionValue::FieldName(ref field_name2) => {
+                    return max(
+                        plan.get_distinct_value(field_name.clone()),
+                        plan.get_distinct_value(field_name2.clone()),
+                    );
+                }
+                ExpressionValue::Constant(ref constant) => {
+                    return plan.get_distinct_value(field_name.clone());
+                }
+            },
+            ExpressionValue::Constant(_) => match self.rhs.value {
+                ExpressionValue::FieldName(ref field_name) => {
+                    return plan.get_distinct_value(field_name.clone());
+                }
+                ExpressionValue::Constant(_) => return 1,
+            },
+        }
+    }
+
+    pub fn equate_with_constant(
+        &self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+    ) -> Option<Constant> {
+        match self.lhs.value.clone() {
+            ExpressionValue::FieldName(_field_name) => match self.rhs.value {
+                ExpressionValue::FieldName(_) => return None,
+                ExpressionValue::Constant(ref constant2) => {
+                    if _field_name == field_name {
+                        return Some(constant2.clone());
+                    } else {
+                        return None;
+                    }
+                }
+            },
+            ExpressionValue::Constant(ref constant) => match self.rhs.value.clone() {
+                ExpressionValue::FieldName(_field_name) => {
+                    if _field_name == field_name {
+                        return Some(constant.clone());
+                    } else {
+                        return None;
+                    }
+                }
+                ExpressionValue::Constant(_) => return None,
+            },
+        }
+    }
+
+    pub fn equate_with_field(
+        &self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+    ) -> Option<String> {
+        match self.lhs.value.clone() {
+            ExpressionValue::FieldName(_field_name) => match self.rhs.value.clone() {
+                ExpressionValue::FieldName(_field_name2) => {
+                    if _field_name == field_name {
+                        return Some(_field_name2.clone());
+                    } else if _field_name2 == field_name {
+                        return Some(_field_name.clone());
+                    } else {
+                        return None;
+                    }
+                }
+                ExpressionValue::Constant(ref constant2) => return None,
+            },
+            ExpressionValue::Constant(ref constant) => return None,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        let lhs = self.lhs.to_string();
+        let rhs = self.rhs.to_string();
+        return format!("{} = {}", lhs, rhs);
     }
 }
 

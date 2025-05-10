@@ -9,7 +9,7 @@ use crate::{
     transaction::{self, Transaction},
 };
 
-trait Plan {
+pub trait Plan {
     fn open(
         &self,
         transaction: &mut Transaction,
@@ -22,7 +22,7 @@ trait Plan {
 
     fn records_output(&self) -> u32;
 
-    fn get_distinct_value(&self) -> u32;
+    fn get_distinct_value(&self, file_name: String) -> u32;
 }
 
 struct TablePlan {
