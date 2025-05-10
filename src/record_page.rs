@@ -68,7 +68,7 @@ impl TableSchema {
         self.add_field(field_name, TableFieldType::VARCHAR, field_length);
     }
 
-    fn add(&mut self, field_name: String, schema: TableSchema) {
+    pub fn add(&mut self, field_name: String, schema: TableSchema) {
         let field_type = schema.get_field_type(field_name.clone());
         let field_length = schema.get_field_length(field_name.clone());
         self.add_field(field_name, field_type.unwrap(), field_length.unwrap());
@@ -80,7 +80,7 @@ impl TableSchema {
         }
     }
 
-    fn fields(&self) -> &Vec<String> {
+    pub fn fields(&self) -> &Vec<String> {
         &self.fields
     }
 

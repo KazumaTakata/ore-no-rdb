@@ -37,7 +37,7 @@ impl StatInfo {
         self.num_blocks
     }
 
-    pub fn distinct_value(&self) -> u32 {
+    pub fn distinct_value(&self, field_name: String) -> u32 {
         // this is wildly inaccurate
         return 1 + self.num_records / 3;
     }

@@ -1,3 +1,5 @@
+use std::cmp::min;
+
 use crate::{
     buffer_manager::{self, BufferList},
     file_manager::{self, FileManager},
@@ -5,7 +7,7 @@ use crate::{
     record_page::{self, Layout, TableSchema},
     scan::{Scan, SelectScan},
     stat_manager::{StatInfo, StatManager},
-    table_scan::TableScan,
+    table_scan::{ProjectScan, TableScan},
     transaction::{self, Transaction},
 };
 
@@ -20,9 +22,14 @@ pub trait Plan {
 
     fn blocks_accessed(&self) -> u32;
 
-    fn records_output(&self) -> u32;
+    fn records_output(&self, transaction: &mut Transaction, buffer_list: &mut BufferList) -> u32;
 
-    fn get_distinct_value(&self, file_name: String) -> u32;
+    fn get_distinct_value(
+        &self,
+        field_name: String,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> u32;
 }
 
 struct TablePlan {
@@ -82,12 +89,17 @@ impl Plan for TablePlan {
         self.stat_info.get_num_blocks()
     }
 
-    fn records_output(&self) -> u32 {
+    fn records_output(&self, transaction: &mut Transaction, buffer_list: &mut BufferList) -> u32 {
         self.stat_info.get_num_records()
     }
 
-    fn get_distinct_value(&self, file_name: String) -> u32 {
-        self.stat_info.distinct_value()
+    fn get_distinct_value(
+        &self,
+        field_name: String,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> u32 {
+        self.stat_info.distinct_value(field_name)
     }
 }
 
@@ -125,11 +137,101 @@ impl Plan for SelectPlan {
         self.table_plan.blocks_accessed()
     }
 
-    fn get_distinct_value(&self, file_name: String) -> u32 {
-        self.table_plan.get_distinct_value(file_name)
+    fn get_distinct_value(
+        &self,
+        field_name: String,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> u32 {
+        if self
+            .predicate
+            .equates_with_constant(transaction, buffer_list, field_name.clone())
+            .is_some()
+        {
+            return 1;
+        } else {
+            let field_name2 =
+                self.predicate
+                    .equate_with_field(transaction, buffer_list, field_name.clone());
+
+            if (field_name2.is_some()) {
+                return min(
+                    self.table_plan.get_distinct_value(
+                        field_name2.clone().unwrap(),
+                        transaction,
+                        buffer_list,
+                    ),
+                    self.table_plan.get_distinct_value(
+                        field_name.clone(),
+                        transaction,
+                        buffer_list,
+                    ),
+                );
+            } else {
+                return self
+                    .table_plan
+                    .get_distinct_value(field_name, transaction, buffer_list);
+            }
+        }
     }
 
-    fn records_output(&self) -> u32 {
-        self.table_plan.records_output()
+    fn records_output(&self, transaction: &mut Transaction, buffer_list: &mut BufferList) -> u32 {
+        self.table_plan.records_output(transaction, buffer_list)
+            / self
+                .predicate
+                .reduction_factor(&self.table_plan, transaction, buffer_list)
+    }
+}
+
+struct ProjectPlan {
+    // Fields for the plan
+    table_plan: Box<dyn Plan>,
+    schema: TableSchema,
+}
+
+impl ProjectPlan {
+    pub fn new(table_plan: Box<dyn Plan>, field_list: Vec<String>) -> Self {
+        let mut schema = TableSchema::new();
+
+        for field in field_list.iter() {
+            schema.add(field.clone(), table_plan.get_schema().clone());
+        }
+
+        ProjectPlan { table_plan, schema }
+    }
+}
+
+impl Plan for ProjectPlan {
+    fn open(
+        &self,
+        transaction: &mut Transaction,
+        file_manager: &mut FileManager,
+        buffer_list: &mut BufferList,
+    ) -> Box<dyn Scan> {
+        let scan = self.table_plan.open(transaction, file_manager, buffer_list);
+        let field_names = self.schema.fields().clone(); // Assuming `fields()` returns `Vec<String>`
+        return Box::new(ProjectScan::new(scan, field_names));
+    }
+
+    fn get_schema(&self) -> &TableSchema {
+        &self.schema
+    }
+
+    fn blocks_accessed(&self) -> u32 {
+        self.table_plan.blocks_accessed()
+    }
+
+    fn get_distinct_value(
+        &self,
+        field_name: String,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> u32 {
+        self.table_plan
+            .get_distinct_value(field_name, transaction, buffer_list)
+    }
+
+    fn records_output(&self, transaction: &mut Transaction, buffer_list: &mut BufferList) -> u32 {
+        self.table_plan.records_output(transaction, buffer_list)
     }
 }

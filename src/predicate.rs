@@ -18,7 +18,7 @@ pub enum ConstantValue {
 }
 
 #[derive(Debug, Clone)]
-struct Constant {
+pub struct Constant {
     value: ConstantValue,
 }
 
@@ -132,22 +132,27 @@ impl Term {
         self.lhs.can_apply_to(schema.clone()) && self.rhs.can_apply_to(schema)
     }
 
-    pub fn reduction_factor(&self, plan: &dyn Plan) -> u32 {
+    pub fn reduction_factor(
+        &self,
+        plan: &dyn Plan,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> u32 {
         match self.lhs.value {
             ExpressionValue::FieldName(ref field_name) => match self.rhs.value {
                 ExpressionValue::FieldName(ref field_name2) => {
                     return max(
-                        plan.get_distinct_value(field_name.clone()),
-                        plan.get_distinct_value(field_name2.clone()),
+                        plan.get_distinct_value(field_name.clone(), transaction, buffer_list),
+                        plan.get_distinct_value(field_name2.clone(), transaction, buffer_list),
                     );
                 }
                 ExpressionValue::Constant(ref constant) => {
-                    return plan.get_distinct_value(field_name.clone());
+                    return plan.get_distinct_value(field_name.clone(), transaction, buffer_list);
                 }
             },
             ExpressionValue::Constant(_) => match self.rhs.value {
                 ExpressionValue::FieldName(ref field_name) => {
-                    return plan.get_distinct_value(field_name.clone());
+                    return plan.get_distinct_value(field_name.clone(), transaction, buffer_list);
                 }
                 ExpressionValue::Constant(_) => return 1,
             },
@@ -242,10 +247,15 @@ impl Predicate {
         self.terms.extend(predicate.terms);
     }
 
-    pub fn reduction_factor(&self, plan: &dyn Plan) -> u32 {
+    pub fn reduction_factor(
+        &self,
+        plan: &dyn Plan,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> u32 {
         let mut reduction_factor = 1;
         for term in &self.terms {
-            reduction_factor *= term.reduction_factor(plan);
+            reduction_factor *= term.reduction_factor(plan, transaction, buffer_list);
         }
         return reduction_factor;
     }
@@ -322,6 +332,7 @@ impl Predicate {
         }
         return None;
     }
+
     pub fn to_string(&self) -> String {
         let mut result = String::new();
         for term in &self.terms {
