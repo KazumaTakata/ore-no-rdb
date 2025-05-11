@@ -28,75 +28,13 @@ mod transaction;
 use block::BlockId;
 use file_manager::FileManager;
 use page::Page;
-use parser::{Rule, SQLParser};
+use parser::{parse_sql, Rule, SQLParser};
 use pest::Parser;
 
 fn main() {
     println!("Hello, world!");
-    let unparsed_file = fs::read_to_string("sample.sql").expect("cannot read file");
 
-    let file = SQLParser::parse(Rule::sql, &unparsed_file)
-        .expect("unsuccessful parse") // unwrap the parse result
-        .next()
-        .unwrap(); // get and unwrap the `file` rule; never fails
-
-    let mut field_sum: f64 = 0.0;
-    let mut record_count: u64 = 0;
-
-    let mut table_name = String::new();
-    let mut field_name_vec: Vec<String> = Vec::new();
-
-    for record in file.into_inner() {
-        match record.as_rule() {
-            Rule::select_sql => {
-                // Handle SELECT SQL
-                println!("Found SELECT SQL: {:?}", record);
-                record
-                    .into_inner()
-                    .for_each(|inner_value| match inner_value.as_rule() {
-                        Rule::table_list => {
-                            inner_value.into_inner().for_each(|inner_value| {
-                                match inner_value.as_rule() {
-                                    Rule::id_token => {
-                                        println!("Table name: {}", inner_value.as_str());
-                                        table_name = inner_value.as_str().to_string();
-                                    }
-                                    _ => {}
-                                }
-                            });
-                        }
-                        Rule::select_list => inner_value.into_inner().for_each(|inner_value| {
-                            match inner_value.as_rule() {
-                                Rule::field => {
-                                    field_name_vec.push(inner_value.as_str().to_string());
-                                }
-                                _ => {}
-                            }
-                        }),
-                        _ => {}
-                    });
-            }
-            Rule::insert_sql => {
-                // Handle INSERT SQL
-                println!("Found INSERT SQL: {:?}", record);
-                record
-                    .into_inner()
-                    .for_each(|inner_value| match inner_value.as_rule() {
-                        Rule::table_name => {
-                            table_name = inner_value.as_str().to_string();
-                        }
-                        Rule::column_name => field_name_vec.push(inner_value.as_str().to_string()),
-                        _ => {}
-                    });
-            }
-            _ => {
-                println!("Unexpected rule: {:?}", record.as_rule());
-            }
-        }
-    }
-
-    println!("table_name: {}", table_name);
-    println!("field_name: {}", field_name_vec.join(", "));
+    parse_sql();
 
     // let block = BlockId::new("./data/test.txt".to_string(), 0);
 
