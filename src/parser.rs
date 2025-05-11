@@ -13,6 +13,41 @@ use crate::predicate::{Constant, ConstantValue, Expression, ExpressionValue, Pre
 #[grammar = "pest/sql.pest"]
 pub struct SQLParser;
 
+pub struct InsertData {
+    pub table_name: String,
+    pub field_name_list: Vec<String>,
+    pub value_list: Vec<Constant>,
+}
+
+impl InsertData {
+    pub fn new(
+        table_name: String,
+        field_name_list: Vec<String>,
+        value_list: Vec<Constant>,
+    ) -> Self {
+        InsertData {
+            table_name,
+            field_name_list,
+            value_list,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        let mut result = String::new();
+        result.push_str("Table: ");
+        result.push_str(&self.table_name);
+        result.push_str("\nFields: ");
+        for field in &self.field_name_list {
+            result.push_str(&format!("{} ", field));
+        }
+        result.push_str("\nValues: ");
+        for value in &self.value_list {
+            result.push_str(&format!("{:?} ", value));
+        }
+        result
+    }
+}
+
 pub struct QueryData {
     pub table_name_list: Vec<String>,
     pub field_name_list: Vec<String>,
