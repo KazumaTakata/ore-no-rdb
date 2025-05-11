@@ -1,9 +1,9 @@
-use std::fs;
+use std::{fs, slice::RChunks};
 
 use pest::Parser;
 use pest_derive::Parser;
 
-use crate::predicate::Predicate;
+use crate::predicate::{Constant, ConstantValue, Expression, ExpressionValue, Predicate, Term};
 
 // #[derive(Parser)]
 // #[grammar = "pest/csv.pest"]
@@ -13,10 +13,10 @@ use crate::predicate::Predicate;
 #[grammar = "pest/sql.pest"]
 pub struct SQLParser;
 
-struct QueryData {
-    table_name_list: Vec<String>,
-    field_name_list: Vec<String>,
-    predicate: Predicate,
+pub struct QueryData {
+    pub table_name_list: Vec<String>,
+    pub field_name_list: Vec<String>,
+    pub predicate: Predicate,
 }
 
 impl QueryData {
@@ -48,7 +48,7 @@ impl QueryData {
     }
 }
 
-pub fn parse_sql() {
+pub fn parse_sql() -> Option<QueryData> {
     let unparsed_file = fs::read_to_string("sample.sql").expect("cannot read file");
 
     let file = SQLParser::parse(Rule::sql, &unparsed_file)
@@ -68,8 +68,8 @@ pub fn parse_sql() {
                 let mut table_name_list: Vec<String> = Vec::new();
                 let mut field_name_list: Vec<String> = Vec::new();
 
-                // Handle SELECT SQL
-                println!("Found SELECT SQL: {:?}", record);
+                let mut predicate: Option<Predicate> = None;
+
                 record
                     .into_inner()
                     .for_each(|inner_value| match inner_value.as_rule() {
@@ -77,7 +77,6 @@ pub fn parse_sql() {
                             inner_value.into_inner().for_each(|inner_value| {
                                 match inner_value.as_rule() {
                                     Rule::id_token => {
-                                        println!("Table name: {}", inner_value.as_str());
                                         table_name = inner_value.as_str().to_string();
                                         table_name_list.push(table_name.clone());
                                     }
@@ -96,8 +95,13 @@ pub fn parse_sql() {
                         }),
                         Rule::predicate => {
                             inner_value.into_inner().for_each(|inner_value| {
+                                let mut terms: Vec<Term> = Vec::new();
+
                                 match inner_value.as_rule() {
                                     Rule::term => {
+                                        let mut lhs = None;
+                                        let mut rhs = None;
+
                                         inner_value.into_inner().for_each(|inner_value| {
                                             match inner_value.as_rule() {
                                                 Rule::expression => {
@@ -108,18 +112,47 @@ pub fn parse_sql() {
                                                                     "Rule::id_token {}",
                                                                     inner_value.as_str()
                                                                 );
+
+                                                                let expression =
+                                                                    inner_value.as_str();
+
+                                                                let expression = Expression::new(
+                                                                    ExpressionValue::FieldName(
+                                                                        inner_value
+                                                                            .as_str()
+                                                                            .to_string(),
+                                                                    ),
+                                                                );
+
+                                                                if lhs.is_none() {
+                                                                    lhs = Some(expression);
+                                                                } else {
+                                                                    rhs = Some(expression);
+                                                                }
                                                             }
                                                             Rule::constant => {
                                                                 let value = inner_value
                                                                     .as_str()
-                                                                    .parse::<f64>()
+                                                                    .parse::<i32>()
                                                                     .unwrap();
-                                                                field_sum += value;
-                                                                record_count += 1;
-                                                                println!(
-                                                                    "Rule::int_token {}",
-                                                                    inner_value.as_str()
+                                                                let int_constant_value =
+                                                                    ConstantValue::Number(value);
+
+                                                                let constant = Constant::new(
+                                                                    int_constant_value,
                                                                 );
+
+                                                                let expression = Expression::new(
+                                                                    ExpressionValue::Constant(
+                                                                        constant.clone(),
+                                                                    ),
+                                                                );
+                                                                println!(
+                                                                    "parsed constant value: {:?}",
+                                                                    constant
+                                                                );
+
+                                                                rhs = Some(expression);
                                                             }
                                                             _ => {}
                                                         },
@@ -128,16 +161,28 @@ pub fn parse_sql() {
                                                 _ => {}
                                             }
                                         });
+
+                                        let term = Term::new(lhs.unwrap(), rhs.unwrap());
+                                        terms.push(term);
                                     }
                                     _ => {}
                                 }
+
+                                predicate = Some(Predicate::new(terms));
                             });
                         }
                         _ => {}
                     });
+                let query_data =
+                    QueryData::new(table_name_list, field_name_list, predicate.unwrap());
+
+                println!("Query Data: \n{}", query_data.to_string());
+
+                return Some(query_data);
             }
             Rule::insert_sql => {
                 // Handle INSERT SQL
+                return None;
                 println!("Found INSERT SQL: {:?}", record);
                 record
                     .into_inner()
@@ -150,55 +195,13 @@ pub fn parse_sql() {
                     });
             }
             _ => {
+                return None;
                 println!("Unexpected rule: {:?}", record.as_rule());
             }
         }
     }
 
+    return None;
     println!("table_name: {}", table_name);
     println!("field_name: {}", field_name_vec.join(", "));
-
-    // let block = BlockId::new("./data/test.txt".to_string(), 0);
-
-    // let mut page = Page::new(400);
-
-    // page.set_string(88, "Hello, world! from page");
-
-    // let mut file_manager = FileManager::new(Path::new("data"), 400);
-
-    // file_manager.write(&block, &mut page);
-
-    // let mut page2 = Page::new(400);
-
-    // file_manager.read(&block, &mut page2);
-
-    // println!("{}", page2.get_string(88));
-
-    // let mut file = file_manager.get_file("./data/test.txt");
-
-    // let mut log_manager = LogManager::new(&mut file_manager, "data/log".to_string());
-
-    // let block_id = BlockId::new("data/test.txt".to_string(), 0);
-
-    // let buffer = buffer_manager.pin(block_id);
-
-    // if let Some(buffer) = buffer {
-    //     let mut buffer_ref = buffer.borrow_mut();
-    //     let page = buffer_ref.content();
-    //     let integer_1 = page.get_integer(80);
-    //     println!("{}", integer_1);
-    //     page.set_integer(80, integer_1 + 1);
-    //     buffer_ref.set_modified(1, 0);
-
-    //     drop(buffer_ref);
-
-    //     buffer_manager.flush_all(1);
-    // }
-
-    // for i in 0..10 {
-    //     let message = format!("Hello, world! from log {}", i);
-    //     let lsn = log_manager.append_record(message.as_bytes());
-    // }
-
-    // log_manager.flush();
 }

@@ -57,7 +57,7 @@ impl Constant {
 }
 
 #[derive(Debug, Clone)]
-enum ExpressionValue {
+pub enum ExpressionValue {
     FieldName(String),
     Constant(Constant),
 }

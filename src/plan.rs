@@ -3,6 +3,7 @@ use std::cmp::min;
 use crate::{
     buffer_manager::{self, BufferList},
     file_manager::{self, FileManager},
+    parser::QueryData,
     predicate::Predicate,
     record_page::{self, Layout, TableSchema},
     scan::{ProductScan, Scan, SelectScan},
@@ -105,12 +106,12 @@ impl Plan for TablePlan {
 
 struct SelectPlan {
     // Fields for the plan
-    table_plan: TablePlan,
+    table_plan: Box<dyn Plan>,
     predicate: Predicate,
 }
 
 impl SelectPlan {
-    pub fn new(table_plan: TablePlan, predicate: Predicate) -> Self {
+    pub fn new(table_plan: Box<dyn Plan>, predicate: Predicate) -> Self {
         SelectPlan {
             table_plan,
             predicate,
@@ -179,7 +180,7 @@ impl Plan for SelectPlan {
         self.table_plan.records_output(transaction, buffer_list)
             / self
                 .predicate
-                .reduction_factor(&self.table_plan, transaction, buffer_list)
+                .reduction_factor(self.table_plan.as_ref(), transaction, buffer_list)
     }
 }
 
@@ -300,4 +301,43 @@ impl Plan for ProductPlan {
                 .get_distinct_value(field_name, transaction, buffer_list);
         }
     }
+}
+
+fn create_query_plan(
+    query_data: QueryData,
+    transaction: &mut Transaction,
+    file_manager: &mut FileManager,
+    buffer_list: &mut BufferList,
+    buffer_manager: &mut buffer_manager::BufferManager,
+    stat_manager: &mut StatManager,
+) -> Box<dyn Plan> {
+    let mut plans: Vec<Box<dyn Plan>> = Vec::new();
+
+    for table_name in query_data.table_name_list.iter() {
+        let layout = record_page::Layout::new(TableSchema::new());
+        let table_plan = TablePlan::new(
+            table_name.clone(),
+            transaction,
+            file_manager,
+            layout,
+            buffer_list,
+            buffer_manager,
+            stat_manager,
+        );
+        let mut plan: Box<dyn Plan> = Box::new(table_plan);
+        plans.push(plan);
+    }
+
+    let mut plan: Box<dyn Plan> = plans.pop().unwrap();
+
+    for next_plan in plans.into_iter() {
+        let product_plan = ProductPlan::new(plan, next_plan);
+        plan = Box::new(product_plan);
+    }
+
+    let select_plan = SelectPlan::new(plan, query_data.predicate.clone());
+
+    let project_plan = ProjectPlan::new(Box::new(select_plan), query_data.field_name_list.clone());
+
+    return Box::new(project_plan);
 }
