@@ -5,7 +5,7 @@ use crate::{
     file_manager::{self, FileManager},
     predicate::Predicate,
     record_page::{self, Layout, TableSchema},
-    scan::{Scan, SelectScan},
+    scan::{ProductScan, Scan, SelectScan},
     stat_manager::{StatInfo, StatManager},
     table_scan::{ProjectScan, TableScan},
     transaction::{self, Transaction},
@@ -20,7 +20,7 @@ pub trait Plan {
     ) -> Box<dyn Scan>;
     fn get_schema(&self) -> &TableSchema;
 
-    fn blocks_accessed(&self) -> u32;
+    fn blocks_accessed(&self, transaction: &mut Transaction, buffer_list: &mut BufferList) -> u32;
 
     fn records_output(&self, transaction: &mut Transaction, buffer_list: &mut BufferList) -> u32;
 
@@ -85,7 +85,7 @@ impl Plan for TablePlan {
         &self.layout.schema
     }
 
-    fn blocks_accessed(&self) -> u32 {
+    fn blocks_accessed(&self, transaction: &mut Transaction, buffer_list: &mut BufferList) -> u32 {
         self.stat_info.get_num_blocks()
     }
 
@@ -133,8 +133,8 @@ impl Plan for SelectPlan {
         self.table_plan.get_schema()
     }
 
-    fn blocks_accessed(&self) -> u32 {
-        self.table_plan.blocks_accessed()
+    fn blocks_accessed(&self, transaction: &mut Transaction, buffer_list: &mut BufferList) -> u32 {
+        self.table_plan.blocks_accessed(transaction, buffer_list)
     }
 
     fn get_distinct_value(
@@ -217,8 +217,8 @@ impl Plan for ProjectPlan {
         &self.schema
     }
 
-    fn blocks_accessed(&self) -> u32 {
-        self.table_plan.blocks_accessed()
+    fn blocks_accessed(&self, transaction: &mut Transaction, buffer_list: &mut BufferList) -> u32 {
+        self.table_plan.blocks_accessed(transaction, buffer_list)
     }
 
     fn get_distinct_value(
@@ -233,5 +233,71 @@ impl Plan for ProjectPlan {
 
     fn records_output(&self, transaction: &mut Transaction, buffer_list: &mut BufferList) -> u32 {
         self.table_plan.records_output(transaction, buffer_list)
+    }
+}
+
+struct ProductPlan {
+    // Fields for the plan
+    left_plan: Box<dyn Plan>,
+    right_plan: Box<dyn Plan>,
+    schema: TableSchema,
+}
+
+impl ProductPlan {
+    pub fn new(left_plan: Box<dyn Plan>, right_plan: Box<dyn Plan>) -> Self {
+        let mut schema = TableSchema::new();
+        schema.add_all(right_plan.get_schema().clone());
+        schema.add_all(left_plan.get_schema().clone());
+
+        ProductPlan {
+            left_plan,
+            right_plan,
+            schema,
+        }
+    }
+}
+
+impl Plan for ProductPlan {
+    fn open(
+        &self,
+        transaction: &mut Transaction,
+        file_manager: &mut FileManager,
+        buffer_list: &mut BufferList,
+    ) -> Box<dyn Scan> {
+        let scan1 = self.left_plan.open(transaction, file_manager, buffer_list);
+        let scan2 = self.right_plan.open(transaction, file_manager, buffer_list);
+        return Box::new(ProductScan::new(scan1, scan2));
+    }
+
+    fn get_schema(&self) -> &TableSchema {
+        &self.schema
+    }
+
+    fn blocks_accessed(&self, transaction: &mut Transaction, buffer_list: &mut BufferList) -> u32 {
+        self.left_plan.blocks_accessed(transaction, buffer_list)
+            + self.left_plan.records_output(transaction, buffer_list)
+                * self.right_plan.blocks_accessed(transaction, buffer_list)
+    }
+
+    fn records_output(&self, transaction: &mut Transaction, buffer_list: &mut BufferList) -> u32 {
+        self.left_plan.records_output(transaction, buffer_list)
+            * self.right_plan.records_output(transaction, buffer_list)
+    }
+
+    fn get_distinct_value(
+        &self,
+        field_name: String,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+    ) -> u32 {
+        if self.left_plan.get_schema().has_field(field_name.clone()) {
+            return self
+                .left_plan
+                .get_distinct_value(field_name, transaction, buffer_list);
+        } else {
+            return self
+                .right_plan
+                .get_distinct_value(field_name, transaction, buffer_list);
+        }
     }
 }
