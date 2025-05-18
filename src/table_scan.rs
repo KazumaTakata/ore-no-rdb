@@ -137,6 +137,26 @@ impl Scan for TableScan {
         )
     }
 
+    fn set_value(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+        value: crate::predicate::ConstantValue,
+    ) {
+        match value {
+            crate::predicate::ConstantValue::Number(num) => {
+                self.set_integer(transaction, buffer_list, field_name, num);
+            }
+            crate::predicate::ConstantValue::String(string) => {
+                self.set_string(transaction, buffer_list, field_name, string);
+            }
+            crate::predicate::ConstantValue::Null => {
+                panic!("Null value cannot be set");
+            }
+        }
+    }
+
     fn insert(
         &mut self,
         transaction: &mut Transaction,
@@ -401,6 +421,16 @@ impl Scan for ProjectScan {
         value: i32,
     ) {
         panic!("set_integer not supported in ProjectScan");
+    }
+
+    fn set_value(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+        value: crate::predicate::ConstantValue,
+    ) {
+        panic!("set_value not supported in ProjectScan");
     }
 
     fn set_string(

@@ -3,7 +3,7 @@ use std::cmp::min;
 use crate::{
     buffer_manager::{self, BufferList},
     file_manager::{self, FileManager},
-    parser::QueryData,
+    parser::{InsertData, QueryData},
     predicate::Predicate,
     record_page::{self, Layout, TableSchema},
     scan::{ProductScan, Scan, SelectScan},
@@ -340,4 +340,37 @@ fn create_query_plan(
     let project_plan = ProjectPlan::new(Box::new(select_plan), query_data.field_name_list.clone());
 
     return Box::new(project_plan);
+}
+
+pub fn execute_insert(
+    transaction: &mut Transaction,
+    file_manager: &mut FileManager,
+    buffer_list: &mut BufferList,
+    buffer_manager: &mut buffer_manager::BufferManager,
+    stat_manager: &mut StatManager,
+    insert_data: InsertData,
+    layout: record_page::Layout,
+) {
+    let plan = TablePlan::new(
+        insert_data.table_name.clone(),
+        transaction,
+        file_manager,
+        layout.clone(),
+        buffer_list,
+        buffer_manager,
+        stat_manager,
+    );
+
+    let mut scan = plan.open(transaction, file_manager, buffer_list);
+
+    scan.insert(transaction, buffer_list, file_manager, layout.clone());
+
+    let mut val_inter = insert_data.value_list.iter();
+
+    for field in insert_data.field_name_list.iter() {
+        let value = val_inter.next().unwrap();
+        scan.set_value(transaction, buffer_list, field.clone(), value.value.clone());
+    }
+
+    scan.close(transaction, buffer_list, buffer_manager);
 }

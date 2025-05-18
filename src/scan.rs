@@ -61,6 +61,14 @@ pub trait Scan {
         field_name: String,
         value: String,
     );
+    fn set_value(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+        value: ConstantValue,
+    );
+
     fn insert(
         &mut self,
         transaction: &mut Transaction,
@@ -201,6 +209,17 @@ impl Scan for SelectScan {
     ) {
         self.scan
             .set_string(transaction, buffer_list, field_name, value);
+    }
+
+    fn set_value(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+        value: ConstantValue,
+    ) {
+        self.scan
+            .set_value(transaction, buffer_list, field_name, value);
     }
 
     fn delete(&mut self) {
@@ -375,5 +394,15 @@ impl Scan for ProductScan {
         value: String,
     ) {
         panic!("set_string not implemented for ProductScan");
+    }
+
+    fn set_value(
+        &mut self,
+        transaction: &mut Transaction,
+        buffer_list: &mut BufferList,
+        field_name: String,
+        value: ConstantValue,
+    ) {
+        panic!("set_value not implemented for ProductScan");
     }
 }

@@ -19,7 +19,7 @@ pub enum ConstantValue {
 
 #[derive(Debug, Clone)]
 pub struct Constant {
-    value: ConstantValue,
+    pub value: ConstantValue,
 }
 
 impl Constant {

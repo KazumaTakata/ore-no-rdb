@@ -48,6 +48,11 @@ impl InsertData {
     }
 }
 
+pub enum ParsedSQL {
+    Query(QueryData),
+    Insert(InsertData),
+}
+
 pub struct QueryData {
     pub table_name_list: Vec<String>,
     pub field_name_list: Vec<String>,
@@ -83,7 +88,7 @@ impl QueryData {
     }
 }
 
-pub fn parse_sql() -> Option<QueryData> {
+pub fn parse_sql() -> Option<ParsedSQL> {
     let unparsed_file = fs::read_to_string("sample.sql").expect("cannot read file");
 
     let file = SQLParser::parse(Rule::sql, &unparsed_file)
@@ -213,21 +218,50 @@ pub fn parse_sql() -> Option<QueryData> {
 
                 println!("Query Data: \n{}", query_data.to_string());
 
-                return Some(query_data);
+                return Some(ParsedSQL::Query(query_data));
             }
             Rule::insert_sql => {
                 // Handle INSERT SQL
                 return None;
                 println!("Found INSERT SQL: {:?}", record);
+                let mut table_name: Option<String> = None;
+                let mut field_name_vec: Vec<String> = Vec::new();
+                let mut constant_list: Vec<Constant> = Vec::new();
                 record
                     .into_inner()
                     .for_each(|inner_value| match inner_value.as_rule() {
-                        Rule::table_name => {
-                            table_name = inner_value.as_str().to_string();
+                        Rule::id_token => {
+                            table_name = Some(inner_value.as_str().to_string());
                         }
-                        Rule::column_name => field_name_vec.push(inner_value.as_str().to_string()),
+                        Rule::field_list => {
+                            inner_value.into_inner().for_each(|inner_value| {
+                                match inner_value.as_rule() {
+                                    Rule::id_token => {
+                                        field_name_vec.push(inner_value.as_str().to_string());
+                                    }
+                                    _ => {}
+                                }
+                            });
+                        }
+                        Rule::constant_list => {
+                            inner_value.into_inner().for_each(|inner_value| {
+                                match inner_value.as_rule() {
+                                    Rule::constant => {
+                                        let value = inner_value.as_str().parse::<i32>().unwrap();
+                                        let int_constant_value = ConstantValue::Number(value);
+                                        let constant = Constant::new(int_constant_value);
+                                        constant_list.push(constant);
+                                    }
+                                    _ => {}
+                                }
+                            });
+                        }
                         _ => {}
                     });
+
+                let insert_data =
+                    InsertData::new(table_name.unwrap(), field_name_vec, constant_list);
+                return Some(ParsedSQL::Insert(insert_data));
             }
             _ => {
                 return None;
