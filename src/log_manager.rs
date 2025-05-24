@@ -73,7 +73,7 @@ impl LogManager {
         block_id
     }
 
-    fn append_record(&mut self, record: &[u8], file_manager: &mut FileManager) -> i32 {
+    pub fn append_record(&mut self, record: &[u8], file_manager: &mut FileManager) -> i32 {
         let record_length = record.len();
         let mut boundary = self.log_page.get_integer(0);
 

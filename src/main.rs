@@ -19,6 +19,7 @@ mod parser;
 mod plan;
 mod predicate;
 mod record_page;
+mod recovery_manager;
 mod scan;
 mod stat_manager;
 mod table_manager;

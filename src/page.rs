@@ -53,4 +53,8 @@ impl Page {
     pub fn get_data(&mut self) -> &mut Vec<u8> {
         &mut self.data
     }
+
+    pub fn get_integer_size() -> usize {
+        4
+    }
 }
