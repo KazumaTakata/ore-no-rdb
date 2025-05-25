@@ -46,7 +46,7 @@ impl Buffer {
         }
     }
 
-    fn block_id(&self) -> &Option<BlockId> {
+    pub fn block_id(&self) -> &Option<BlockId> {
         &self.block_id
     }
 

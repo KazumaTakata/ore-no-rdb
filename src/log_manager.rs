@@ -60,6 +60,12 @@ impl LogManager {
         self.latest_saved_lsn = self.latest_lsn;
     }
 
+    pub fn flush_with_lsn(&mut self, file_manager: &mut FileManager, lsn: i32) {
+        if lsn > self.latest_saved_lsn {
+            self.flush(file_manager);
+        }
+    }
+
     pub fn iterator(&mut self, file_manager: &mut FileManager) -> LogIterator {
         self.flush(file_manager);
         LogIterator::new(file_manager, self.current_block_id.clone())
@@ -93,7 +99,7 @@ impl LogManager {
     }
 }
 
-struct LogIterator {
+pub struct LogIterator {
     current_block_id: BlockId,
     current_offset: usize,
     log_page: Page,
@@ -112,12 +118,12 @@ impl LogIterator {
         }
     }
 
-    fn has_next(&self, file_manager: &FileManager) -> bool {
+    pub fn has_next(&self, file_manager: &FileManager) -> bool {
         self.current_offset < file_manager.block_size
             || self.current_block_id.get_block_number() > 0
     }
 
-    fn next(&mut self, file_manager: &mut FileManager) -> Vec<u8> {
+    pub fn next(&mut self, file_manager: &mut FileManager) -> Vec<u8> {
         let block_size = file_manager.block_size;
         if block_size == self.current_offset {
             self.current_block_id = BlockId::new(
