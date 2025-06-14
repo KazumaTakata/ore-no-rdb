@@ -15,6 +15,7 @@ mod concurrency_manager;
 mod constant;
 mod file_manager;
 mod log_manager;
+mod log_manager_v2;
 mod page;
 mod parser;
 mod plan;
