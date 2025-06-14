@@ -12,6 +12,7 @@ use std::{
 mod block;
 mod buffer_manager;
 mod concurrency_manager;
+mod constant;
 mod file_manager;
 mod log_manager;
 mod page;

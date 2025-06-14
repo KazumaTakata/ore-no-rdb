@@ -80,17 +80,17 @@ struct SetStringRecord {
 
 impl SetStringRecord {
     pub fn new(page: Page) -> Self {
-        let mut offset = Page::get_integer_size();
+        let mut offset = Page::get_integer_byte_size();
         let transaction_id = page.get_integer(offset);
-        offset += Page::get_integer_size();
+        offset += Page::get_integer_byte_size();
         let filename = page.get_string(offset);
-        offset += String::len(&filename) + Page::get_integer_size();
+        offset += String::len(&filename) + Page::get_integer_byte_size();
         let block_number = page.get_integer(offset);
         let block_id = BlockId::new(filename, block_number as u64);
 
-        offset += Page::get_integer_size();
+        offset += Page::get_integer_byte_size();
         let offset_value = page.get_integer(offset) as usize;
-        offset += Page::get_integer_size();
+        offset += Page::get_integer_byte_size();
         let value = page.get_string(offset);
 
         SetStringRecord {
@@ -109,13 +109,13 @@ impl SetStringRecord {
         offset: usize,
         value: &str,
     ) -> i32 {
-        let transaction_id_offset = Page::get_integer_size();
-        let filename_offset = transaction_id_offset + Page::get_integer_size();
+        let transaction_id_offset = Page::get_integer_byte_size();
+        let filename_offset = transaction_id_offset + Page::get_integer_byte_size();
         let block_number_offset =
-            filename_offset + block_id.get_file_name().len() + Page::get_integer_size();
-        let offset_value_offset = block_number_offset + Page::get_integer_size();
-        let value_offset = offset_value_offset + Page::get_integer_size();
-        let record_length = value_offset + value.len() + Page::get_integer_size();
+            filename_offset + block_id.get_file_name().len() + Page::get_integer_byte_size();
+        let offset_value_offset = block_number_offset + Page::get_integer_byte_size();
+        let value_offset = offset_value_offset + Page::get_integer_byte_size();
+        let record_length = value_offset + value.len() + Page::get_integer_byte_size();
 
         let mut page = Page::new(record_length);
         page.set_integer(0, LogRecordType::SETSTRING as i32);
@@ -167,17 +167,17 @@ struct SetIntegerRecord {
 
 impl SetIntegerRecord {
     pub fn new(page: Page) -> Self {
-        let mut offset = Page::get_integer_size();
+        let mut offset = Page::get_integer_byte_size();
         let transaction_id = page.get_integer(offset);
-        offset += Page::get_integer_size();
+        offset += Page::get_integer_byte_size();
         let filename = page.get_string(offset);
-        offset += String::len(&filename) + Page::get_integer_size();
+        offset += String::len(&filename) + Page::get_integer_byte_size();
         let block_number = page.get_integer(offset);
         let block_id = BlockId::new(filename, block_number as u64);
 
-        offset += Page::get_integer_size();
+        offset += Page::get_integer_byte_size();
         let offset_value = page.get_integer(offset) as usize;
-        offset += Page::get_integer_size();
+        offset += Page::get_integer_byte_size();
         let value = page.get_integer(offset);
 
         SetIntegerRecord {
@@ -196,13 +196,13 @@ impl SetIntegerRecord {
         offset: usize,
         value: i32,
     ) -> i32 {
-        let transaction_id_offset = Page::get_integer_size();
-        let filename_offset = transaction_id_offset + Page::get_integer_size();
+        let transaction_id_offset = Page::get_integer_byte_size();
+        let filename_offset = transaction_id_offset + Page::get_integer_byte_size();
         let block_number_offset =
-            filename_offset + block_id.get_file_name().len() + Page::get_integer_size();
-        let offset_value_offset = block_number_offset + Page::get_integer_size();
-        let value_offset = offset_value_offset + Page::get_integer_size();
-        let record_length = value_offset + Page::get_integer_size();
+            filename_offset + block_id.get_file_name().len() + Page::get_integer_byte_size();
+        let offset_value_offset = block_number_offset + Page::get_integer_byte_size();
+        let value_offset = offset_value_offset + Page::get_integer_byte_size();
+        let record_length = value_offset + Page::get_integer_byte_size();
 
         let mut page = Page::new(record_length);
         page.set_integer(0, LogRecordType::SETSTRING as i32);
@@ -256,7 +256,7 @@ impl CheckpointRecord {
         log_manager: &mut log_manager::LogManager,
         file_manager: &mut file_manager::FileManager,
     ) -> i32 {
-        let mut page = Page::new(Page::get_integer_size());
+        let mut page = Page::new(Page::get_integer_byte_size());
         page.set_integer(0, LogRecordType::SETSTRING as i32);
         let lsn = log_manager.append_record(page.get_data(), file_manager);
 
@@ -289,7 +289,7 @@ struct StartRecord {
 
 impl StartRecord {
     pub fn new(page: Page) -> Self {
-        let mut offset = Page::get_integer_size();
+        let mut offset = Page::get_integer_byte_size();
         let transaction_id = page.get_integer(offset);
         StartRecord { transaction_id }
     }
@@ -299,9 +299,9 @@ impl StartRecord {
         file_manager: &mut file_manager::FileManager,
         transaction_id: i32,
     ) -> i32 {
-        let mut page = Page::new(Page::get_integer_size());
+        let mut page = Page::new(Page::get_integer_byte_size());
         page.set_integer(0, LogRecordType::START as i32);
-        page.set_integer(Page::get_integer_size(), transaction_id);
+        page.set_integer(Page::get_integer_byte_size(), transaction_id);
         let lsn = log_manager.append_record(page.get_data(), file_manager);
 
         return lsn;
@@ -334,7 +334,7 @@ struct CommitRecord {
 
 impl CommitRecord {
     pub fn new(page: Page) -> Self {
-        let mut offset = Page::get_integer_size();
+        let mut offset = Page::get_integer_byte_size();
         let transaction_id = page.get_integer(offset);
         CommitRecord { transaction_id }
     }
@@ -344,9 +344,9 @@ impl CommitRecord {
         file_manager: &mut file_manager::FileManager,
         transaction_id: i32,
     ) -> i32 {
-        let mut page = Page::new(Page::get_integer_size());
+        let mut page = Page::new(Page::get_integer_byte_size());
         page.set_integer(0, LogRecordType::COMMIT as i32);
-        page.set_integer(Page::get_integer_size(), transaction_id);
+        page.set_integer(Page::get_integer_byte_size(), transaction_id);
         let lsn = log_manager.append_record(page.get_data(), file_manager);
 
         return lsn;
@@ -377,7 +377,7 @@ struct RollbackRecord {
 }
 impl RollbackRecord {
     pub fn new(page: Page) -> Self {
-        let mut offset = Page::get_integer_size();
+        let mut offset = Page::get_integer_byte_size();
         let transaction_id = page.get_integer(offset);
         RollbackRecord { transaction_id }
     }
@@ -387,9 +387,9 @@ impl RollbackRecord {
         file_manager: &mut file_manager::FileManager,
         transaction_id: i32,
     ) -> i32 {
-        let mut page = Page::new(Page::get_integer_size());
+        let mut page = Page::new(Page::get_integer_byte_size());
         page.set_integer(0, LogRecordType::ROLLBACK as i32);
-        page.set_integer(Page::get_integer_size(), transaction_id);
+        page.set_integer(Page::get_integer_byte_size(), transaction_id);
         let lsn = log_manager.append_record(page.get_data(), file_manager);
 
         return lsn;
