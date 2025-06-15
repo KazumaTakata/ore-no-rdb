@@ -21,7 +21,7 @@ impl LockTable {
         LockTable { locks }
     }
 
-    fn s_lock(&mut self, block_id: BlockId) {
+    pub fn s_lock(&mut self, block_id: BlockId) {
         if self.has_xlock(&block_id) {
             panic!("lock conflict");
         }
@@ -30,7 +30,7 @@ impl LockTable {
         self.locks.insert(block_id, lock + 1);
     }
 
-    fn x_lock(&mut self, block_id: BlockId) {
+    pub fn x_lock(&mut self, block_id: BlockId) {
         if self.has_other_slock(&block_id) || self.has_xlock(&block_id) {
             panic!("lock conflict");
         }
@@ -45,7 +45,7 @@ impl LockTable {
         return self.get_lock_value(block_id) > 1;
     }
 
-    fn unlock(&mut self, block_id: &BlockId) {
+    pub fn unlock(&mut self, block_id: &BlockId) {
         let val = self.get_lock_value(block_id);
 
         if val > 1 {

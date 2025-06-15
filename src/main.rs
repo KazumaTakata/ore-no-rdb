@@ -13,6 +13,7 @@ mod block;
 mod buffer_manager;
 mod buffer_manager_v2;
 mod concurrency_manager;
+mod concurrency_manager_v2;
 mod constant;
 mod file_manager;
 mod log_manager;
@@ -28,6 +29,7 @@ mod stat_manager;
 mod table_manager;
 mod table_scan;
 mod transaction;
+mod transaction_v2;
 
 use block::BlockId;
 use file_manager::FileManager;

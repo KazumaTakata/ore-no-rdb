@@ -153,7 +153,7 @@ impl BufferManagerV2 {
             if let Some(buffer) = buffer {
                 buffer.borrow_mut().assign_to_block(block_id);
                 buffer.borrow_mut().pin();
-                return Some(buffer.clone());
+                return Some(buffer);
             } else {
                 return None;
             }
@@ -193,5 +193,59 @@ impl BufferManagerV2 {
 
     pub fn pin(&mut self, block_id: BlockId) -> Option<Rc<RefCell<BufferV2>>> {
         return self.try_to_pin(block_id);
+    }
+}
+
+pub struct BufferListV2 {
+    buffers: HashMap<BlockId, Rc<RefCell<BufferV2>>>,
+    pins: Vec<BlockId>,
+    buffer_manager: Rc<RefCell<BufferManagerV2>>,
+}
+
+impl BufferListV2 {
+    pub fn new(buffer_manager: Rc<RefCell<BufferManagerV2>>) -> BufferListV2 {
+        BufferListV2 {
+            buffers: HashMap::new(),
+            pins: Vec::new(),
+            buffer_manager,
+        }
+    }
+
+    pub fn pin(&mut self, block_id: BlockId) {
+        if let Some(buffer) = self.buffer_manager.borrow_mut().pin(block_id.clone()) {
+            self.buffers.insert(block_id.clone(), Rc::clone(&buffer));
+            self.pins.push(block_id);
+        }
+    }
+
+    pub fn unpin(&mut self, block_id: BlockId) {
+        if let Some(buffer) = self.buffers.get(&block_id) {
+            let mut buffer = buffer.borrow_mut();
+            buffer.unpin();
+            // self.pinsから始めに見つかったblock_idを削除
+            if let Some(index) = self.pins.iter().position(|x| *x == block_id) {
+                self.pins.remove(index);
+            }
+
+            if !buffer.is_pinned() {
+                self.buffer_manager.borrow_mut().unpin(&mut buffer);
+            }
+        }
+    }
+
+    pub fn unpin_all(&mut self) {
+        for block_id in self.pins.iter() {
+            if let Some(buffer) = self.buffers.get(block_id) {
+                let mut buffer = buffer.borrow_mut();
+                self.buffer_manager.borrow_mut().unpin(&mut buffer);
+            }
+        }
+        self.buffers.clear();
+        self.pins.clear();
+    }
+
+    pub fn get_buffer(&mut self, block_id: BlockId) -> Option<&Rc<RefCell<BufferV2>>> {
+        let buffer = self.buffers.get(&block_id);
+        return buffer;
     }
 }
