@@ -11,6 +11,7 @@ use std::{
 
 mod block;
 mod buffer_manager;
+mod buffer_manager_v2;
 mod concurrency_manager;
 mod constant;
 mod file_manager;

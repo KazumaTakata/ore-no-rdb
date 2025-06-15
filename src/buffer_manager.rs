@@ -16,13 +16,13 @@ use crate::page::Page;
 pub struct Buffer {
     page: Page,
     block_id: Option<BlockId>,
-    tx_num: Option<i32>,
+    pub tx_num: Option<i32>,
     lsn: Option<i32>,
     pin_count: i32,
 }
 
 impl Buffer {
-    fn new() -> Buffer {
+    pub fn new() -> Buffer {
         let page = Page::new(1000);
         let pin_count = 0;
 
@@ -50,7 +50,7 @@ impl Buffer {
         &self.block_id
     }
 
-    fn is_pinned(&self) -> bool {
+    pub fn is_pinned(&self) -> bool {
         self.pin_count > 0
     }
 
@@ -58,14 +58,14 @@ impl Buffer {
         self.tx_num
     }
 
-    fn assign_to_block(&mut self, file_manager: &mut FileManager, block_id: BlockId) {
+    pub fn assign_to_block(&mut self, file_manager: &mut FileManager, block_id: BlockId) {
         self.flush(file_manager);
         file_manager.read(&block_id, &mut self.page);
         self.block_id = Some(block_id);
         self.pin_count = 0;
     }
 
-    fn flush(&mut self, file_manager: &mut FileManager) {
+    pub fn flush(&mut self, file_manager: &mut FileManager) {
         if self.tx_num.is_some() && self.block_id.is_some() {
             let block_id = self.block_id.as_ref().unwrap();
             file_manager.write(&block_id, &mut self.page);
@@ -73,11 +73,11 @@ impl Buffer {
         }
     }
 
-    fn pin(&mut self) {
+    pub fn pin(&mut self) {
         self.pin_count += 1;
     }
 
-    fn unpin(&mut self) {
+    pub fn unpin(&mut self) {
         self.pin_count -= 1;
     }
 }
