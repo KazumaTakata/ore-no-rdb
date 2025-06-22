@@ -23,6 +23,7 @@ mod parser;
 mod plan;
 mod predicate;
 mod record_page;
+mod record_page_v2;
 mod recovery_manager;
 mod scan;
 mod stat_manager;

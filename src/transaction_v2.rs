@@ -51,6 +51,10 @@ impl TransactionV2 {
         }
     }
 
+    pub fn get_block_size(&self) -> usize {
+        self.file_manager.borrow().get_block_size()
+    }
+
     pub fn pin(&mut self, block_id: BlockId) {
         self.buffer_list.pin(block_id);
     }
@@ -102,5 +106,49 @@ impl TransactionV2 {
 
     pub fn append(&mut self, file_name: &str) -> BlockId {
         self.file_manager.borrow_mut().append(file_name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{log_manager, log_manager_v2::LogManagerV2};
+
+    use super::*;
+
+    // FileManagerのテスト
+    #[test]
+    fn test_transaction_v2() {
+        let test_dir = Path::new("data");
+        let block_size = 400;
+        let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
+        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+            file_manager.clone(),
+            "log.txt".to_string(),
+        )));
+        let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
+            10,
+            file_manager.clone(),
+            log_manager.clone(),
+        )));
+        let lock_table = Rc::new(RefCell::new(LockTable::new()));
+
+        let mut transaction = TransactionV2::new(
+            1,
+            file_manager.clone(),
+            buffer_manager.clone(),
+            lock_table.clone(),
+        );
+
+        let block_id_1 = BlockId::new("test_file_1.txt".to_string(), 1);
+        let block_id_2 = BlockId::new("test_file_1.txt".to_string(), 2);
+
+        transaction.pin(block_id_1.clone());
+        transaction.pin(block_id_2.clone());
+
+        transaction.set_string(block_id_2.clone(), 0, "hello world");
+
+        let value = transaction.get_string(block_id_2.clone(), 0);
+        print!("Value at block_id_1: {}\n", value);
+        transaction.commit();
     }
 }

@@ -5,7 +5,7 @@ use crate::transaction::Transaction;
 use crate::{BlockId, FileManager};
 
 #[derive(Clone)]
-struct TableFieldInfo {
+pub struct TableFieldInfo {
     field_type: TableFieldType,
     field_length: i32,
 }
@@ -179,17 +179,17 @@ impl Layout {
         return None;
     }
 
-    fn get_field_type(&self, field_name: String) -> Option<TableFieldType> {
+    pub fn get_field_type(&self, field_name: String) -> Option<TableFieldType> {
         self.schema.get_field_type(field_name)
     }
 
-    fn has_field(&self, field_name: String) -> bool {
+    pub fn has_field(&self, field_name: String) -> bool {
         self.schema.has_field(field_name)
     }
 }
 
 #[derive(Copy, Clone)]
-enum RecordType {
+pub enum RecordType {
     EMPTY = 0,
     USED = 1,
 }
