@@ -23,7 +23,7 @@ pub struct Buffer {
 
 impl Buffer {
     pub fn new() -> Buffer {
-        let page = Page::new(1000);
+        let page: Page = Page::new(1000);
         let pin_count = 0;
 
         Buffer {

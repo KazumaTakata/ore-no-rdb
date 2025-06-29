@@ -168,8 +168,8 @@ impl Layout {
         self.slot_size
     }
 
-    pub fn get_offset(&self, field_name: String) -> Option<i32> {
-        let offset = self.offsets.get(&field_name);
+    pub fn get_offset(&self, field_name: &str) -> Option<i32> {
+        let offset = self.offsets.get(field_name);
         // offsetが存在しない場合はNoneを返す
 
         if let Some(offset) = offset {
@@ -215,7 +215,7 @@ impl RecordPage {
             return None;
         }
 
-        let offset = self.layout.get_offset(field_name.clone()).unwrap();
+        let offset = self.layout.get_offset(&field_name).unwrap();
         let record_offset = self.get_offset_of_record(slot_id);
         let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
 
@@ -248,7 +248,7 @@ impl RecordPage {
             return;
         }
 
-        let offset = self.layout.get_offset(field_name.clone()).unwrap();
+        let offset = self.layout.get_offset(&field_name).unwrap();
         let record_offset = self.get_offset_of_record(slot_id);
         let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
 
@@ -286,7 +286,7 @@ impl RecordPage {
             return;
         }
 
-        let offset = self.layout.get_offset(field_name.clone()).unwrap();
+        let offset = self.layout.get_offset(&field_name).unwrap();
         let record_offset = self.get_offset_of_record(slot_id);
         let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
 
@@ -337,7 +337,7 @@ impl RecordPage {
             return None;
         }
 
-        let offset = self.layout.get_offset(field_name.clone()).unwrap();
+        let offset = self.layout.get_offset(&field_name).unwrap();
         let record_offset = self.get_offset_of_record(slot_id);
         let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
 
@@ -435,7 +435,7 @@ impl RecordPage {
 
             for field in schema.fields() {
                 let field_type = schema.get_field_type(field.clone()).unwrap();
-                let offset = self.layout.get_offset(field.clone()).unwrap();
+                let offset = self.layout.get_offset(&field).unwrap();
 
                 match field_type {
                     TableFieldType::INTEGER => {
@@ -484,7 +484,7 @@ mod tests {
 
         // layerのschemaをiterateしてoffsetをprintoutする
         for field in layout.schema.fields() {
-            let offset = layout.get_offset(field.clone()).unwrap();
+            let offset = layout.get_offset(&field).unwrap();
             println!("{}: {}", field, offset);
         }
 

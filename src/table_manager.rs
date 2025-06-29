@@ -87,9 +87,7 @@ impl TableManager {
                 .get_field_length(field.clone())
                 .expect("Field length not found");
 
-            let field_offset = layout
-                .get_offset(field.clone())
-                .expect("Field offset not found");
+            let field_offset = layout.get_offset(&field).expect("Field offset not found");
 
             field_scan.insert(
                 transaction,

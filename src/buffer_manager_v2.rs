@@ -28,7 +28,7 @@ impl BufferV2 {
         file_manager: Rc<RefCell<FileManager>>,
         log_manager: Rc<RefCell<LogManagerV2>>,
     ) -> BufferV2 {
-        let page = Page::new(1000);
+        let page = Page::new(file_manager.borrow().block_size);
         let pin_count = 0;
 
         BufferV2 {
