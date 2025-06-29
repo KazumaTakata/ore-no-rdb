@@ -29,6 +29,7 @@ mod scan;
 mod stat_manager;
 mod table_manager;
 mod table_scan;
+mod table_scan_v2;
 mod transaction;
 mod transaction_v2;
 
