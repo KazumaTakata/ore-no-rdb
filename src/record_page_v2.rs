@@ -18,6 +18,7 @@ impl RecordPage {
         layout: Layout,
         block_id: BlockId,
     ) -> RecordPage {
+        transaction.borrow_mut().pin(block_id.clone());
         RecordPage {
             transaction,
             layout,
@@ -62,6 +63,11 @@ impl RecordPage {
         if field_type != TableFieldType::INTEGER {
             return;
         }
+
+        println!(
+            "set_integer: field_name: {}, slot_id: {}, value: {}",
+            field_name, slot_id, value
+        );
 
         self.transaction.borrow_mut().set_integer(
             self.block_id.clone(),
@@ -149,13 +155,6 @@ impl RecordPage {
     }
 
     pub fn is_valid_slot_id(&self, slot_id: i32) -> bool {
-        println!(
-            "is_valid_slot_id: slot_id: {}, offset_of_record: {}, block_size: {}",
-            slot_id,
-            self.get_offset_of_record(slot_id + 1),
-            self.transaction.borrow_mut().get_block_size()
-        );
-
         return self.get_offset_of_record(slot_id + 1)
             <= self.transaction.borrow_mut().get_block_size() as i32;
     }
@@ -182,7 +181,7 @@ impl RecordPage {
     pub fn format(&mut self) {
         let mut slot_id = 0;
         while self.is_valid_slot_id(slot_id) {
-            print!(
+            println!(
                 "slot_id: {}, slot_size: {}",
                 slot_id,
                 self.layout.get_slot_size()

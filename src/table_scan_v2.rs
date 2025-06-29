@@ -50,6 +50,7 @@ impl TableScan {
         }
     }
     pub fn move_to_block(&mut self, block_number: u64) {
+        self.close();
         let block_id = BlockId::new(self.file_name.clone(), block_number);
         self.record_page = RecordPage::new(self.transaction.clone(), self.layout.clone(), block_id);
         self.current_slot = -1;
@@ -102,25 +103,22 @@ impl ScanV2 for TableScan {
     }
 
     fn insert(&mut self) {
-        if self.current_slot == -1 {
-            self.current_slot = 0;
-        }
-
-        let mut current_slot = self.record_page.insert_after_slot_id(self.current_slot);
+        self.current_slot = self
+            .record_page
+            .insert_after_slot_id(self.current_slot)
+            .unwrap_or(-1);
 
         // current_slotが optionalだったら、次のblockに移動する
-        while current_slot.is_none() {
+        while self.current_slot == -1 {
             if self.at_last_block() {
                 self.move_to_new_block();
             } else {
-                let block_id = BlockId::new(
-                    self.file_name.clone(),
-                    self.record_page.get_block_id().get_block_number() + 1,
-                );
-                self.record_page =
-                    RecordPage::new(self.transaction.clone(), self.layout.clone(), block_id);
+                self.move_to_block(self.record_page.get_block_id().get_block_number() + 1);
             }
-            current_slot = self.record_page.insert_after_slot_id(self.current_slot)
+            self.current_slot = self
+                .record_page
+                .insert_after_slot_id(self.current_slot)
+                .unwrap_or(-1)
         }
     }
 
@@ -134,6 +132,7 @@ impl ScanV2 for TableScan {
     fn delete(&mut self) {}
 
     fn move_to_record_id(&mut self, record_id: RecordID) {
+        self.close();
         let block_id = BlockId::new(self.file_name.clone(), record_id.get_block_number());
         self.record_page = RecordPage::new(self.transaction.clone(), self.layout.clone(), block_id);
         self.current_slot = record_id.get_slot_number();
@@ -174,15 +173,21 @@ impl ScanV2 for TableScan {
     }
 
     fn next(&mut self) -> bool {
-        let mut current_slot = self.record_page.find_next_after_slot_id(self.current_slot);
+        self.current_slot = self
+            .record_page
+            .find_next_after_slot_id(self.current_slot)
+            .unwrap_or(-1);
 
-        while current_slot.is_none() {
+        while self.current_slot == -1 {
             if self.at_last_block() {
                 return false;
             }
             self.move_to_block(self.record_page.get_block_id().get_block_number() + 1);
 
-            current_slot = self.record_page.find_next_after_slot_id(-1);
+            self.current_slot = self
+                .record_page
+                .find_next_after_slot_id(self.current_slot)
+                .unwrap_or(-1)
         }
 
         return true;
@@ -196,5 +201,95 @@ impl ScanV2 for TableScan {
         self.transaction
             .borrow_mut()
             .unpin(self.record_page.get_block_id());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, path::Path, rc::Rc};
+
+    use rand::Rng;
+
+    use crate::{
+        buffer_manager_v2::BufferManagerV2,
+        concurrency_manager::LockTable,
+        file_manager::{self, FileManager},
+        log_manager,
+        log_manager_v2::LogManagerV2,
+        record_page::TableSchema,
+        transaction,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_table_scan_v2() {
+        let mut file_manager = Rc::new(RefCell::new(FileManager::new(Path::new("data"), 400)));
+        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+            file_manager.clone(),
+            "log.txt".to_string(),
+        )));
+
+        let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
+            3,
+            file_manager.clone(),
+            log_manager.clone(),
+        )));
+
+        let lock_table = Rc::new(RefCell::new(LockTable::new()));
+
+        let mut transaction = Rc::new(RefCell::new(TransactionV2::new(
+            1,
+            file_manager.clone(),
+            buffer_manager.clone(),
+            lock_table.clone(),
+        )));
+
+        let mut schema = TableSchema::new();
+        schema.add_integer_field("Field1".to_string());
+        schema.add_string_field("Field2".to_string(), 9);
+        let layout = Layout::new(schema);
+
+        layout.schema.fields().iter().for_each(|field| {
+            let offset = layout.get_offset(field);
+            println!("Field: {}, Offset: {}", field, offset.unwrap());
+        });
+
+        let mut table_scan = TableScan::new(
+            "test_table".to_string(),
+            transaction.clone(),
+            layout.clone(),
+        );
+
+        table_scan.move_to_before_first();
+
+        for _ in 0..10 {
+            table_scan.insert();
+            let random_value = rand::rng().random_range(0..100);
+            table_scan.set_integer("Field1".to_string(), random_value);
+            table_scan.set_string("Field2".to_string(), format!("Hello {}", random_value));
+        }
+
+        table_scan.move_to_before_first();
+
+        while table_scan.next() {
+            let field1_value = table_scan.get_integer("Field1".to_string());
+            let field2_value = table_scan.get_string("Field2".to_string());
+
+            if let Some(value) = field1_value {
+                println!("Field1: {}", value);
+            } else {
+                println!("Field1: None");
+            }
+
+            if let Some(value) = field2_value {
+                println!("Field2: {}", value);
+            } else {
+                println!("Field2: None");
+            }
+        }
+
+        table_scan.close();
+        transaction.borrow_mut().commit();
     }
 }
