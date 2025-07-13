@@ -152,3 +152,62 @@ impl TableManagerV2 {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, path::Path, rc::Rc};
+
+    use rand::Rng;
+
+    use crate::{
+        buffer_manager_v2::BufferManagerV2,
+        concurrency_manager::LockTable,
+        file_manager::{self, FileManager},
+        log_manager,
+        log_manager_v2::LogManagerV2,
+        record_page::TableSchema,
+        transaction,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_table_mgr() {
+        let mut file_manager = Rc::new(RefCell::new(FileManager::new(Path::new("data"), 400)));
+        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+            file_manager.clone(),
+            "log.txt".to_string(),
+        )));
+
+        let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
+            3,
+            file_manager.clone(),
+            log_manager.clone(),
+        )));
+
+        let lock_table = Rc::new(RefCell::new(LockTable::new()));
+
+        let mut transaction = Rc::new(RefCell::new(TransactionV2::new(
+            1,
+            file_manager.clone(),
+            buffer_manager.clone(),
+            lock_table.clone(),
+        )));
+
+        let table_manager = TableManagerV2::new();
+        table_manager.create_table(
+            "table_catalog".to_string(),
+            &table_manager.table_catalog_layout.schema.clone(),
+            transaction.clone(),
+        );
+        table_manager.create_table(
+            "field_catalog".to_string(),
+            &table_manager.field_catalog_layout.schema.clone(),
+            transaction.clone(),
+        );
+
+        // let mut schema = TableSchema::new();
+        // schema.add_integer_field("A".to_string());
+        // schema.add_string_field("B".to_string(), 9);
+    }
+}

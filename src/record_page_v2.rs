@@ -64,11 +64,6 @@ impl RecordPage {
             return;
         }
 
-        println!(
-            "set_integer: field_name: {}, slot_id: {}, value: {}",
-            field_name, slot_id, value
-        );
-
         self.transaction.borrow_mut().set_integer(
             self.block_id.clone(),
             (record_offset + offset) as usize,
