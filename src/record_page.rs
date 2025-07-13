@@ -156,6 +156,18 @@ impl Layout {
         }
     }
 
+    pub fn new_with_offset_and_size(
+        schema: TableSchema,
+        offsets: HashMap<String, i32>,
+        slot_size: i32,
+    ) -> Layout {
+        Layout {
+            schema,
+            offsets,
+            slot_size: slot_size,
+        }
+    }
+
     fn get_length_in_bytes(schema: &TableSchema, field_name: String) -> i32 {
         let field_type = schema.get_field_type(field_name.clone()).unwrap();
         match field_type {

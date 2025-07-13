@@ -28,6 +28,7 @@ mod recovery_manager;
 mod scan;
 mod stat_manager;
 mod table_manager;
+mod table_manager_v2;
 mod table_scan;
 mod table_scan_v2;
 mod transaction;
