@@ -10,7 +10,7 @@ pub struct TableFieldInfo {
     field_length: i32,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TableFieldType {
     INTEGER,
     VARCHAR,
@@ -61,7 +61,7 @@ impl TableSchema {
     }
 
     pub fn add_integer_field(&mut self, field_name: String) {
-        self.add_field(field_name, TableFieldType::INTEGER, -1);
+        self.add_field(field_name, TableFieldType::INTEGER, 0);
     }
 
     pub fn add_string_field(&mut self, field_name: String, field_length: i32) {

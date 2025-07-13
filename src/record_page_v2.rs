@@ -176,11 +176,6 @@ impl RecordPage {
     pub fn format(&mut self) {
         let mut slot_id = 0;
         while self.is_valid_slot_id(slot_id) {
-            println!(
-                "slot_id: {}, slot_size: {}",
-                slot_id,
-                self.layout.get_slot_size()
-            );
             self.set_flag(slot_id, RecordType::EMPTY);
             let schema = &self.layout.schema;
 

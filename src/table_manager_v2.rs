@@ -47,12 +47,15 @@ impl TableManagerV2 {
         let mut table_scan = TableScan::new(
             "table_catalog".to_string(),
             transaction.clone(),
-            layout.clone(),
+            self.table_catalog_layout.clone(),
         );
         table_scan.insert();
         table_scan.set_string("table_name".to_string(), table_name.clone());
-        table_scan.set_integer("slot_size".to_string(), layout.get_slot_size() as i32);
+        let slot_size = layout.get_slot_size() as i32;
+        table_scan.set_integer("slot_size".to_string(), slot_size);
         table_scan.close();
+
+        transaction.borrow_mut().commit();
 
         let mut field_scan = TableScan::new(
             "field_catalog".to_string(),
@@ -75,6 +78,8 @@ impl TableManagerV2 {
         }
 
         field_scan.close();
+
+        transaction.borrow_mut().commit();
     }
 
     pub fn get_layout(
@@ -206,8 +211,25 @@ mod tests {
             transaction.clone(),
         );
 
-        // let mut schema = TableSchema::new();
-        // schema.add_integer_field("A".to_string());
-        // schema.add_string_field("B".to_string(), 9);
+        let layout = table_manager.get_layout("field_catalog".to_string(), transaction.clone());
+
+        let mut schema = TableSchema::new();
+        schema.add_integer_field("A".to_string());
+        schema.add_string_field("B".to_string(), 9);
+
+        table_manager.create_table("test_table".to_string(), &schema, transaction.clone());
+        let layout = table_manager.get_layout("test_table".to_string(), transaction.clone());
+
+        println!("Layout for test_table:");
+        println!("Slot Size: {}", layout.get_slot_size());
+
+        for field in layout.schema.fields.iter() {
+            println!("Field: {}", field);
+            let offset = layout.get_offset(field).unwrap();
+            println!("Offset: {}", offset);
+            let field_type = schema.get_field_type(field.to_string()).unwrap();
+            println!("Field Type: {:?}", field_type);
+            let field_length = schema.get_field_length(field.to_string()).unwrap();
+        }
     }
 }
