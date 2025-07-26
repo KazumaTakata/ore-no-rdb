@@ -27,6 +27,7 @@ mod record_page;
 mod record_page_v2;
 mod recovery_manager;
 mod scan;
+mod scan_v2;
 mod stat_manager;
 mod stat_manager_v2;
 mod table_manager;

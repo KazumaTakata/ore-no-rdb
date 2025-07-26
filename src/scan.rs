@@ -82,25 +82,6 @@ pub trait Scan {
     fn move_to_record_id(&mut self, layout: record_page::Layout, record_id: RecordID);
 }
 
-pub trait ScanV2 {
-    fn move_to_before_first(&mut self);
-    fn next(&mut self) -> bool;
-    fn get_integer(&mut self, field_name: String) -> Option<i32>;
-    fn get_string(&mut self, field_name: String) -> Option<String>;
-    fn get_value(&mut self, field_name: String) -> ConstantValue;
-    fn close(&mut self);
-    fn has_field(&self, field_name: String) -> bool;
-    fn set_integer(&mut self, field_name: String, value: i32);
-    fn set_string(&mut self, field_name: String, value: String);
-    fn set_value(&mut self, field_name: String, value: ConstantValue);
-
-    fn insert(&mut self);
-    fn delete(&mut self);
-
-    fn get_record_id(&self) -> RecordID;
-    fn move_to_record_id(&mut self, record_id: RecordID);
-}
-
 // pub trait UpdateScan: Scan {
 //     fn set_integer(
 //         &mut self,

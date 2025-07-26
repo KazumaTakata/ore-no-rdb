@@ -4,7 +4,7 @@ use crate::{
     block::BlockId,
     record_page::{Layout, TableFieldType},
     record_page_v2::RecordPage,
-    scan::ScanV2,
+    scan_v2::ScanV2,
     table_scan::RecordID,
     transaction_v2::TransactionV2,
 };

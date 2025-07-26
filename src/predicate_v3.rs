@@ -1,7 +1,7 @@
 use crate::{
     predicate::{Constant, ConstantValue, Expression},
     record_page::TableSchema,
-    scan::ScanV2,
+    scan_v2::ScanV2,
 };
 
 #[derive(Debug, Clone)]

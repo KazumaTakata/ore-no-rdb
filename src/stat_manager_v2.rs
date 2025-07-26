@@ -4,7 +4,7 @@ use crate::{
     buffer_manager::{self, BufferList},
     file_manager::FileManager,
     record_page,
-    scan::{Scan, ScanV2},
+    scan_v2::ScanV2,
     table_manager::TableManager,
     table_manager_v2::TableManagerV2,
     table_scan_v2::TableScan,

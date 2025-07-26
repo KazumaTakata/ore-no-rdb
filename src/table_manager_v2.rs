@@ -3,7 +3,8 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     buffer_manager, file_manager,
     record_page::{self, TableFieldType, TableSchema},
-    scan::{Scan, ScanV2},
+    scan::Scan,
+    scan_v2::ScanV2,
     table_scan_v2::TableScan,
     transaction,
     transaction_v2::TransactionV2,
