@@ -92,6 +92,84 @@ impl ScanV2 for SelectScanV2 {
     }
 }
 
+pub struct ProjectScanV2 {
+    scan: Box<dyn ScanV2>,
+    fields: Vec<String>,
+}
+
+impl ProjectScanV2 {
+    pub fn new(scan: Box<dyn ScanV2>, fields: Vec<String>) -> Self {
+        ProjectScanV2 { scan, fields }
+    }
+}
+
+impl ScanV2 for ProjectScanV2 {
+    fn move_to_before_first(&mut self) {
+        self.scan.move_to_before_first();
+    }
+
+    fn next(&mut self) -> bool {
+        self.scan.next()
+    }
+
+    fn get_integer(&mut self, field_name: String) -> Option<i32> {
+        if self.fields.contains(&field_name) {
+            return self.scan.get_integer(field_name);
+        }
+        None
+    }
+
+    fn get_string(&mut self, field_name: String) -> Option<String> {
+        if self.fields.contains(&field_name) {
+            return self.scan.get_string(field_name);
+        }
+        None
+    }
+
+    fn get_value(&mut self, field_name: String) -> ConstantValue {
+        if self.fields.contains(&field_name) {
+            return self.scan.get_value(field_name);
+        }
+        ConstantValue::Null
+    }
+
+    fn close(&mut self) {
+        self.scan.close();
+    }
+
+    fn has_field(&self, field_name: String) -> bool {
+        self.fields.contains(&field_name)
+    }
+
+    fn set_integer(&mut self, field_name: String, value: i32) {
+        panic!("set_integer not implemented for ProjectScan");
+    }
+
+    fn set_string(&mut self, field_name: String, value: String) {
+        panic!("set_string not implemented for ProjectScan");
+    }
+
+    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+        panic!("set_value not implemented for ProjectScan");
+    }
+
+    fn delete(&mut self) {
+        panic!("Delete not supported in ProjectScan");
+    }
+
+    fn insert(&mut self) {
+        panic!("Insert not supported in ProjectScan");
+    }
+
+    fn get_record_id(&self) -> RecordID {
+        panic!("get_record_id not implemented for ProjectScan");
+    }
+
+    fn move_to_record_id(&mut self, record_id: RecordID) {
+        panic!("move_to_record_id not implemented for ProjectScan");
+    }
+}
+
 pub struct ProductScanV2 {
     left_scan: Box<dyn ScanV2>,
     right_scan: Box<dyn ScanV2>,
