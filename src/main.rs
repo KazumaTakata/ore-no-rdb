@@ -22,6 +22,7 @@ mod page;
 mod parser;
 mod plan;
 mod predicate;
+mod predicate_v3;
 mod record_page;
 mod record_page_v2;
 mod recovery_manager;
