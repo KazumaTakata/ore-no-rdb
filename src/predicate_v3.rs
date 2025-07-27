@@ -75,6 +75,49 @@ impl TermV2 {
         let rhs = self.rhs.to_string();
         return format!("{} = {}", lhs, rhs);
     }
+
+    pub fn equate_with_constant(&self, field_name: String) -> Option<Constant> {
+        match &self.lhs.value {
+            ExpressionValue::FieldName(_field_name) => match self.rhs.value {
+                ExpressionValue::FieldName(_) => return None,
+                ExpressionValue::Constant(ref constant2) => {
+                    if *_field_name == field_name {
+                        return Some(constant2.clone());
+                    } else {
+                        return None;
+                    }
+                }
+            },
+            ExpressionValue::Constant(ref constant) => match &self.rhs.value {
+                ExpressionValue::FieldName(_field_name) => {
+                    if *_field_name == field_name {
+                        return Some(constant.clone());
+                    } else {
+                        return None;
+                    }
+                }
+                ExpressionValue::Constant(_) => return None,
+            },
+        }
+    }
+
+    pub fn equate_with_field(&self, field_name: String) -> Option<String> {
+        match &self.lhs.value {
+            ExpressionValue::FieldName(_field_name) => match &self.rhs.value {
+                ExpressionValue::FieldName(_field_name2) => {
+                    if *_field_name == field_name {
+                        return Some(_field_name2.clone());
+                    } else if *_field_name2 == field_name {
+                        return Some(_field_name.clone());
+                    } else {
+                        return None;
+                    }
+                }
+                ExpressionValue::Constant(_constant2) => return None,
+            },
+            ExpressionValue::Constant(_constant) => return None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -98,6 +141,26 @@ impl PredicateV2 {
 
     pub fn conjunction_with(&mut self, predicate: PredicateV2) {
         self.terms.extend(predicate.terms);
+    }
+
+    pub fn equates_with_constant(&self, field_name: String) -> Option<Constant> {
+        for term in &self.terms {
+            let constant = term.equate_with_constant(field_name.clone());
+            if constant.is_some() {
+                return constant;
+            }
+        }
+        return None;
+    }
+
+    pub fn equate_with_field(&self, field_name: String) -> Option<String> {
+        for term in &self.terms {
+            let field = term.equate_with_field(field_name.clone());
+            if field.is_some() {
+                return field;
+            }
+        }
+        return None;
     }
 
     pub fn to_string(&self) -> String {

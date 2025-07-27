@@ -21,6 +21,7 @@ mod log_manager_v2;
 mod page;
 mod parser;
 mod plan;
+mod plan_v2;
 mod predicate;
 mod predicate_v3;
 mod record_page;
