@@ -1,15 +1,19 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, cmp::min, rc::Rc};
 
 use crate::{
+    parser::{InsertData, QueryData},
+    plan::Plan,
+    predicate_v3::PredicateV2,
     record_page::{Layout, TableSchema},
-    scan_v2::ScanV2,
+    scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
     stat_manager_v2::{StatInfoV2, StatManagerV2},
+    table_manager,
     table_manager_v2::TableManagerV2,
     table_scan_v2::TableScan,
     transaction_v2::TransactionV2,
 };
 
-pub trait Plan {
+pub trait PlanV2 {
     fn open(&self) -> Box<dyn ScanV2>;
     fn get_schema(&self) -> &TableSchema;
 
@@ -48,7 +52,7 @@ impl TablePlanV2 {
     }
 }
 
-impl Plan for TablePlanV2 {
+impl PlanV2 for TablePlanV2 {
     fn open(&self) -> Box<dyn ScanV2> {
         return Box::new(TableScan::new(
             self.table_name.clone(),
@@ -72,4 +76,214 @@ impl Plan for TablePlanV2 {
     fn get_distinct_value(&self, field_name: String) -> u32 {
         self.stat_info.distinct_value(field_name)
     }
+}
+
+struct SelectPlanV2 {
+    // Fields for the plan
+    table_plan: Box<dyn PlanV2>,
+    predicate: PredicateV2,
+}
+
+impl SelectPlanV2 {
+    pub fn new(table_plan: Box<dyn PlanV2>, predicate: PredicateV2) -> Self {
+        SelectPlanV2 {
+            table_plan,
+            predicate,
+        }
+    }
+}
+
+impl PlanV2 for SelectPlanV2 {
+    fn open(&self) -> Box<dyn ScanV2> {
+        let scan = self.table_plan.open();
+        return Box::new(SelectScanV2::new(scan, self.predicate.clone()));
+    }
+
+    fn get_schema(&self) -> &TableSchema {
+        self.table_plan.get_schema()
+    }
+
+    fn blocks_accessed(&self) -> u32 {
+        self.table_plan.blocks_accessed()
+    }
+
+    fn get_distinct_value(&self, field_name: String) -> u32 {
+        if self
+            .predicate
+            .equates_with_constant(field_name.clone())
+            .is_some()
+        {
+            return 1;
+        } else {
+            let field_name2 = self.predicate.equate_with_field(field_name.clone());
+
+            if (field_name2.is_some()) {
+                return min(
+                    self.table_plan
+                        .get_distinct_value(field_name2.clone().unwrap()),
+                    self.table_plan.get_distinct_value(field_name.clone()),
+                );
+            } else {
+                return self.table_plan.get_distinct_value(field_name);
+            }
+        }
+    }
+
+    fn records_output(&self) -> u32 {
+        self.table_plan.records_output() / self.predicate.reduction_factor(self.table_plan.as_ref())
+    }
+}
+
+struct ProjectPlanV2 {
+    // Fields for the plan
+    plan: Box<dyn PlanV2>,
+    schema: TableSchema,
+}
+
+impl ProjectPlanV2 {
+    pub fn new(plan: Box<dyn PlanV2>, field_list: Vec<String>) -> Self {
+        let mut schema = TableSchema::new();
+
+        for field in field_list.iter() {
+            schema.add(field.clone(), plan.get_schema().clone());
+        }
+
+        ProjectPlanV2 { plan, schema }
+    }
+}
+
+impl PlanV2 for ProjectPlanV2 {
+    fn open(&self) -> Box<dyn ScanV2> {
+        let scan = self.plan.open();
+        let field_names = self.schema.fields().clone(); // Assuming `fields()` returns `Vec<String>`
+        return Box::new(ProjectScanV2::new(scan, field_names));
+    }
+
+    fn get_schema(&self) -> &TableSchema {
+        &self.schema
+    }
+
+    fn blocks_accessed(&self) -> u32 {
+        self.plan.blocks_accessed()
+    }
+
+    fn get_distinct_value(&self, field_name: String) -> u32 {
+        self.plan.get_distinct_value(field_name)
+    }
+
+    fn records_output(&self) -> u32 {
+        self.plan.records_output()
+    }
+}
+
+struct ProductPlanV2 {
+    // Fields for the plan
+    left_plan: Box<dyn PlanV2>,
+    right_plan: Box<dyn PlanV2>,
+    schema: TableSchema,
+}
+
+impl ProductPlanV2 {
+    pub fn new(left_plan: Box<dyn PlanV2>, right_plan: Box<dyn PlanV2>) -> Self {
+        let mut schema = TableSchema::new();
+        schema.add_all(right_plan.get_schema().clone());
+        schema.add_all(left_plan.get_schema().clone());
+
+        ProductPlanV2 {
+            left_plan,
+            right_plan,
+            schema,
+        }
+    }
+}
+
+impl PlanV2 for ProductPlanV2 {
+    fn open(&self) -> Box<dyn ScanV2> {
+        let scan1 = self.left_plan.open();
+        let scan2 = self.right_plan.open();
+        return Box::new(ProductScanV2::new(scan1, scan2));
+    }
+
+    fn get_schema(&self) -> &TableSchema {
+        &self.schema
+    }
+
+    fn blocks_accessed(&self) -> u32 {
+        self.left_plan.blocks_accessed()
+            + self.left_plan.records_output() * self.right_plan.blocks_accessed()
+    }
+
+    fn records_output(&self) -> u32 {
+        self.left_plan.records_output() * self.right_plan.records_output()
+    }
+
+    fn get_distinct_value(&self, field_name: String) -> u32 {
+        if self.left_plan.get_schema().has_field(field_name.clone()) {
+            return self.left_plan.get_distinct_value(field_name);
+        } else {
+            return self.right_plan.get_distinct_value(field_name);
+        }
+    }
+}
+
+fn create_query_plan(
+    query_data: QueryData,
+    transaction: Rc<RefCell<TransactionV2>>,
+    stat_manager: &mut StatManagerV2,
+    table_manager: &mut TableManagerV2,
+) -> Box<dyn PlanV2> {
+    let mut plans: Vec<Box<dyn PlanV2>> = Vec::new();
+
+    for table_name in query_data.table_name_list.iter() {
+        let layout = Layout::new(TableSchema::new());
+        let table_plan = TablePlanV2::new(
+            table_name.clone(),
+            transaction.clone(),
+            table_manager,
+            stat_manager,
+        );
+        let mut plan: Box<dyn PlanV2> = Box::new(table_plan);
+        plans.push(plan);
+    }
+
+    let mut plan: Box<dyn PlanV2> = plans.pop().unwrap();
+
+    for next_plan in plans.into_iter() {
+        let product_plan = ProductPlanV2::new(plan, next_plan);
+        plan = Box::new(product_plan);
+    }
+
+    let select_plan = SelectPlanV2::new(plan, query_data.predicate.clone());
+
+    let project_plan =
+        ProjectPlanV2::new(Box::new(select_plan), query_data.field_name_list.clone());
+
+    return Box::new(project_plan);
+}
+
+pub fn execute_insert(
+    transaction: Rc<RefCell<TransactionV2>>,
+    stat_manager: &mut StatManagerV2,
+    table_manager: &mut TableManagerV2,
+    insert_data: InsertData,
+) {
+    let plan = TablePlanV2::new(
+        insert_data.table_name.clone(),
+        transaction,
+        table_manager,
+        stat_manager,
+    );
+
+    let mut scan = plan.open();
+
+    scan.insert();
+
+    let mut val_inter = insert_data.value_list.iter();
+
+    for field in insert_data.field_name_list.iter() {
+        let value = val_inter.next().unwrap();
+        scan.set_value(field.clone(), value.value.clone());
+    }
+
+    scan.close();
 }

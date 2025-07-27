@@ -1,14 +1,9 @@
 use crate::{
-    predicate::{Constant, ConstantValue, Expression},
+    plan_v2::PlanV2,
+    predicate::{Constant, ConstantValue, Expression, ExpressionValue},
     record_page::TableSchema,
     scan_v2::ScanV2,
 };
-
-#[derive(Debug, Clone)]
-pub enum ExpressionValue {
-    FieldName(String),
-    Constant(Constant),
-}
 
 #[derive(Debug, Clone)]
 pub struct ExpressionV2 {
@@ -173,5 +168,9 @@ impl PredicateV2 {
             result.truncate(result.len() - 5);
         }
         return result;
+    }
+
+    pub fn reduction_factor(&self, plan: &dyn PlanV2) -> u32 {
+        return 1;
     }
 }

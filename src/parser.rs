@@ -3,7 +3,10 @@ use std::{fs, slice::RChunks};
 use pest::Parser;
 use pest_derive::Parser;
 
-use crate::predicate::{Constant, ConstantValue, Expression, ExpressionValue, Predicate, Term};
+use crate::{
+    predicate::{Constant, ConstantValue, Expression, ExpressionValue, Predicate, Term},
+    predicate_v3::{ExpressionV2, PredicateV2, TermV2},
+};
 
 // #[derive(Parser)]
 // #[grammar = "pest/csv.pest"]
@@ -56,14 +59,14 @@ pub enum ParsedSQL {
 pub struct QueryData {
     pub table_name_list: Vec<String>,
     pub field_name_list: Vec<String>,
-    pub predicate: Predicate,
+    pub predicate: PredicateV2,
 }
 
 impl QueryData {
     pub fn new(
         table_name_list: Vec<String>,
         field_name_list: Vec<String>,
-        predicate: Predicate,
+        predicate: PredicateV2,
     ) -> Self {
         QueryData {
             table_name_list,
@@ -108,7 +111,7 @@ pub fn parse_sql() -> Option<ParsedSQL> {
                 let mut table_name_list: Vec<String> = Vec::new();
                 let mut field_name_list: Vec<String> = Vec::new();
 
-                let mut predicate: Option<Predicate> = None;
+                let mut predicate: Option<PredicateV2> = None;
 
                 record
                     .into_inner()
@@ -135,12 +138,12 @@ pub fn parse_sql() -> Option<ParsedSQL> {
                         }),
                         Rule::predicate => {
                             inner_value.into_inner().for_each(|inner_value| {
-                                let mut terms: Vec<Term> = Vec::new();
+                                let mut terms: Vec<TermV2> = Vec::new();
 
                                 match inner_value.as_rule() {
                                     Rule::term => {
-                                        let mut lhs = None;
-                                        let mut rhs = None;
+                                        let mut lhs: Option<ExpressionV2> = None;
+                                        let mut rhs: Option<ExpressionV2> = None;
 
                                         inner_value.into_inner().for_each(|inner_value| {
                                             match inner_value.as_rule() {
@@ -156,7 +159,7 @@ pub fn parse_sql() -> Option<ParsedSQL> {
                                                                 let expression =
                                                                     inner_value.as_str();
 
-                                                                let expression = Expression::new(
+                                                                let expression = ExpressionV2::new(
                                                                     ExpressionValue::FieldName(
                                                                         inner_value
                                                                             .as_str()
@@ -182,7 +185,7 @@ pub fn parse_sql() -> Option<ParsedSQL> {
                                                                     int_constant_value,
                                                                 );
 
-                                                                let expression = Expression::new(
+                                                                let expression = ExpressionV2::new(
                                                                     ExpressionValue::Constant(
                                                                         constant.clone(),
                                                                     ),
@@ -202,13 +205,13 @@ pub fn parse_sql() -> Option<ParsedSQL> {
                                             }
                                         });
 
-                                        let term = Term::new(lhs.unwrap(), rhs.unwrap());
+                                        let term = TermV2::new(lhs.unwrap(), rhs.unwrap());
                                         terms.push(term);
                                     }
                                     _ => {}
                                 }
 
-                                predicate = Some(Predicate::new(terms));
+                                predicate = Some(PredicateV2::new(terms));
                             });
                         }
                         _ => {}
