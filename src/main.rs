@@ -47,8 +47,6 @@ use pest::Parser;
 fn main() {
     println!("Hello, world!");
 
-    parse_sql();
-
     // let block = BlockId::new("./data/test.txt".to_string(), 0);
 
     // let mut page = Page::new(400);

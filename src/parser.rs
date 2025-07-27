@@ -91,16 +91,11 @@ impl QueryData {
     }
 }
 
-pub fn parse_sql() -> Option<ParsedSQL> {
-    let unparsed_file = fs::read_to_string("sample.sql").expect("cannot read file");
-
-    let file = SQLParser::parse(Rule::sql, &unparsed_file)
+pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
+    let file = SQLParser::parse(Rule::sql, &sql)
         .expect("unsuccessful parse") // unwrap the parse result
         .next()
         .unwrap(); // get and unwrap the `file` rule; never fails
-
-    let mut field_sum: f64 = 0.0;
-    let mut record_count: u64 = 0;
 
     let mut table_name = String::new();
     let mut field_name_vec: Vec<String> = Vec::new();
@@ -274,6 +269,39 @@ pub fn parse_sql() -> Option<ParsedSQL> {
     }
 
     return None;
-    println!("table_name: {}", table_name);
-    println!("field_name: {}", field_name_vec.join(", "));
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, f32::consts::E, path::Path, rc::Rc};
+
+    use rand::Rng;
+
+    use crate::{
+        buffer_manager_v2::BufferManagerV2,
+        concurrency_manager::LockTable,
+        file_manager::{self, FileManager},
+        log_manager,
+        log_manager_v2::LogManagerV2,
+        predicate::{Constant, ConstantValue, ExpressionValue},
+        predicate_v3::{ExpressionV2, TermV2},
+        record_page::TableSchema,
+        stat_manager, transaction,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_plan() {
+        let unparsed_file = fs::read_to_string("sample.sql").expect("cannot read file");
+        let parsed_sql = parse_sql(unparsed_file);
+        match parsed_sql.unwrap() {
+            ParsedSQL::Query(query_data) => {
+                println!("Parsed Query Data: \n{}", query_data.to_string());
+            }
+            ParsedSQL::Insert(insert_data) => {
+                println!("Parsed Insert Data: \n{}", insert_data.to_string());
+            }
+        }
+    }
 }
