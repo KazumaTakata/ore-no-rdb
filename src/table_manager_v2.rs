@@ -11,8 +11,8 @@ use crate::{
 };
 
 pub struct TableManagerV2 {
-    table_catalog_layout: record_page::Layout,
-    field_catalog_layout: record_page::Layout,
+    pub table_catalog_layout: record_page::Layout,
+    pub field_catalog_layout: record_page::Layout,
 }
 
 impl TableManagerV2 {

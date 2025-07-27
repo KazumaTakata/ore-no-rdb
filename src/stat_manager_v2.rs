@@ -13,7 +13,7 @@ use crate::{
 };
 
 pub struct StatManagerV2 {
-    table_manager: TableManagerV2,
+    table_manager: Rc<RefCell<TableManagerV2>>,
     table_stats: HashMap<String, StatInfoV2>,
     num_calls: u32,
 }
@@ -46,7 +46,7 @@ impl StatInfoV2 {
 }
 
 impl StatManagerV2 {
-    pub fn new(table_manager: TableManagerV2) -> Self {
+    pub fn new(table_manager: Rc<RefCell<TableManagerV2>>) -> Self {
         StatManagerV2 {
             table_manager,
             table_stats: HashMap::new(),
@@ -77,6 +77,7 @@ impl StatManagerV2 {
         self.num_calls = 0;
         let table_layout = self
             .table_manager
+            .borrow()
             .get_layout("table_catalog".to_string(), transaction.clone());
 
         let mut table_scan = TableScan::new(
@@ -93,6 +94,7 @@ impl StatManagerV2 {
                     let table_name = name.clone();
                     let layout = self
                         .table_manager
+                        .borrow()
                         .get_layout(table_name.clone(), transaction.clone());
                     let table_stat = self.calc_table_stats(
                         table_name.clone(),

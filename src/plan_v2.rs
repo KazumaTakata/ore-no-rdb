@@ -287,3 +287,134 @@ pub fn execute_insert(
 
     scan.close();
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, f32::consts::E, path::Path, rc::Rc};
+
+    use rand::Rng;
+
+    use crate::{
+        buffer_manager_v2::BufferManagerV2,
+        concurrency_manager::LockTable,
+        file_manager::{self, FileManager},
+        log_manager,
+        log_manager_v2::LogManagerV2,
+        predicate::{Constant, ConstantValue, ExpressionValue},
+        predicate_v3::{ExpressionV2, TermV2},
+        record_page::TableSchema,
+        stat_manager, transaction,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_plan() {
+        let mut file_manager = Rc::new(RefCell::new(FileManager::new(Path::new("data"), 400)));
+        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+            file_manager.clone(),
+            "log.txt".to_string(),
+        )));
+
+        let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
+            3,
+            file_manager.clone(),
+            log_manager.clone(),
+        )));
+
+        let lock_table = Rc::new(RefCell::new(LockTable::new()));
+
+        let mut transaction = Rc::new(RefCell::new(TransactionV2::new(
+            1,
+            file_manager.clone(),
+            buffer_manager.clone(),
+            lock_table.clone(),
+        )));
+
+        let table_manager = Rc::new(RefCell::new(TableManagerV2::new()));
+
+        let mut mutable_table_manager = table_manager.borrow_mut();
+
+        // mutable_table_manager.create_table(
+        //     "table_catalog".to_string(),
+        //     &mutable_table_manager.table_catalog_layout.schema.clone(),
+        //     transaction.clone(),
+        // );
+        // mutable_table_manager.create_table(
+        //     "field_catalog".to_string(),
+        //     &mutable_table_manager.field_catalog_layout.schema.clone(),
+        //     transaction.clone(),
+        // );
+
+        let layout =
+            mutable_table_manager.get_layout("field_catalog".to_string(), transaction.clone());
+
+        let mut schema = TableSchema::new();
+        schema.add_integer_field("A".to_string());
+        schema.add_string_field("B".to_string(), 9);
+
+        // mutable_table_manager.create_table("test_table".to_string(), &schema, transaction.clone());
+
+        let layout =
+            mutable_table_manager.get_layout("test_table".to_string(), transaction.clone());
+
+        let mut stat_manager = StatManagerV2::new(table_manager.clone());
+
+        let insert_data = InsertData {
+            table_name: "test_table".to_string(),
+            field_name_list: vec!["A".to_string(), "B".to_string()],
+            value_list: vec![
+                Constant::new(ConstantValue::Number(42)),
+                Constant::new(ConstantValue::String("Hello World".to_string())),
+            ],
+        };
+
+        // execute_insert(
+        //     transaction.clone(),
+        //     &mut stat_manager,
+        //     &mut mutable_table_manager,
+        //     insert_data,
+        // );
+
+        // transaction.borrow_mut().commit();
+
+        let term = TermV2::new(
+            ExpressionV2::new(ExpressionValue::FieldName("A".to_string())),
+            ExpressionV2::new(ExpressionValue::Constant(Constant::new(
+                ConstantValue::Number(42),
+            ))),
+        );
+
+        let query_data = QueryData {
+            table_name_list: vec!["test_table".to_string()],
+            field_name_list: vec!["A".to_string(), "B".to_string()],
+            predicate: PredicateV2::new(vec![term.clone()]),
+        };
+
+        let plan = create_query_plan(
+            query_data,
+            transaction.clone(),
+            &mut stat_manager,
+            &mut mutable_table_manager,
+        );
+
+        let mut scan = plan.open();
+        scan.move_to_before_first();
+        while scan.next() {
+            let field1_value = scan.get_integer("A".to_string());
+            let field2_value = scan.get_string("B".to_string());
+
+            if let Some(value) = field1_value {
+                println!("Field A: {}", value);
+            } else {
+                println!("Field A: None");
+            }
+
+            if let Some(value) = field2_value {
+                println!("Field B: {}", value);
+            } else {
+                println!("Field B: None");
+            }
+        }
+    }
+}
