@@ -1,0 +1,1 @@
+insert into users (name, age) values ("Alice", 30)

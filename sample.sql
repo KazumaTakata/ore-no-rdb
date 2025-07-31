@@ -1,1 +1,1 @@
-select field_a, field_b from table_a, table_b where field_a = 1
+select field_a, field_b from table_a where field_a = 1

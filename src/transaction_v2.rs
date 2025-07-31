@@ -107,7 +107,6 @@ impl TransactionV2 {
     pub fn append(&mut self, file_name: &str) -> BlockId {
         self.file_manager.borrow_mut().append(file_name)
     }
-    
 }
 
 #[cfg(test)]

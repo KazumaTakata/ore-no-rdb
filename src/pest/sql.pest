@@ -1,13 +1,13 @@
 WHITESPACE = _{ " " | "\t" }
 id_token = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 field = @{ id_token }
-field_list = { ( field ) ~ ("," ~ ( field ))* }
+field_list = { "(" ~ ( field ) ~ ("," ~ ( field ))* ~ ")" }
 select_list = { ( field ) ~ ("," ~ ( field ))* }
 table_list = { ( id_token ) ~ ("," ~ ( id_token ))* }
 string_token = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
 int_token = @{ ASCII_DIGIT+ }
 constant = { string_token | int_token }
-constant_list = { ( constant ) ~ ("," ~ ( constant ))* }
+constant_list = { "(" ~ ( constant ) ~ ("," ~ ( constant ))* ~ ")" }
 expression = { field | constant }
 term = { expression ~ "=" ~ expression }
 predicate = { term ~ ("and" ~ term)* }

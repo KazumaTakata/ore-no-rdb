@@ -214,13 +214,10 @@ pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
                 let query_data =
                     QueryData::new(table_name_list, field_name_list, predicate.unwrap());
 
-                println!("Query Data: \n{}", query_data.to_string());
-
                 return Some(ParsedSQL::Query(query_data));
             }
             Rule::insert_sql => {
                 // Handle INSERT SQL
-                return None;
                 println!("Found INSERT SQL: {:?}", record);
                 let mut table_name: Option<String> = None;
                 let mut field_name_vec: Vec<String> = Vec::new();
@@ -234,7 +231,7 @@ pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
                         Rule::field_list => {
                             inner_value.into_inner().for_each(|inner_value| {
                                 match inner_value.as_rule() {
-                                    Rule::id_token => {
+                                    Rule::field => {
                                         field_name_vec.push(inner_value.as_str().to_string());
                                     }
                                     _ => {}
@@ -244,12 +241,27 @@ pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
                         Rule::constant_list => {
                             inner_value.into_inner().for_each(|inner_value| {
                                 match inner_value.as_rule() {
-                                    Rule::constant => {
-                                        let value = inner_value.as_str().parse::<i32>().unwrap();
-                                        let int_constant_value = ConstantValue::Number(value);
-                                        let constant = Constant::new(int_constant_value);
-                                        constant_list.push(constant);
-                                    }
+                                    Rule::constant => match inner_value.into_inner().next() {
+                                        Some(inner_value) => match inner_value.as_rule() {
+                                            Rule::int_token => {
+                                                let value =
+                                                    inner_value.as_str().parse::<i32>().unwrap();
+                                                let int_constant_value =
+                                                    ConstantValue::Number(value);
+                                                let constant = Constant::new(int_constant_value);
+                                                constant_list.push(constant);
+                                            }
+                                            Rule::string_token => {
+                                                let value = inner_value.as_str().to_string();
+                                                let string_constant_value =
+                                                    ConstantValue::String(value.clone());
+                                                let constant = Constant::new(string_constant_value);
+                                                constant_list.push(constant);
+                                            }
+                                            _ => {}
+                                        },
+                                        None => {}
+                                    },
                                     _ => {}
                                 }
                             });
@@ -293,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_plan() {
-        let unparsed_file = fs::read_to_string("sample.sql").expect("cannot read file");
+        let unparsed_file = fs::read_to_string("sample_insert.sql").expect("cannot read file");
         let parsed_sql = parse_sql(unparsed_file);
         match parsed_sql.unwrap() {
             ParsedSQL::Query(query_data) => {
