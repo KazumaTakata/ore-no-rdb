@@ -361,6 +361,7 @@ mod tests {
         //     &mutable_table_manager.table_catalog_layout.schema.clone(),
         //     transaction.clone(),
         // );
+        
         // mutable_table_manager.create_table(
         //     "field_catalog".to_string(),
         //     &mutable_table_manager.field_catalog_layout.schema.clone(),

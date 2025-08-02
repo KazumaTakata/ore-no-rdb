@@ -1,4 +1,4 @@
-use std::{fs, slice::RChunks};
+use std::{collections::HashMap, fs, slice::RChunks, vec};
 
 use pest::Parser;
 use pest_derive::Parser;
@@ -6,6 +6,7 @@ use pest_derive::Parser;
 use crate::{
     predicate::{Constant, ConstantValue, Expression, ExpressionValue, Predicate, Term},
     predicate_v3::{ExpressionV2, PredicateV2, TermV2},
+    record_page::{TableFieldInfo, TableFieldType, TableSchema},
 };
 
 // #[derive(Parser)]
@@ -54,6 +55,20 @@ impl InsertData {
 pub enum ParsedSQL {
     Query(QueryData),
     Insert(InsertData),
+    CreateTable(CreateTableData),
+}
+
+pub struct CreateTableData {
+    pub table_name: String,
+    pub schema: TableSchema,
+}
+
+use std::fmt;
+
+impl fmt::Display for CreateTableData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Table: {}\nSchema: {:?}", self.table_name, self.schema)
+    }
 }
 
 pub struct QueryData {
@@ -272,9 +287,75 @@ pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
                     InsertData::new(table_name.unwrap(), field_name_vec, constant_list);
                 return Some(ParsedSQL::Insert(insert_data));
             }
+
+            Rule::create_table_sql => {
+                let mut table_name: Option<String> = None;
+                let mut schema = TableSchema {
+                    fields: Vec::new(),
+                    field_infos: HashMap::new(),
+                };
+
+                record
+                    .into_inner()
+                    .for_each(|inner_value| match inner_value.as_rule() {
+                        Rule::id_token => {
+                            table_name = Some(inner_value.as_str().to_string());
+                        }
+                        Rule::field_definitions => {
+                            let mut table_field_infos: Vec<TableFieldInfo> = vec![];
+                            inner_value.into_inner().for_each(|inner_value| {
+                                match inner_value.as_rule() {
+                                    Rule::field_definition => {
+                                        let mut field_name = String::new();
+                                        let mut field_type = TableFieldType::INTEGER;
+                                        let mut field_length: Option<i32> = None;
+
+                                        inner_value.into_inner().for_each(|inner_value| {
+                                            match inner_value.as_rule() {
+                                                Rule::id_token => {
+                                                    field_name = inner_value.as_str().to_string();
+                                                }
+                                                Rule::text => {
+                                                    field_type = TableFieldType::VARCHAR;
+                                                }
+                                                Rule::integer => {
+                                                    field_type = TableFieldType::INTEGER;
+                                                }
+                                                Rule::int_token => {
+                                                    field_length = Some(
+                                                        inner_value
+                                                            .as_str()
+                                                            .parse::<i32>()
+                                                            .unwrap(),
+                                                    );
+                                                }
+
+                                                _ => {}
+                                            }
+                                        });
+
+                                        schema.add_field(
+                                            field_name,
+                                            field_type,
+                                            field_length.unwrap_or(0),
+                                        );
+                                    }
+                                    _ => {}
+                                }
+                            });
+                        }
+                        _ => {}
+                    });
+
+                let create_table_data = CreateTableData {
+                    table_name: table_name.unwrap(),
+                    schema,
+                };
+                return Some(ParsedSQL::CreateTable(create_table_data));
+            }
+
             _ => {
                 return None;
-                println!("Unexpected rule: {:?}", record.as_rule());
             }
         }
     }
@@ -304,7 +385,8 @@ mod tests {
 
     #[test]
     fn test_plan() {
-        let unparsed_file = fs::read_to_string("sample_insert.sql").expect("cannot read file");
+        let unparsed_file =
+            fs::read_to_string("sample_create_table.sql").expect("cannot read file");
         let parsed_sql = parse_sql(unparsed_file);
         match parsed_sql.unwrap() {
             ParsedSQL::Query(query_data) => {
@@ -312,6 +394,12 @@ mod tests {
             }
             ParsedSQL::Insert(insert_data) => {
                 println!("Parsed Insert Data: \n{}", insert_data.to_string());
+            }
+            ParsedSQL::CreateTable(create_table_data) => {
+                println!(
+                    "Parsed Create Table Data: \n{}",
+                    create_table_data.to_string()
+                );
             }
         }
     }

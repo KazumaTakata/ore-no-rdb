@@ -4,10 +4,19 @@ use crate::buffer_manager::BufferList;
 use crate::transaction::Transaction;
 use crate::{BlockId, FileManager};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TableFieldInfo {
     field_type: TableFieldType,
     field_length: i32,
+}
+
+impl TableFieldInfo {
+    pub fn new(field_type: TableFieldType, field_length: i32) -> TableFieldInfo {
+        TableFieldInfo {
+            field_type,
+            field_length,
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -16,7 +25,7 @@ pub enum TableFieldType {
     VARCHAR,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TableSchema {
     pub fields: Vec<String>,
     pub field_infos: HashMap<String, TableFieldInfo>,
