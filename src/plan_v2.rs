@@ -1,6 +1,11 @@
-use std::{cell::RefCell, cmp::min, rc::Rc};
+use std::{cell::RefCell, cmp::min, fs::Metadata, path::Path, rc::Rc};
 
 use crate::{
+    buffer_manager_v2::BufferManagerV2,
+    concurrency_manager::LockTable,
+    file_manager::FileManager,
+    log_manager_v2::LogManagerV2,
+    metadata_manager::{self, MetadataManager},
     parser::{InsertData, QueryData},
     plan::Plan,
     predicate_v3::PredicateV2,
@@ -36,12 +41,14 @@ impl TablePlanV2 {
     pub fn new(
         table_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
-        table_manager: &mut TableManagerV2,
-        stat_manager: &mut StatManagerV2,
+        metadata_manager: &mut MetadataManager,
     ) -> Self {
-        let layout = table_manager.get_layout(table_name.clone(), transaction.clone());
-        let stat_info =
-            stat_manager.get_table_stats(table_name.clone(), transaction.clone(), layout.clone());
+        let layout = metadata_manager.get_layout(table_name.clone(), transaction.clone());
+        let stat_info = metadata_manager.get_table_stats(
+            table_name.clone(),
+            transaction.clone(),
+            layout.clone(),
+        );
 
         TablePlanV2 {
             table_name,
@@ -229,19 +236,14 @@ impl PlanV2 for ProductPlanV2 {
 fn create_query_plan(
     query_data: QueryData,
     transaction: Rc<RefCell<TransactionV2>>,
-    stat_manager: &mut StatManagerV2,
-    table_manager: &mut TableManagerV2,
+    metadata_manager: &mut MetadataManager,
 ) -> Box<dyn PlanV2> {
     let mut plans: Vec<Box<dyn PlanV2>> = Vec::new();
 
     for table_name in query_data.table_name_list.iter() {
         let layout = Layout::new(TableSchema::new());
-        let table_plan = TablePlanV2::new(
-            table_name.clone(),
-            transaction.clone(),
-            table_manager,
-            stat_manager,
-        );
+        let table_plan =
+            TablePlanV2::new(table_name.clone(), transaction.clone(), metadata_manager);
         let mut plan: Box<dyn PlanV2> = Box::new(table_plan);
         plans.push(plan);
     }
@@ -263,15 +265,13 @@ fn create_query_plan(
 
 pub fn execute_insert(
     transaction: Rc<RefCell<TransactionV2>>,
-    stat_manager: &mut StatManagerV2,
-    table_manager: &mut TableManagerV2,
+    metadata_manager: &mut MetadataManager,
     insert_data: InsertData,
 ) {
     let plan = TablePlanV2::new(
         insert_data.table_name.clone(),
         transaction,
-        table_manager,
-        stat_manager,
+        metadata_manager,
     );
 
     let mut scan = plan.open();
@@ -288,29 +288,16 @@ pub fn execute_insert(
     scan.close();
 }
 
-#[cfg(test)]
-mod tests {
-    use std::{cell::RefCell, f32::consts::E, path::Path, rc::Rc};
+struct Database {
+    lock_table: Rc<RefCell<LockTable>>,
+    log_manager: Rc<RefCell<LogManagerV2>>,
+    buffer_manager: Rc<RefCell<BufferManagerV2>>,
+    file_manager: Rc<RefCell<FileManager>>,
+}
 
-    use rand::Rng;
-
-    use crate::{
-        buffer_manager_v2::BufferManagerV2,
-        concurrency_manager::LockTable,
-        file_manager::{self, FileManager},
-        log_manager,
-        log_manager_v2::LogManagerV2,
-        predicate::{Constant, ConstantValue, ExpressionValue},
-        predicate_v3::{ExpressionV2, TermV2},
-        record_page::TableSchema,
-        stat_manager, transaction,
-    };
-
-    use super::*;
-
-    #[test]
-    fn test_plan() {
-        let mut file_manager = Rc::new(RefCell::new(FileManager::new(Path::new("data"), 400)));
+impl Database {
+    pub fn new() -> Self {
+        let file_manager = Rc::new(RefCell::new(FileManager::new(Path::new("data"), 400)));
         let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
             file_manager.clone(),
             "log.txt".to_string(),
@@ -324,16 +311,50 @@ mod tests {
 
         let lock_table = Rc::new(RefCell::new(LockTable::new()));
 
-        let mut transaction = Rc::new(RefCell::new(TransactionV2::new(
-            1,
-            file_manager.clone(),
-            buffer_manager.clone(),
-            lock_table.clone(),
-        )));
+        Database {
+            lock_table,
+            log_manager,
+            buffer_manager,
+            file_manager,
+        }
+    }
 
-        let table_manager = Rc::new(RefCell::new(TableManagerV2::new()));
+    pub fn new_transaction(&self, transaction_id: i32) -> Rc<RefCell<TransactionV2>> {
+        Rc::new(RefCell::new(TransactionV2::new(
+            transaction_id,
+            self.file_manager.clone(),
+            self.buffer_manager.clone(),
+            self.lock_table.clone(),
+        )))
+    }
+}
 
-        let mut mutable_table_manager = table_manager.borrow_mut();
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, f32::consts::E, path::Path, rc::Rc};
+
+    use rand::Rng;
+
+    use crate::{
+        buffer_manager_v2::BufferManagerV2,
+        concurrency_manager::LockTable,
+        file_manager::{self, FileManager},
+        log_manager,
+        log_manager_v2::LogManagerV2,
+        metadata_manager::{self, MetadataManager},
+        predicate::{Constant, ConstantValue, ExpressionValue},
+        predicate_v3::{ExpressionV2, TermV2},
+        record_page::TableSchema,
+        stat_manager, transaction,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_plan() {
+        let database = Database::new();
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new();
 
         // mutable_table_manager.create_table(
         //     "table_catalog".to_string(),
@@ -346,19 +367,11 @@ mod tests {
         //     transaction.clone(),
         // );
 
-        let layout =
-            mutable_table_manager.get_layout("field_catalog".to_string(), transaction.clone());
-
         let mut schema = TableSchema::new();
         schema.add_integer_field("A".to_string());
         schema.add_string_field("B".to_string(), 9);
 
         // mutable_table_manager.create_table("test_table".to_string(), &schema, transaction.clone());
-
-        let layout =
-            mutable_table_manager.get_layout("test_table".to_string(), transaction.clone());
-
-        let mut stat_manager = StatManagerV2::new(table_manager.clone());
 
         let insert_data = InsertData {
             table_name: "test_table".to_string(),
@@ -369,12 +382,7 @@ mod tests {
             ],
         };
 
-        // execute_insert(
-        //     transaction.clone(),
-        //     &mut stat_manager,
-        //     &mut mutable_table_manager,
-        //     insert_data,
-        // );
+        // execute_insert(transaction.clone(), &mut metadata_manager, insert_data);
 
         // transaction.borrow_mut().commit();
 
@@ -391,12 +399,7 @@ mod tests {
             predicate: PredicateV2::new(vec![term.clone()]),
         };
 
-        let plan = create_query_plan(
-            query_data,
-            transaction.clone(),
-            &mut stat_manager,
-            &mut mutable_table_manager,
-        );
+        let plan = create_query_plan(query_data, transaction.clone(), &mut metadata_manager);
 
         let mut scan = plan.open();
         scan.move_to_before_first();

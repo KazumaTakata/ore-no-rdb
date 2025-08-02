@@ -218,7 +218,6 @@ pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
             }
             Rule::insert_sql => {
                 // Handle INSERT SQL
-                println!("Found INSERT SQL: {:?}", record);
                 let mut table_name: Option<String> = None;
                 let mut field_name_vec: Vec<String> = Vec::new();
                 let mut constant_list: Vec<Constant> = Vec::new();

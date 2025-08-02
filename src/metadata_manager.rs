@@ -7,7 +7,7 @@ use crate::{
     transaction_v2,
 };
 
-struct MetadataManager {
+pub struct MetadataManager {
     table_manager: Rc<RefCell<TableManagerV2>>,
     stat_manager: StatManagerV2,
 }
