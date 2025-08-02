@@ -342,6 +342,7 @@ mod tests {
         log_manager,
         log_manager_v2::LogManagerV2,
         metadata_manager::{self, MetadataManager},
+        parser::parse_sql,
         predicate::{Constant, ConstantValue, ExpressionValue},
         predicate_v3::{ExpressionV2, TermV2},
         record_page::TableSchema,
@@ -361,43 +362,34 @@ mod tests {
         //     &mutable_table_manager.table_catalog_layout.schema.clone(),
         //     transaction.clone(),
         // );
-        
+
         // mutable_table_manager.create_table(
         //     "field_catalog".to_string(),
         //     &mutable_table_manager.field_catalog_layout.schema.clone(),
         //     transaction.clone(),
         // );
 
-        let mut schema = TableSchema::new();
-        schema.add_integer_field("A".to_string());
-        schema.add_string_field("B".to_string(), 9);
-
         // mutable_table_manager.create_table("test_table".to_string(), &schema, transaction.clone());
 
-        let insert_data = InsertData {
-            table_name: "test_table".to_string(),
-            field_name_list: vec!["A".to_string(), "B".to_string()],
-            value_list: vec![
-                Constant::new(ConstantValue::Number(42)),
-                Constant::new(ConstantValue::String("Hello World".to_string())),
-            ],
+        let parsed_sql = parse_sql(
+            "insert into test_table (A, B) values (44, 'Hello World yay!111')".to_string(),
+        )
+        .unwrap();
+
+        let insert_data = match parsed_sql {
+            crate::parser::ParsedSQL::Insert(q) => q,
+            _ => panic!("Expected a Insert variant from parse_sql"),
         };
 
-        // execute_insert(transaction.clone(), &mut metadata_manager, insert_data);
+        execute_insert(transaction.clone(), &mut metadata_manager, insert_data);
 
         // transaction.borrow_mut().commit();
 
-        let term = TermV2::new(
-            ExpressionV2::new(ExpressionValue::FieldName("A".to_string())),
-            ExpressionV2::new(ExpressionValue::Constant(Constant::new(
-                ConstantValue::Number(42),
-            ))),
-        );
+        let parsed_sql = parse_sql("select A, B from test_table where A = 44".to_string()).unwrap();
 
-        let query_data = QueryData {
-            table_name_list: vec!["test_table".to_string()],
-            field_name_list: vec!["A".to_string(), "B".to_string()],
-            predicate: PredicateV2::new(vec![term.clone()]),
+        let query_data = match parsed_sql {
+            crate::parser::ParsedSQL::Query(q) => q,
+            _ => panic!("Expected a Query variant from parse_sql"),
         };
 
         let plan = create_query_plan(query_data, transaction.clone(), &mut metadata_manager);
