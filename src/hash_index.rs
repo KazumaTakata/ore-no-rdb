@@ -17,7 +17,7 @@ use crate::{
     transaction_v2::TransactionV2,
 };
 
-struct HashIndex {
+pub struct HashIndex {
     transaction: Rc<RefCell<TransactionV2>>,
     index_name: String,
     layout: Layout,
@@ -33,7 +33,11 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
 }
 
 impl HashIndex {
-    fn new(transaction: Rc<RefCell<TransactionV2>>, index_name: String, layout: Layout) -> Self {
+    pub fn new(
+        transaction: Rc<RefCell<TransactionV2>>,
+        index_name: String,
+        layout: Layout,
+    ) -> Self {
         HashIndex {
             transaction,
             index_name,
@@ -131,8 +135,8 @@ impl HashIndex {
         // Logic to close the index
     }
 
-    fn get_search_cost(number_of_records: i32) -> f64 {
-        return number_of_records as f64 / 10.0;
+    pub fn get_search_cost(number_of_blocks: i32) -> i32 {
+        return number_of_blocks / 10;
     }
 }
 
