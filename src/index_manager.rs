@@ -122,7 +122,7 @@ impl IndexInfo {
         stat_info: StatInfoV2,
         transaction: Rc<RefCell<TransactionV2>>,
     ) -> Self {
-        let index_layout = HashIndex::create_index_layout(&tableSchema, field_name.clone());
+        let index_layout = IndexInfo::create_index_layout(&tableSchema, field_name.clone());
 
         IndexInfo {
             index_name,
