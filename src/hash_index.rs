@@ -8,6 +8,7 @@ use std::{
 use rand::seq::index;
 
 use crate::{
+    plan_v2::PlanV2,
     predicate::{Constant, ConstantValue},
     record_page::Layout,
     scan_v2::ScanV2,
@@ -133,4 +134,8 @@ impl HashIndex {
     fn get_search_cost(number_of_records: i32) -> f64 {
         return number_of_records as f64 / 10.0;
     }
+}
+
+struct IndexSelectPlan {
+    plan: Box<dyn PlanV2>,
 }
