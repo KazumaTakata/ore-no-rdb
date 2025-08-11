@@ -16,6 +16,7 @@ mod concurrency_manager;
 mod concurrency_manager_v2;
 mod constant;
 mod file_manager;
+mod hash_index;
 mod log_manager;
 mod log_manager_v2;
 mod metadata_manager;

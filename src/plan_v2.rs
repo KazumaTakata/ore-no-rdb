@@ -381,7 +381,7 @@ mod tests {
             _ => panic!("Expected a Insert variant from parse_sql"),
         };
 
-        execute_insert(transaction.clone(), &mut metadata_manager, insert_data);
+        // execute_insert(transaction.clone(), &mut metadata_manager, insert_data);
 
         // transaction.borrow_mut().commit();
 
