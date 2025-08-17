@@ -22,6 +22,7 @@ mod index_manager;
 mod index_update_planner;
 mod log_manager;
 mod log_manager_v2;
+mod materialize;
 mod metadata_manager;
 mod page;
 mod parser;
