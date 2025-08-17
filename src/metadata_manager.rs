@@ -1,24 +1,47 @@
-use std::{cell::RefCell, os::macos::raw::stat, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, os::macos::raw::stat, rc::Rc};
 
 use crate::{
+    index_manager::{self, IndexInfo, IndexManager},
     record_page::{Layout, TableSchema},
     stat_manager_v2::{StatInfoV2, StatManagerV2},
     table_manager_v2::TableManagerV2,
-    transaction_v2,
+    transaction, transaction_v2,
 };
 
 pub struct MetadataManager {
     table_manager: Rc<RefCell<TableManagerV2>>,
-    stat_manager: StatManagerV2,
+    stat_manager: Rc<RefCell<StatManagerV2>>,
+    index_manager: Rc<RefCell<IndexManager>>,
 }
 
 impl MetadataManager {
-    pub fn new() -> Self {
+    pub fn new(is_new: bool, transaction: Rc<RefCell<transaction_v2::TransactionV2>>) -> Self {
         let table_manager = Rc::new(RefCell::new(TableManagerV2::new()));
-        let stat_manager = StatManagerV2::new(table_manager.clone());
+        let stat_manager = Rc::new(RefCell::new(StatManagerV2::new(table_manager.clone())));
+        let index_manager = Rc::new(RefCell::new(IndexManager::new(
+            table_manager.clone(),
+            stat_manager.clone(),
+            is_new,
+            transaction.clone(),
+        )));
+
+        if is_new {
+            table_manager.borrow_mut().create_table(
+                "table_catalog".to_string(),
+                &table_manager.borrow().table_catalog_layout.schema.clone(),
+                transaction.clone(),
+            );
+            table_manager.borrow_mut().create_table(
+                "field_catalog".to_string(),
+                &table_manager.borrow().field_catalog_layout.schema.clone(),
+                transaction.clone(),
+            );
+        }
+
         MetadataManager {
             table_manager: table_manager,
             stat_manager: stat_manager,
+            index_manager: index_manager,
         }
     }
 
@@ -50,6 +73,32 @@ impl MetadataManager {
         layout: Layout,
     ) -> StatInfoV2 {
         self.stat_manager
+            .borrow_mut()
             .get_table_stats(table_name, transaction, layout)
+    }
+
+    pub fn create_index(
+        &mut self,
+        index_name: String,
+        table_name: String,
+        field_name: String,
+        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+    ) {
+        self.index_manager.borrow_mut().create_index(
+            index_name,
+            table_name,
+            field_name,
+            transaction,
+        );
+    }
+
+    pub fn get_index_info(
+        &self,
+        table_name: String,
+        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+    ) -> HashMap<String, IndexInfo> {
+        self.index_manager
+            .borrow()
+            .get_index_info(table_name, transaction)
     }
 }

@@ -11,14 +11,14 @@ use crate::{
     transaction_v2::TransactionV2,
 };
 
-struct IndexManager {
+pub struct IndexManager {
     layout: Layout,
     table_manager: Rc<RefCell<TableManagerV2>>,
     stat_manager: Rc<RefCell<StatManagerV2>>,
 }
 
 impl IndexManager {
-    fn new(
+    pub fn new(
         table_manager: Rc<RefCell<TableManagerV2>>,
         stat_manager: Rc<RefCell<StatManagerV2>>,
         is_new: bool,
@@ -48,7 +48,7 @@ impl IndexManager {
         }
     }
 
-    fn create_index(
+    pub fn create_index(
         &mut self,
         index_name: String,
         table_name: String,
@@ -63,7 +63,7 @@ impl IndexManager {
         table_scan.close();
     }
 
-    fn get_index_info(
+    pub fn get_index_info(
         &self,
         table_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
@@ -105,7 +105,7 @@ impl IndexManager {
     }
 }
 
-struct IndexInfo {
+pub struct IndexInfo {
     index_name: String,
     field_name: String,
     schema: TableSchema,
@@ -115,7 +115,7 @@ struct IndexInfo {
 }
 
 impl IndexInfo {
-    fn new(
+    pub fn new(
         index_name: String,
         field_name: String,
         tableSchema: TableSchema,
@@ -134,7 +134,7 @@ impl IndexInfo {
         }
     }
 
-    fn open(&mut self) -> HashIndex {
+    pub fn open(&mut self) -> HashIndex {
         self.schema = TableSchema::new();
         HashIndex::new(
             self.transaction.clone(),

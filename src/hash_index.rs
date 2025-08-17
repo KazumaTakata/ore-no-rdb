@@ -100,7 +100,7 @@ impl HashIndex {
         None
     }
 
-    fn insert(&mut self, value: Constant, record_id: RecordID) {
+    pub fn insert(&mut self, value: Constant, record_id: RecordID) {
         self.before_first(value.clone());
 
         if let Some(scan) = &mut self.table_scan {
@@ -128,7 +128,7 @@ impl HashIndex {
         }
     }
 
-    fn close(&mut self) {
+    pub fn close(&mut self) {
         if let Some(scan) = &mut self.table_scan {
             scan.close();
         }

@@ -9,6 +9,7 @@ use crate::{
     transaction::{self, Transaction},
 };
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RecordID {
     block_number: u64,
     slot_number: i32,

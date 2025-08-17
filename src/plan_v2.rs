@@ -29,7 +29,7 @@ pub trait PlanV2 {
     fn get_distinct_value(&self, field_name: String) -> u32;
 }
 
-struct TablePlanV2 {
+pub struct TablePlanV2 {
     // Fields for the plan
     table_name: String,
     layout: Layout,
@@ -355,7 +355,7 @@ mod tests {
     fn test_plan() {
         let database = Database::new();
         let transaction = database.new_transaction(1);
-        let mut metadata_manager = MetadataManager::new();
+        let mut metadata_manager = MetadataManager::new(true, transaction.clone());
 
         // mutable_table_manager.create_table(
         //     "table_catalog".to_string(),
