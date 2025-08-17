@@ -25,15 +25,19 @@ impl MetadataManager {
             transaction.clone(),
         )));
 
+        let copied_table_manager = table_manager.clone();
+
+        let borrowed_table_manager = copied_table_manager.borrow_mut();
+
         if is_new {
-            table_manager.borrow_mut().create_table(
+            borrowed_table_manager.create_table(
                 "table_catalog".to_string(),
-                &table_manager.borrow().table_catalog_layout.schema.clone(),
+                &borrowed_table_manager.table_catalog_layout.schema.clone(),
                 transaction.clone(),
             );
-            table_manager.borrow_mut().create_table(
+            borrowed_table_manager.create_table(
                 "field_catalog".to_string(),
-                &table_manager.borrow().field_catalog_layout.schema.clone(),
+                &borrowed_table_manager.field_catalog_layout.schema.clone(),
                 transaction.clone(),
             );
         }

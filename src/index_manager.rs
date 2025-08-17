@@ -55,7 +55,11 @@ impl IndexManager {
         field_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
     ) {
-        let mut table_scan = TableScan::new(table_name.clone(), transaction, self.layout.clone());
+        let mut table_scan = TableScan::new(
+            "index_catalog".to_string(),
+            transaction,
+            self.layout.clone(),
+        );
         table_scan.insert();
         table_scan.set_string("index_name".to_string(), index_name.clone());
         table_scan.set_string("table_name".to_string(), table_name.clone());

@@ -15,6 +15,7 @@ mod buffer_manager_v2;
 mod concurrency_manager;
 mod concurrency_manager_v2;
 mod constant;
+mod database;
 mod file_manager;
 mod hash_index;
 mod index_manager;
