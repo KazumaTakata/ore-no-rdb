@@ -62,8 +62,10 @@ impl MaterializePlan {
             src_plan,
         }
     }
+}
 
-    pub fn open(&mut self) -> Box<dyn ScanV2> {
+impl PlanV2 for MaterializePlan {
+    fn open(&self) -> Box<dyn ScanV2> {
         let schema = self.src_plan.get_schema();
         let mut temp_table = TempTable::new(self.transaction.clone(), schema.clone());
 
@@ -84,21 +86,21 @@ impl MaterializePlan {
         dest
     }
 
-    pub fn blocks_accessed(&self) -> i32 {
+    fn blocks_accessed(&self) -> u32 {
         let layout = Layout::new(self.src_plan.get_schema().clone());
         let rpb = self.transaction.borrow().get_block_size() as i32 / layout.get_slot_size();
-        return self.src_plan.blocks_accessed() as i32 / rpb;
+        return self.src_plan.blocks_accessed() as u32 / rpb as u32;
     }
 
-    pub fn records_output(&self) -> u32 {
+    fn records_output(&self) -> u32 {
         self.src_plan.records_output()
     }
 
-    pub fn get_distinct_value(&self, field_name: String) -> u32 {
+    fn get_distinct_value(&self, field_name: String) -> u32 {
         self.src_plan.get_distinct_value(field_name)
     }
 
-    pub fn get_schema(&self) -> &TableSchema {
+    fn get_schema(&self) -> &TableSchema {
         self.src_plan.get_schema()
     }
 }
