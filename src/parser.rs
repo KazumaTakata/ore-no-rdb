@@ -226,8 +226,11 @@ pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
                         }
                         _ => {}
                     });
-                let query_data =
-                    QueryData::new(table_name_list, field_name_list, predicate.unwrap());
+                let query_data = QueryData::new(
+                    table_name_list,
+                    field_name_list,
+                    predicate.unwrap_or(PredicateV2::new(vec![])),
+                );
 
                 return Some(ParsedSQL::Query(query_data));
             }

@@ -10,7 +10,7 @@ use crate::{
 
 static INDEX_COUNTER: Mutex<i32> = Mutex::new(0);
 
-struct TempTable {
+pub struct TempTable {
     transaction: Rc<RefCell<TransactionV2>>,
     table_name: String,
     layout: Layout,
@@ -65,8 +65,9 @@ impl MaterializePlan {
 }
 
 impl PlanV2 for MaterializePlan {
-    fn open(&self) -> Box<dyn ScanV2> {
-        let schema = self.src_plan.get_schema();
+    fn open(&mut self) -> Box<dyn ScanV2> {
+        let schema = self.src_plan.get_schema().clone();
+
         let mut temp_table = TempTable::new(self.transaction.clone(), schema.clone());
 
         let mut src = self.src_plan.open();

@@ -18,7 +18,7 @@ impl IndexUpdatePlanner {
 
     pub fn execute_insert(&self, insert_data: InsertData, transaction: Rc<RefCell<TransactionV2>>) {
         let table_name = insert_data.table_name.clone();
-        let plan = TablePlanV2::new(
+        let mut plan = TablePlanV2::new(
             table_name.clone(),
             transaction.clone(),
             &mut self.metadata_manager.borrow_mut(),

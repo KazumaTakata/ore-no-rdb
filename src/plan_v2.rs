@@ -19,7 +19,7 @@ use crate::{
 };
 
 pub trait PlanV2 {
-    fn open(&self) -> Box<dyn ScanV2>;
+    fn open(&mut self) -> Box<dyn ScanV2>;
     fn get_schema(&self) -> &TableSchema;
 
     fn blocks_accessed(&self) -> u32;
@@ -60,7 +60,7 @@ impl TablePlanV2 {
 }
 
 impl PlanV2 for TablePlanV2 {
-    fn open(&self) -> Box<dyn ScanV2> {
+    fn open(&mut self) -> Box<dyn ScanV2> {
         return Box::new(TableScan::new(
             self.table_name.clone(),
             self.transaction.clone(),
@@ -101,7 +101,7 @@ impl SelectPlanV2 {
 }
 
 impl PlanV2 for SelectPlanV2 {
-    fn open(&self) -> Box<dyn ScanV2> {
+    fn open(&mut self) -> Box<dyn ScanV2> {
         let scan = self.table_plan.open();
         return Box::new(SelectScanV2::new(scan, self.predicate.clone()));
     }
@@ -160,7 +160,7 @@ impl ProjectPlanV2 {
 }
 
 impl PlanV2 for ProjectPlanV2 {
-    fn open(&self) -> Box<dyn ScanV2> {
+    fn open(&mut self) -> Box<dyn ScanV2> {
         let scan = self.plan.open();
         let field_names = self.schema.fields().clone(); // Assuming `fields()` returns `Vec<String>`
         return Box::new(ProjectScanV2::new(scan, field_names));
@@ -205,7 +205,7 @@ impl ProductPlanV2 {
 }
 
 impl PlanV2 for ProductPlanV2 {
-    fn open(&self) -> Box<dyn ScanV2> {
+    fn open(&mut self) -> Box<dyn ScanV2> {
         let scan1 = self.left_plan.open();
         let scan2 = self.right_plan.open();
         return Box::new(ProductScanV2::new(scan1, scan2));
@@ -268,7 +268,7 @@ pub fn execute_insert(
     metadata_manager: &mut MetadataManager,
     insert_data: InsertData,
 ) {
-    let plan = TablePlanV2::new(
+    let mut plan = TablePlanV2::new(
         insert_data.table_name.clone(),
         transaction,
         metadata_manager,
@@ -345,14 +345,14 @@ mod tests {
 
         // transaction.borrow_mut().commit();
 
-        let parsed_sql = parse_sql("select A, B from test_table where A = 44".to_string()).unwrap();
+        let parsed_sql = parse_sql("select A, B from test_table where A = 42".to_string()).unwrap();
 
         let query_data = match parsed_sql {
             crate::parser::ParsedSQL::Query(q) => q,
             _ => panic!("Expected a Query variant from parse_sql"),
         };
 
-        let plan = create_query_plan(query_data, transaction.clone(), &mut metadata_manager);
+        let mut plan = create_query_plan(query_data, transaction.clone(), &mut metadata_manager);
 
         let mut scan = plan.open();
         scan.move_to_before_first();

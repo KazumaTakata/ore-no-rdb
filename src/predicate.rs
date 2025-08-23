@@ -54,6 +54,42 @@ impl Constant {
             ConstantValue::Null => return false,
         }
     }
+
+    pub fn compare_to(&self, value: ConstantValue) -> std::cmp::Ordering {
+        match value {
+            ConstantValue::String(s) => match self.value {
+                ConstantValue::String(ref str) => {
+                    if str == &s {
+                        return std::cmp::Ordering::Equal;
+                    } else if str < &s {
+                        return std::cmp::Ordering::Less;
+                    } else {
+                        return std::cmp::Ordering::Greater;
+                    }
+                }
+                _ => {
+                    panic!("Cannot compare String with non-String value")
+                }
+            },
+            ConstantValue::Number(n) => match self.value {
+                ConstantValue::Number(m) => {
+                    if n == m {
+                        return std::cmp::Ordering::Equal;
+                    } else if m < n {
+                        return std::cmp::Ordering::Less;
+                    } else {
+                        return std::cmp::Ordering::Greater;
+                    }
+                }
+                _ => {
+                    panic!("Cannot compare Number with non-Number value")
+                }
+            },
+            _ => {
+                panic!("Cannot compare Null value")
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
