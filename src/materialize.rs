@@ -50,7 +50,7 @@ impl TempTable {
     }
 }
 
-struct MaterializePlan {
+pub struct MaterializePlan {
     transaction: Rc<RefCell<TransactionV2>>,
     src_plan: Box<dyn PlanV2>,
 }
