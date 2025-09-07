@@ -129,7 +129,9 @@ impl ScanV2 for TableScan {
         );
     }
 
-    fn delete(&mut self) {}
+    fn delete(&mut self) {
+        self.record_page.delete(self.current_slot);
+    }
 
     fn move_to_record_id(&mut self, record_id: RecordID) {
         self.close();

@@ -71,7 +71,7 @@ impl RecordPage {
         );
     }
 
-    fn delete(&mut self, slot_id: i32) {
+    pub fn delete(&mut self, slot_id: i32) {
         let record_offset = self.get_offset_of_record(slot_id);
         self.transaction.borrow_mut().set_integer(
             self.block_id.clone(),

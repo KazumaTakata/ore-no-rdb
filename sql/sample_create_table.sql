@@ -1,0 +1,1 @@
+CREATE TABLE posts ( title VARCHAR(200), content VARCHAR(200) )
