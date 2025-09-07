@@ -6,7 +6,7 @@ use crate::{
     file_manager::FileManager,
     log_manager_v2::LogManagerV2,
     metadata_manager::{self, MetadataManager},
-    parser::{InsertData, QueryData},
+    parser::{CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
     plan::Plan,
     predicate_v3::PredicateV2,
     record_page::{Layout, TableSchema},
@@ -286,6 +286,67 @@ pub fn execute_insert(
     }
 
     scan.close();
+}
+
+pub fn execute_delete(
+    transaction: Rc<RefCell<TransactionV2>>,
+    metadata_manager: &mut MetadataManager,
+    delete_data: DeleteData,
+) -> u32 {
+    let mut plan = TablePlanV2::new(
+        delete_data.table_name.clone(),
+        transaction.clone(),
+        metadata_manager,
+    );
+    let mut select_plan = SelectPlanV2::new(Box::new(plan), delete_data.predicate.clone());
+    let mut scan = select_plan.open();
+
+    let mut count = 0;
+
+    while scan.next() {
+        scan.delete();
+        count += 1;
+    }
+
+    scan.close();
+    return count;
+}
+
+pub fn execute_update(
+    transaction: Rc<RefCell<TransactionV2>>,
+    metadata_manager: &mut MetadataManager,
+    update_data: UpdateData,
+) -> u32 {
+    let mut plan = TablePlanV2::new(
+        update_data.table_name.clone(),
+        transaction.clone(),
+        metadata_manager,
+    );
+    let mut select_plan = SelectPlanV2::new(Box::new(plan), update_data.predicate.clone());
+    let mut scan = select_plan.open();
+
+    let mut count = 0;
+
+    while scan.next() {
+        let field = update_data.field_name.clone();
+        let value = update_data.new_value.clone();
+        scan.set_value(field.clone(), value.value);
+    }
+
+    scan.close();
+    return count;
+}
+
+pub fn execute_create_table(
+    transaction: Rc<RefCell<TransactionV2>>,
+    metadata_manager: &mut MetadataManager,
+    create_table_data: CreateTableData,
+) {
+    metadata_manager.create_table(
+        create_table_data.table_name.clone(),
+        &create_table_data.schema,
+        transaction,
+    );
 }
 
 #[cfg(test)]
