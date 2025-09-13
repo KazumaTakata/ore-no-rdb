@@ -5,7 +5,6 @@ use crate::{
     file_manager::FileManager,
     record_page,
     scan_v2::ScanV2,
-    table_manager::TableManager,
     table_manager_v2::TableManagerV2,
     table_scan_v2::TableScan,
     transaction::Transaction,

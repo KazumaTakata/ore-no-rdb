@@ -8,12 +8,12 @@ use std::{
 use rand::seq::index;
 
 use crate::{
+    error::ValueNotFound,
     plan_v2::PlanV2,
     predicate::{Constant, ConstantValue},
     record_page::Layout,
     scan_v2::ScanV2,
-    table_scan::RecordID,
-    table_scan_v2::TableScan,
+    table_scan_v2::{RecordID, TableScan},
     transaction_v2::TransactionV2,
 };
 
@@ -69,35 +69,41 @@ impl HashIndex {
         self.table_scan = Some(Box::new(table_scan));
     }
 
-    fn next(&mut self) -> bool {
+    fn next(&mut self) -> Result<bool, ValueNotFound> {
         if let Some(scan) = &mut self.table_scan {
-            while scan.next() {
+            while scan.next()? {
                 let data_value = scan.get_value("data_value".to_string());
-                match self.search_key {
-                    Some(ref key) if key.equals(data_value) => {
-                        return true;
+
+                if let Some(inner_value) = data_value {
+                    match self.search_key {
+                        Some(ref key) if key.equals(inner_value) => {
+                            return Ok(true);
+                        }
+                        _ => continue,
                     }
-                    _ => continue,
+                } else {
+                    return Err(ValueNotFound::new("data_value".to_string(), None));
                 }
             }
+
+            return Ok(false);
         } else {
             panic!("Table scan is not initialized. Call before_first first.");
         }
-        false
     }
 
-    fn get_data_record_id(&mut self) -> Option<RecordID> {
+    fn get_data_record_id(&mut self) -> Result<Option<RecordID>, ValueNotFound> {
         if let Some(scan) = &mut self.table_scan {
-            if scan.next() {
+            if scan.next()? {
                 let value = scan.get_integer("block".to_string());
                 let id = scan.get_integer("id".to_string());
 
                 if let (Some(block), Some(id)) = (value, id) {
-                    return Some(RecordID::new(block as u64, id));
+                    return Ok(Some(RecordID::new(block as u64, id)));
                 }
             }
         }
-        None
+        Ok(None)
     }
 
     pub fn insert(&mut self, value: Constant, record_id: RecordID) {
@@ -113,16 +119,18 @@ impl HashIndex {
         }
     }
 
-    fn delete(&mut self, value: Constant, record_id: RecordID) {
+    fn delete(&mut self, value: Constant, record_id: RecordID) -> Result<bool, ValueNotFound> {
         self.before_first(value.clone());
         if let Some(scan) = &mut self.table_scan {
-            while scan.next() {
+            while scan.next()? {
                 let data_record_id = scan.get_record_id();
                 if data_record_id.equals(&record_id) {
                     scan.delete();
-                    return;
+                    return Ok(true);
                 }
             }
+
+            return Ok(false);
         } else {
             panic!("Table scan is not initialized. Call before_first first.");
         }

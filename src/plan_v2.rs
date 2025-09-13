@@ -3,6 +3,7 @@ use std::{cell::RefCell, cmp::min, fs::Metadata, path::Path, rc::Rc};
 use crate::{
     buffer_manager_v2::BufferManagerV2,
     concurrency_manager::LockTable,
+    error::ValueNotFound,
     file_manager::FileManager,
     log_manager_v2::LogManagerV2,
     metadata_manager::{self, MetadataManager},
@@ -18,7 +19,7 @@ use crate::{
 };
 
 pub trait PlanV2 {
-    fn open(&mut self) -> Box<dyn ScanV2>;
+    fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound>;
     fn get_schema(&self) -> &TableSchema;
 
     fn blocks_accessed(&self) -> u32;
@@ -233,7 +234,7 @@ impl PlanV2 for ProductPlanV2 {
 }
 
 pub fn create_query_plan(
-    query_data: QueryData,
+    query_data: &QueryData,
     transaction: Rc<RefCell<TransactionV2>>,
     metadata_manager: &mut MetadataManager,
 ) -> Box<dyn PlanV2> {
@@ -372,10 +373,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_insert_plan() {
+        let database = Database::new();
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(false, transaction.clone());
+
+        let parsed_sql =
+            parse_sql("insert into posts_2 (title, content) values ('title1', 'body')".to_string())
+                .unwrap();
+
+        let insert_data = match parsed_sql {
+            crate::parser::ParsedSQL::Insert(q) => q,
+            _ => panic!("Expected a Insert variant from parse_sql"),
+        };
+
+        execute_insert(transaction.clone(), &mut metadata_manager, insert_data);
+
+        transaction.borrow_mut().commit();
+    }
+
     fn test_plan() {
         let database = Database::new();
         let transaction = database.new_transaction(1);
-        let mut metadata_manager = MetadataManager::new(true, transaction.clone());
+        let mut metadata_manager = MetadataManager::new(false, transaction.clone());
 
         // mutable_table_manager.create_table(
         //     "table_catalog".to_string(),
@@ -412,7 +432,7 @@ mod tests {
             _ => panic!("Expected a Query variant from parse_sql"),
         };
 
-        let mut plan = create_query_plan(query_data, transaction.clone(), &mut metadata_manager);
+        let mut plan = create_query_plan(&query_data, transaction.clone(), &mut metadata_manager);
 
         let mut scan = plan.open();
         scan.move_to_before_first();

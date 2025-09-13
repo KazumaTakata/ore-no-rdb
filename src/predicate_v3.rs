@@ -1,6 +1,6 @@
 use crate::{
     plan_v2::PlanV2,
-    predicate::{Constant, ConstantValue, Expression, ExpressionValue},
+    predicate::{Constant, ConstantValue, ExpressionValue},
     record_page::TableSchema,
     scan_v2::ScanV2,
 };
