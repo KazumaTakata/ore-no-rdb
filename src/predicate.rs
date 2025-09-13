@@ -4,7 +4,6 @@ use pest::pratt_parser::Op;
 
 use crate::{
     buffer_manager::BufferList,
-    plan::Plan,
     record_page::TableSchema,
     scan::Scan,
     transaction::{self, Transaction},
@@ -168,33 +167,6 @@ impl Term {
         self.lhs.can_apply_to(schema.clone()) && self.rhs.can_apply_to(schema)
     }
 
-    pub fn reduction_factor(
-        &self,
-        plan: &dyn Plan,
-        transaction: &mut Transaction,
-        buffer_list: &mut BufferList,
-    ) -> u32 {
-        match self.lhs.value {
-            ExpressionValue::FieldName(ref field_name) => match self.rhs.value {
-                ExpressionValue::FieldName(ref field_name2) => {
-                    return max(
-                        plan.get_distinct_value(field_name.clone(), transaction, buffer_list),
-                        plan.get_distinct_value(field_name2.clone(), transaction, buffer_list),
-                    );
-                }
-                ExpressionValue::Constant(ref constant) => {
-                    return plan.get_distinct_value(field_name.clone(), transaction, buffer_list);
-                }
-            },
-            ExpressionValue::Constant(_) => match self.rhs.value {
-                ExpressionValue::FieldName(ref field_name) => {
-                    return plan.get_distinct_value(field_name.clone(), transaction, buffer_list);
-                }
-                ExpressionValue::Constant(_) => return 1,
-            },
-        }
-    }
-
     pub fn equate_with_constant(
         &self,
         transaction: &mut Transaction,
@@ -281,35 +253,6 @@ impl Predicate {
 
     pub fn conjoin_with(&mut self, predicate: Predicate) {
         self.terms.extend(predicate.terms);
-    }
-
-    pub fn reduction_factor(
-        &self,
-        plan: &dyn Plan,
-        transaction: &mut Transaction,
-        buffer_list: &mut BufferList,
-    ) -> u32 {
-        let mut reduction_factor = 1;
-        for term in &self.terms {
-            reduction_factor *= term.reduction_factor(plan, transaction, buffer_list);
-        }
-        return reduction_factor;
-    }
-
-    pub fn select_sub_predicate(&self, schema: TableSchema) -> Option<Predicate> {
-        let mut predicate = Predicate::new(vec![]);
-
-        for term in &self.terms {
-            if term.can_apply_to(schema.clone()) {
-                predicate.terms.push(term.clone());
-            }
-        }
-
-        if predicate.terms.len() == 0 {
-            return None;
-        } else {
-            return Some(predicate);
-        }
     }
 
     pub fn join_sub_predicate(

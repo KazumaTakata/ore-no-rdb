@@ -2,7 +2,6 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     materialize::{self, MaterializePlan, TempTable},
-    plan::Plan,
     plan_v2::PlanV2,
     predicate::Constant,
     record_page::TableSchema,

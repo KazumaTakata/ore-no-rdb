@@ -7,7 +7,6 @@ use crate::{
     log_manager_v2::LogManagerV2,
     metadata_manager::{self, MetadataManager},
     parser::{CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
-    plan::Plan,
     predicate_v3::PredicateV2,
     record_page::{Layout, TableSchema},
     scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
@@ -233,7 +232,7 @@ impl PlanV2 for ProductPlanV2 {
     }
 }
 
-fn create_query_plan(
+pub fn create_query_plan(
     query_data: QueryData,
     transaction: Rc<RefCell<TransactionV2>>,
     metadata_manager: &mut MetadataManager,

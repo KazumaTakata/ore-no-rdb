@@ -1,3 +1,5 @@
+use rustyline::error::ReadlineError;
+use rustyline::{DefaultEditor, Result};
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -26,7 +28,6 @@ mod materialize;
 mod metadata_manager;
 mod page;
 mod parser;
-mod plan;
 mod plan_v2;
 mod predicate;
 mod predicate_v3;
@@ -51,8 +52,82 @@ use page::Page;
 use parser::{parse_sql, Rule, SQLParser};
 use pest::Parser;
 
-fn main() {
-    println!("Hello, world!");
+use crate::database::Database;
+use crate::metadata_manager::MetadataManager;
+use crate::parser::ParsedSQL;
+use crate::plan_v2::{create_query_plan, execute_delete, execute_insert};
+
+fn main() -> Result<()> {
+    let database = Database::new();
+    let transaction = database.new_transaction(1);
+    let mut metadata_manager = MetadataManager::new(true, transaction.clone());
+
+    // `()` can be used when no completer is required
+    let mut rl = DefaultEditor::new()?;
+    #[cfg(feature = "with-file-history")]
+    if rl.load_history("history.txt").is_err() {
+        println!("No previous history.");
+    }
+
+    loop {
+        let readline = rl.readline(">> ");
+        match readline {
+            Ok(line) => {
+                rl.add_history_entry(line.as_str())?;
+                println!("Line: {}", line);
+
+                let parsed_sql = parse_sql(line.to_string()).unwrap();
+                match parsed_sql {
+                    ParsedSQL::Query(q) => {
+                        let mut plan =
+                            create_query_plan(q, transaction.clone(), &mut metadata_manager);
+                        let mut scan = plan.open();
+                        scan.move_to_before_first();
+                        while scan.next() {
+                            let field1_value = scan.get_integer("A".to_string());
+                            let field2_value = scan.get_string("B".to_string());
+
+                            if let Some(value) = field1_value {
+                                println!("Field A: {}", value);
+                            } else {
+                                println!("Field A: None");
+                            }
+
+                            if let Some(value) = field2_value {
+                                println!("Field B: {}", value);
+                            } else {
+                                println!("Field B: None");
+                            }
+                        }
+                    }
+                    ParsedSQL::Insert(insert_data) => {
+                        execute_insert(transaction.clone(), &mut metadata_manager, insert_data);
+                        transaction.borrow_mut().commit();
+                    }
+                    ParsedSQL::Delete(delete_data) => {
+                        execute_delete(transaction.clone(), &mut metadata_manager, delete_data);
+                        transaction.borrow_mut().commit();
+                    }
+                    _ => panic!("Expected a Query variant from parse_sql"),
+                };
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("CTRL-C");
+                break;
+            }
+            Err(ReadlineError::Eof) => {
+                println!("CTRL-D");
+                break;
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        }
+    }
+    #[cfg(feature = "with-file-history")]
+    rl.save_history("history.txt");
+    Ok(())
 
     // let block = BlockId::new("./data/test.txt".to_string(), 0);
 
