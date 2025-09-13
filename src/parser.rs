@@ -536,6 +536,20 @@ mod tests {
     }
 
     #[test]
+    fn test_create_table() {
+        let sql = "create table posts (title varchar(10), content varchar(10))".to_string();
+        let parsed_sql = parse_sql(sql);
+        parsed_sql.unwrap().debug_print();
+    }
+
+    #[test]
+    fn test_insert_sql() {
+        let sql = "insert into test_table (A, B) values (44, 'Hello World')".to_string();
+        let parsed_sql = parse_sql(sql);
+        parsed_sql.unwrap().debug_print();
+    }
+
+    #[test]
     fn test_update_sql() {
         let sql = "update test_table set B = 'Updated Value' where A = 44".to_string();
         let parsed_sql = parse_sql(sql);

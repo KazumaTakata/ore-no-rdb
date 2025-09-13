@@ -55,7 +55,7 @@ use pest::Parser;
 use crate::database::Database;
 use crate::metadata_manager::MetadataManager;
 use crate::parser::ParsedSQL;
-use crate::plan_v2::{create_query_plan, execute_delete, execute_insert};
+use crate::plan_v2::{create_query_plan, execute_create_table, execute_delete, execute_insert};
 
 fn main() -> Result<()> {
     let database = Database::new();
@@ -78,14 +78,23 @@ fn main() -> Result<()> {
 
                 let parsed_sql = parse_sql(line.to_string()).unwrap();
                 match parsed_sql {
-                    ParsedSQL::Query(q) => {
-                        let mut plan =
-                            create_query_plan(q, transaction.clone(), &mut metadata_manager);
+                    ParsedSQL::Query(select_query) => {
+                        let mut plan = create_query_plan(
+                            &select_query,
+                            transaction.clone(),
+                            &mut metadata_manager,
+                        );
+
+                        // TODO: 可変のfield数に対応する,
+                        let field_1 = select_query.field_name_list[0].clone();
+                        let field_2 = select_query.field_name_list[1].clone();
+
                         let mut scan = plan.open();
                         scan.move_to_before_first();
                         while scan.next() {
-                            let field1_value = scan.get_integer("A".to_string());
-                            let field2_value = scan.get_string("B".to_string());
+                            // TODO: integer, stringの両方に対応する, metadata_managerから型情報を取ってくる
+                            let field1_value = scan.get_string(field_1.clone());
+                            let field2_value = scan.get_string(field_2.clone());
 
                             if let Some(value) = field1_value {
                                 println!("Field A: {}", value);
@@ -107,6 +116,13 @@ fn main() -> Result<()> {
                     ParsedSQL::Delete(delete_data) => {
                         execute_delete(transaction.clone(), &mut metadata_manager, delete_data);
                         transaction.borrow_mut().commit();
+                    }
+                    ParsedSQL::CreateTable(create_table_data) => {
+                        execute_create_table(
+                            transaction.clone(),
+                            &mut metadata_manager,
+                            create_table_data,
+                        );
                     }
                     _ => panic!("Expected a Query variant from parse_sql"),
                 };
