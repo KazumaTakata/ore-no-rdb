@@ -3,6 +3,7 @@ use std::{cell::RefCell, cmp::min, fs::Metadata, path::Path, rc::Rc};
 use crate::{
     buffer_manager_v2::BufferManagerV2,
     concurrency_manager::LockTable,
+    error::ValueNotFound,
     file_manager::FileManager,
     log_manager_v2::LogManagerV2,
     metadata_manager::{self, MetadataManager},
@@ -18,7 +19,7 @@ use crate::{
 };
 
 pub trait PlanV2 {
-    fn open(&mut self) -> Box<dyn ScanV2>;
+    fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound>;
     fn get_schema(&self) -> &TableSchema;
 
     fn blocks_accessed(&self) -> u32;

@@ -1,11 +1,16 @@
-use crate::{predicate::ConstantValue, predicate_v3::PredicateV2, table_scan::RecordID};
+use pest::pratt_parser::Op;
+
+use crate::{
+    error::ValueNotFound, predicate::ConstantValue, predicate_v3::PredicateV2,
+    table_scan_v2::RecordID,
+};
 
 pub trait ScanV2 {
-    fn move_to_before_first(&mut self);
-    fn next(&mut self) -> bool;
+    fn move_to_before_first(&mut self) -> Result<(), ValueNotFound>;
+    fn next(&mut self) -> Result<bool, ValueNotFound>;
     fn get_integer(&mut self, field_name: String) -> Option<i32>;
     fn get_string(&mut self, field_name: String) -> Option<String>;
-    fn get_value(&mut self, field_name: String) -> ConstantValue;
+    fn get_value(&mut self, field_name: String) -> Option<ConstantValue>;
     fn close(&mut self);
     fn has_field(&self, field_name: String) -> bool;
     fn set_integer(&mut self, field_name: String, value: i32);
@@ -31,17 +36,18 @@ impl SelectScanV2 {
 }
 
 impl ScanV2 for SelectScanV2 {
-    fn move_to_before_first(&mut self) {
+    fn move_to_before_first(&mut self) -> Result<(), ValueNotFound> {
         self.scan.move_to_before_first();
+        return Ok(());
     }
 
-    fn next(&mut self) -> bool {
-        while self.scan.next() {
+    fn next(&mut self) -> Result<bool, ValueNotFound> {
+        while self.scan.next()? {
             if self.predicate.is_satisfied(&mut *self.scan) {
-                return true;
+                return Ok(true);
             }
         }
-        return false;
+        return Ok(false);
     }
 
     fn get_integer(&mut self, field_name: String) -> Option<i32> {
@@ -51,7 +57,7 @@ impl ScanV2 for SelectScanV2 {
     fn get_string(&mut self, field_name: String) -> Option<String> {
         self.scan.get_string(field_name)
     }
-    fn get_value(&mut self, field_name: String) -> ConstantValue {
+    fn get_value(&mut self, field_name: String) -> Option<ConstantValue> {
         self.scan.get_value(field_name)
     }
 
@@ -104,11 +110,11 @@ impl ProjectScanV2 {
 }
 
 impl ScanV2 for ProjectScanV2 {
-    fn move_to_before_first(&mut self) {
-        self.scan.move_to_before_first();
+    fn move_to_before_first(&mut self) -> Result<(), ValueNotFound> {
+        self.scan.move_to_before_first()
     }
 
-    fn next(&mut self) -> bool {
+    fn next(&mut self) -> Result<bool, ValueNotFound> {
         self.scan.next()
     }
 
@@ -126,11 +132,12 @@ impl ScanV2 for ProjectScanV2 {
         None
     }
 
-    fn get_value(&mut self, field_name: String) -> ConstantValue {
+    fn get_value(&mut self, field_name: String) -> Option<ConstantValue> {
         if self.fields.contains(&field_name) {
             return self.scan.get_value(field_name);
         }
-        ConstantValue::Null
+
+        return None;
     }
 
     fn close(&mut self) {
@@ -185,18 +192,26 @@ impl ProductScanV2 {
 }
 
 impl ScanV2 for ProductScanV2 {
-    fn move_to_before_first(&mut self) {
-        self.left_scan.move_to_before_first();
-        self.left_scan.next();
-        self.right_scan.move_to_before_first();
+    fn move_to_before_first(&mut self) -> Result<(), ValueNotFound> {
+        self.left_scan.move_to_before_first()?;
+        self.left_scan.next()?;
+        self.right_scan.move_to_before_first()?;
+        Ok(())
     }
 
-    fn next(&mut self) -> bool {
-        if self.right_scan.next() {
-            return true;
+    fn next(&mut self) -> Result<bool, ValueNotFound> {
+        let right_scan_next = self.right_scan.next()?;
+
+        if right_scan_next {
+            return Ok(true);
         }
+
         self.right_scan.move_to_before_first();
-        return self.right_scan.next() && self.left_scan.next();
+
+        let left_scan_next = self.left_scan.next()?;
+        let right_scan_next = self.right_scan.next()?;
+
+        return Ok(right_scan_next && left_scan_next);
     }
 
     fn get_integer(&mut self, field_name: String) -> Option<i32> {
@@ -215,7 +230,7 @@ impl ScanV2 for ProductScanV2 {
         }
     }
 
-    fn get_value(&mut self, field_name: String) -> ConstantValue {
+    fn get_value(&mut self, field_name: String) -> Option<ConstantValue> {
         if self.left_scan.has_field(field_name.clone()) {
             return self.left_scan.get_value(field_name);
         } else {

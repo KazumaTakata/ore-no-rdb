@@ -1,11 +1,15 @@
 use std::{cell::RefCell, rc::Rc};
 
+use pest::pratt_parser::Op;
+
 use crate::{
+    error::ValueNotFound,
     materialize::{self, MaterializePlan, TempTable},
     plan_v2::PlanV2,
     predicate::Constant,
     record_page::TableSchema,
     scan_v2::ScanV2,
+    table_scan_v2::RecordID,
     transaction_v2::TransactionV2,
 };
 
@@ -33,12 +37,20 @@ impl SortPlan {
         }
     }
 
-    fn copy(&self, src_scan: &mut dyn ScanV2, dest: &mut dyn ScanV2) -> bool {
+    fn copy(
+        &self,
+        src_scan: &mut dyn ScanV2,
+        dest: &mut dyn ScanV2,
+    ) -> Result<bool, ValueNotFound> {
         dest.insert();
 
         for field in self.table_schema.fields.iter() {
             let value = src_scan.get_value(field.clone());
-            dest.set_value(field.clone(), value);
+            if let Some(inner_value) = value {
+                dest.set_value(field.clone(), inner_value);
+            } else {
+                return Err(ValueNotFound::new(field.clone(), None));
+            }
         }
 
         return src_scan.next();
@@ -61,12 +73,15 @@ impl SortPlan {
         return new_runs;
     }
 
-    fn split_into_runs(&mut self, src_scan: &mut dyn ScanV2) -> Vec<TempTable> {
+    fn split_into_runs(
+        &mut self,
+        src_scan: &mut dyn ScanV2,
+    ) -> Result<Vec<TempTable>, ValueNotFound> {
         let mut temp_tables: Vec<TempTable> = Vec::new();
         src_scan.move_to_before_first();
 
-        if !src_scan.next() {
-            return temp_tables; // No records to sort
+        if !src_scan.next()? {
+            return Ok(temp_tables); // No records to sort
         }
 
         // Start a new run
@@ -75,8 +90,8 @@ impl SortPlan {
 
         let mut current_scan = current_temp_table.open();
 
-        while self.copy(src_scan, &mut *current_scan) {
-            if self.comparator.compare(src_scan, &mut *current_scan) == std::cmp::Ordering::Less {
+        while self.copy(src_scan, &mut *current_scan)? {
+            if self.comparator.compare(src_scan, &mut *current_scan)? == std::cmp::Ordering::Less {
                 current_scan.close();
                 temp_tables.push(current_temp_table);
                 current_temp_table =
@@ -86,14 +101,14 @@ impl SortPlan {
         }
 
         current_scan.close();
-        return temp_tables;
+        return Ok(temp_tables);
     }
 
     fn merge_two_runs(
         &mut self,
         temp_table_1: &mut TempTable,
         temp_table_2: &mut TempTable,
-    ) -> TempTable {
+    ) -> Result<TempTable, ValueNotFound> {
         // Implementation for merging two sorted runs
         // This is a placeholder; actual implementation would depend on the specific requirements
 
@@ -106,20 +121,20 @@ impl SortPlan {
         let mut has_more_data_1 = scan1.next();
         let mut has_more_data_2 = scan2.next();
 
-        while has_more_data_1 && has_more_data_2 {
-            if self.comparator.compare(&mut *scan1, &mut *scan2) != std::cmp::Ordering::Less {
+        while has_more_data_1.clone()? && has_more_data_2.clone()? {
+            if self.comparator.compare(&mut *scan1, &mut *scan2)? != std::cmp::Ordering::Less {
                 has_more_data_1 = self.copy(&mut *scan1, &mut *destination_result);
             } else {
                 has_more_data_2 = self.copy(&mut *scan2, &mut *destination_result);
             }
         }
 
-        if has_more_data_1 {
-            while has_more_data_1 {
+        if has_more_data_1.clone()? {
+            while has_more_data_1.clone()? {
                 has_more_data_1 = self.copy(&mut *scan1, &mut *destination_result);
             }
-        } else if has_more_data_2 {
-            while has_more_data_2 {
+        } else if has_more_data_2.clone()? {
+            while has_more_data_2.clone()? {
                 has_more_data_2 = self.copy(&mut *scan2, &mut *destination_result);
             }
         }
@@ -128,21 +143,26 @@ impl SortPlan {
         scan2.close();
         destination_result.close();
 
-        return merged_table;
+        return Ok(merged_table);
     }
 }
 
 impl PlanV2 for SortPlan {
-    fn open(&mut self) -> Box<dyn ScanV2> {
+    fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
         let mut src_scan = self.plan.open();
-        let mut runs = self.split_into_runs(&mut *src_scan);
+        let runs = self.split_into_runs(&mut *src_scan);
         src_scan.close();
 
-        while runs.len() > 2 {
-            runs = self.do_merge_iteration(&mut runs);
+        let mut inner_runs = runs?;
+
+        while inner_runs.len() > 2 {
+            inner_runs = self.do_merge_iteration(&mut inner_runs);
         }
 
-        return Box::new(SortScan::new(&mut runs, self.comparator.clone()));
+        return Ok(Box::new(SortScan::new(
+            &mut inner_runs,
+            self.comparator.clone(),
+        )));
     }
 
     fn records_output(&self) -> u32 {
@@ -173,21 +193,29 @@ impl RecordComparator {
         RecordComparator { field_name_list }
     }
 
-    pub fn compare(&self, scan1: &mut dyn ScanV2, scan2: &mut dyn ScanV2) -> std::cmp::Ordering {
+    pub fn compare(
+        &self,
+        scan1: &mut dyn ScanV2,
+        scan2: &mut dyn ScanV2,
+    ) -> Result<std::cmp::Ordering, ValueNotFound> {
         for field_name in &self.field_name_list {
             let value1 = scan1.get_value(field_name.clone());
             let value2 = scan2.get_value(field_name.clone());
 
-            let val1 = Constant::new(value1);
-            let val2 = Constant::new(value2);
+            if let (Some(inner_value1), Some(inner_value2)) = (value1, value2) {
+                let val1 = Constant::new(inner_value1);
+                let val2 = Constant::new(inner_value2);
 
-            match val1.compare_to(val2.value) {
-                std::cmp::Ordering::Equal => continue,
-                std::cmp::Ordering::Less => return std::cmp::Ordering::Less,
-                std::cmp::Ordering::Greater => return std::cmp::Ordering::Greater,
+                match val1.compare_to(val2.value) {
+                    std::cmp::Ordering::Equal => continue,
+                    std::cmp::Ordering::Less => return Ok(std::cmp::Ordering::Less),
+                    std::cmp::Ordering::Greater => return Ok(std::cmp::Ordering::Greater),
+                }
+            } else {
+                return Err(ValueNotFound::new(field_name.clone(), None));
             }
         }
-        std::cmp::Ordering::Equal
+        Ok(std::cmp::Ordering::Equal)
     }
 }
 
@@ -208,58 +236,76 @@ struct SortScan {
 }
 
 impl SortScan {
-    pub fn new(runs: &mut Vec<TempTable>, comparator: RecordComparator) -> Self {
+    pub fn new(
+        runs: &mut Vec<TempTable>,
+        comparator: RecordComparator,
+    ) -> Result<Self, ValueNotFound> {
         let mut scan1 = runs.get_mut(0).unwrap().open();
-        let has_more_data_1 = scan1.next();
+        let has_more_data_1 = scan1.next()?;
 
         let (scan2, has_more_data_2) = if runs.len() > 1 {
             let mut scan2 = runs.get_mut(1).unwrap().open();
-            let has_more_data_2 = scan2.next();
+            let has_more_data_2 = scan2.next()?;
 
             (Some(scan2), has_more_data_2)
         } else {
             (None, false)
         };
 
-        SortScan {
+        Ok(SortScan {
             scan1,
             scan2,
             has_more_data_1,
             has_more_data_2,
             comparator,
             current_scan: CurrentScan::None,
-        }
+        })
     }
 }
 
 impl ScanV2 for SortScan {
-    fn move_to_before_first(&mut self) {
+    fn move_to_before_first(&mut self) -> Result<(), ValueNotFound> {
         self.scan1.move_to_before_first();
-        self.has_more_data_1 = self.scan1.next();
+        let has_more_data_1 = self.scan1.next();
+
+        match has_more_data_1 {
+            Err(e) => return Err(e),
+            Ok(inner_has_more_data_1) => {
+                self.has_more_data_1 = inner_has_more_data_1;
+            }
+        }
 
         if let Some(scan2) = &mut self.scan2 {
             scan2.move_to_before_first();
-            self.has_more_data_2 = scan2.next();
+            let has_more_data_2 = scan2.next();
+            match has_more_data_2 {
+                Err(e) => return Err(e),
+                Ok(inner_has_more_data_2) => {
+                    self.has_more_data_2 = inner_has_more_data_2;
+                    return Ok(());
+                }
+            }
+        } else {
+            return Ok(());
         }
     }
 
-    fn next(&mut self) -> bool {
+    fn next(&mut self) -> Result<bool, ValueNotFound> {
         if self.current_scan == CurrentScan::Scan1 {
-            self.has_more_data_1 = self.scan1.next();
+            self.has_more_data_1 = self.scan1.next()?;
         } else if self.current_scan == CurrentScan::Scan2 {
             if let Some(scan2) = &mut self.scan2 {
-                self.has_more_data_2 = scan2.next();
+                self.has_more_data_2 = scan2.next()?;
             }
         }
 
         if (!self.has_more_data_1) && (!self.has_more_data_2 || self.scan2.is_none()) {
             self.current_scan = CurrentScan::None;
-            return false;
+            return Ok(false);
         } else if self.has_more_data_1 && self.has_more_data_2 {
             if let Some(scan2) = &mut self.scan2 {
-                if self.comparator.compare(&mut *self.scan1, &mut **scan2)
-                    != std::cmp::Ordering::Less
-                {
+                let compare_value = self.comparator.compare(&mut *self.scan1, &mut **scan2)?;
+                if compare_value != std::cmp::Ordering::Less {
                     self.current_scan = CurrentScan::Scan1;
                 } else {
                     self.current_scan = CurrentScan::Scan2;
@@ -271,7 +317,7 @@ impl ScanV2 for SortScan {
             self.current_scan = CurrentScan::Scan2;
         }
 
-        return true;
+        return Ok(true);
     }
 
     fn get_integer(&mut self, field_name: String) -> Option<i32> {
@@ -316,17 +362,17 @@ impl ScanV2 for SortScan {
         }
     }
 
-    fn get_value(&mut self, field_name: String) -> crate::predicate::ConstantValue {
+    fn get_value(&mut self, field_name: String) -> Option<crate::predicate::ConstantValue> {
         if self.current_scan == CurrentScan::Scan1 {
             self.scan1.get_value(field_name)
         } else if self.current_scan == CurrentScan::Scan2 {
             if let Some(scan2) = &mut self.scan2 {
                 scan2.get_value(field_name)
             } else {
-                crate::predicate::ConstantValue::Null
+                None
             }
         } else {
-            crate::predicate::ConstantValue::Null
+            None
         }
     }
 
@@ -341,14 +387,14 @@ impl ScanV2 for SortScan {
         panic!("SortScan does not support delete operation.");
     }
 
-    fn get_record_id(&self) -> crate::table_scan::RecordID {
+    fn get_record_id(&self) -> RecordID {
         panic!("SortScan does not support get_record_id operation.");
     }
     fn insert(&mut self) {
         panic!("SortScan does not support insert operation.");
     }
 
-    fn move_to_record_id(&mut self, record_id: crate::table_scan::RecordID) {
+    fn move_to_record_id(&mut self, record_id: RecordID) {
         panic!("SortScan does not support move_to_record_id operation.");
     }
 

@@ -18,6 +18,7 @@ mod concurrency_manager;
 mod concurrency_manager_v2;
 mod constant;
 mod database;
+mod error;
 mod file_manager;
 mod hash_index;
 mod index_manager;
@@ -34,14 +35,10 @@ mod predicate_v3;
 mod record_page;
 mod record_page_v2;
 mod recovery_manager;
-mod scan;
 mod scan_v2;
 mod sort_plan;
-mod stat_manager;
 mod stat_manager_v2;
-mod table_manager;
 mod table_manager_v2;
-mod table_scan;
 mod table_scan_v2;
 mod transaction;
 mod transaction_v2;
@@ -84,15 +81,24 @@ fn main() -> Result<()> {
                             transaction.clone(),
                             &mut metadata_manager,
                         );
-
-                        // TODO: 可変のfield数に対応する,
-                        let field_1 = select_query.field_name_list[0].clone();
-                        let field_2 = select_query.field_name_list[1].clone();
-
                         let mut scan = plan.open();
                         scan.move_to_before_first();
                         while scan.next() {
+                            // TODO: 可変のfield数に対応する,
+                            let field_1 = select_query.field_name_list[0].clone();
+                            let field_2 = select_query.field_name_list[1].clone();
+
+                            select_query
+                                .field_name_list
+                                .iter()
+                                .map(|field_name| {
+                                    let value = scan.get_value(field_name.clone());
+                                    print!("{} ", value);
+                                })
+                                .collect::<Vec<()>>();
+
                             // TODO: integer, stringの両方に対応する, metadata_managerから型情報を取ってくる
+
                             let field1_value = scan.get_string(field_1.clone());
                             let field2_value = scan.get_string(field_2.clone());
 

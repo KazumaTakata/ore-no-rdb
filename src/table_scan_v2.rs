@@ -2,12 +2,43 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     block::BlockId,
+    error::ValueNotFound,
     record_page::{Layout, TableFieldType},
     record_page_v2::RecordPage,
     scan_v2::ScanV2,
-    table_scan::RecordID,
     transaction_v2::TransactionV2,
 };
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RecordID {
+    block_number: u64,
+    slot_number: i32,
+}
+
+impl RecordID {
+    pub fn new(block_number: u64, slot_number: i32) -> Self {
+        RecordID {
+            block_number,
+            slot_number,
+        }
+    }
+
+    pub fn get_block_number(&self) -> u64 {
+        self.block_number
+    }
+
+    pub fn get_slot_number(&self) -> i32 {
+        self.slot_number
+    }
+
+    pub fn equals(&self, other: &RecordID) -> bool {
+        self.block_number == other.block_number && self.slot_number == other.slot_number
+    }
+
+    pub fn to_string(&self) -> String {
+        format!("RecordID({}, {})", self.block_number, self.slot_number)
+    }
+}
 
 pub struct TableScan {
     file_name: String,
@@ -140,8 +171,9 @@ impl ScanV2 for TableScan {
         self.current_slot = record_id.get_slot_number();
     }
 
-    fn move_to_before_first(&mut self) {
-        self.move_to_block(0)
+    fn move_to_before_first(&mut self) -> Result<(), ValueNotFound> {
+        self.move_to_block(0);
+        Ok(())
     }
 
     fn get_integer(&mut self, field_name: String) -> Option<i32> {
@@ -152,29 +184,33 @@ impl ScanV2 for TableScan {
         self.record_page.get_string(field_name, self.current_slot)
     }
 
-    fn get_value(&mut self, field_name: String) -> crate::predicate::ConstantValue {
+    fn get_value(&mut self, field_name: String) -> Option<crate::predicate::ConstantValue> {
         let field_type = self.layout.schema.get_field_type(field_name.clone());
 
-        if let field_type = TableFieldType::INTEGER {
-            let integer_value = self.get_integer(field_name);
-            if let Some(value) = integer_value {
-                return crate::predicate::ConstantValue::Number(value);
-            } else {
-                return crate::predicate::ConstantValue::Null;
-            }
-        } else if let _field_type = TableFieldType::VARCHAR {
-            let string_value = self.get_string(field_name);
-            if let Some(value) = string_value {
-                return crate::predicate::ConstantValue::String(value);
-            } else {
-                return crate::predicate::ConstantValue::Null;
-            }
-        } else {
-            panic!("Unknown field type");
-        }
+        match field_type {
+            None => return None,
+            Some(table_field_type) => match table_field_type {
+                TableFieldType::INTEGER => {
+                    let integer_value = self.get_integer(field_name);
+                    if let Some(value) = integer_value {
+                        return Some(crate::predicate::ConstantValue::Number(value));
+                    } else {
+                        return Some(crate::predicate::ConstantValue::Null);
+                    }
+                }
+                TableFieldType::VARCHAR => {
+                    let string_value = self.get_string(field_name);
+                    if let Some(value) = string_value {
+                        return Some(crate::predicate::ConstantValue::String(value));
+                    } else {
+                        return Some(crate::predicate::ConstantValue::Null);
+                    }
+                }
+            },
+        };
     }
 
-    fn next(&mut self) -> bool {
+    fn next(&mut self) -> Result<bool, ValueNotFound> {
         self.current_slot = self
             .record_page
             .find_next_after_slot_id(self.current_slot)
@@ -182,7 +218,7 @@ impl ScanV2 for TableScan {
 
         while self.current_slot == -1 {
             if self.at_last_block() {
-                return false;
+                return Ok(false);
             }
             self.move_to_block(self.record_page.get_block_id().get_block_number() + 1);
 
@@ -192,7 +228,7 @@ impl ScanV2 for TableScan {
                 .unwrap_or(-1)
         }
 
-        return true;
+        return Ok(true);
     }
 
     fn has_field(&self, field_name: String) -> bool {
@@ -225,7 +261,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_table_scan_v2() {
+    fn test_table_scan_v2() -> Result<(), Box<dyn std::error::Error>> {
         let mut file_manager = Rc::new(RefCell::new(FileManager::new(Path::new("data"), 400)));
         let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
             file_manager.clone(),
@@ -274,7 +310,7 @@ mod tests {
 
         table_scan.move_to_before_first();
 
-        while table_scan.next() {
+        while table_scan.next()? {
             let field1_value = table_scan.get_integer("Field1".to_string());
             let field2_value = table_scan.get_string("Field2".to_string());
 
@@ -293,5 +329,7 @@ mod tests {
 
         table_scan.close();
         transaction.borrow_mut().commit();
+
+        return Ok(());
     }
 }
