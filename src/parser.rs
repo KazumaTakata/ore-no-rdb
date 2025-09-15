@@ -96,6 +96,7 @@ pub enum ParsedSQL {
     CreateTable(CreateTableData),
     Delete(DeleteData),
     Update(UpdateData),
+    ShowTables,
 }
 
 impl ParsedSQL {
@@ -128,6 +129,9 @@ impl ParsedSQL {
                     update_data.new_value,
                     update_data.predicate.to_string()
                 );
+            }
+            ParsedSQL::ShowTables => {
+                println!("Parsed Show Tables Command");
             }
         }
     }
@@ -490,6 +494,9 @@ pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
                     schema,
                 };
                 return Some(ParsedSQL::CreateTable(create_table_data));
+            }
+            Rule::show_tables_sql => {
+                return Some(ParsedSQL::ShowTables);
             }
 
             _ => {

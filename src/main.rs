@@ -1,5 +1,6 @@
 use rustyline::error::ReadlineError;
 use rustyline::{DefaultEditor, Result};
+use std::vec;
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -51,8 +52,9 @@ use pest::Parser;
 
 use crate::database::Database;
 use crate::metadata_manager::MetadataManager;
-use crate::parser::ParsedSQL;
+use crate::parser::{ParsedSQL, QueryData};
 use crate::plan_v2::{create_query_plan, execute_create_table, execute_delete, execute_insert};
+use crate::predicate_v3::PredicateV2;
 
 fn main() -> Result<()> {
     let database = Database::new();
@@ -111,6 +113,35 @@ fn main() -> Result<()> {
                             &mut metadata_manager,
                             create_table_data,
                         );
+                    }
+
+                    ParsedSQL::ShowTables => {
+                        let select_query = QueryData::new(
+                            vec!["table_catalog".to_string()],
+                            vec!["table_name".to_string()],
+                            PredicateV2::new(vec![]),
+                        );
+
+                        let mut plan = create_query_plan(
+                            &select_query,
+                            transaction.clone(),
+                            &mut metadata_manager,
+                        )
+                        .unwrap();
+                        let mut scan = plan.open().unwrap();
+                        scan.move_to_before_first();
+                        while scan.next().unwrap() {
+                            let results = select_query
+                                .field_name_list
+                                .iter()
+                                .map(|field_name| {
+                                    let value = scan.get_value(field_name.clone());
+                                    return value;
+                                })
+                                .collect::<Vec<_>>();
+
+                            println!("Results: {:?}", results);
+                        }
                     }
                     _ => panic!("Expected a Query variant from parse_sql"),
                 };

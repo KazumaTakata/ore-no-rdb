@@ -36,18 +36,19 @@ impl MetadataManager {
 
         let borrowed_table_manager = copied_table_manager.borrow_mut();
 
-        if is_new {
-            borrowed_table_manager.create_table(
-                "table_catalog".to_string(),
-                &borrowed_table_manager.table_catalog_layout.schema.clone(),
-                transaction.clone(),
-            );
-            borrowed_table_manager.create_table(
-                "field_catalog".to_string(),
-                &borrowed_table_manager.field_catalog_layout.schema.clone(),
-                transaction.clone(),
-            );
-        }
+        //  すでにテーブルが存在する場合はエラーを無視する
+        let _table_catalog_result = borrowed_table_manager.create_table(
+            "table_catalog".to_string(),
+            &borrowed_table_manager.table_catalog_layout.schema.clone(),
+            transaction.clone(),
+        );
+
+        //  すでにテーブルが存在する場合はエラーを無視する
+        let _table_field_result = borrowed_table_manager.create_table(
+            "field_catalog".to_string(),
+            &borrowed_table_manager.field_catalog_layout.schema.clone(),
+            transaction.clone(),
+        );
 
         Ok(MetadataManager {
             table_manager: table_manager,
