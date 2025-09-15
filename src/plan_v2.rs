@@ -84,7 +84,7 @@ impl PlanV2 for TablePlanV2 {
     }
 }
 
-struct SelectPlanV2 {
+pub struct SelectPlanV2 {
     // Fields for the plan
     table_plan: Box<dyn PlanV2>,
     predicate: PredicateV2,

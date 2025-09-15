@@ -120,7 +120,7 @@ impl HashIndex {
         }
     }
 
-    fn delete(&mut self, value: Constant, record_id: RecordID) -> Result<bool, ValueNotFound> {
+    pub fn delete(&mut self, value: Constant, record_id: RecordID) -> Result<bool, ValueNotFound> {
         self.before_first(value.clone());
         if let Some(scan) = &mut self.table_scan {
             while scan.next()? {
