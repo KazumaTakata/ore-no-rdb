@@ -12,7 +12,6 @@ use crate::{
     record_page::{Layout, TableSchema},
     scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
     stat_manager_v2::{StatInfoV2, StatManagerV2},
-    table_manager,
     table_manager_v2::TableManagerV2,
     table_scan_v2::TableScan,
     transaction_v2::TransactionV2,
@@ -42,30 +41,30 @@ impl TablePlanV2 {
         table_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
         metadata_manager: &mut MetadataManager,
-    ) -> Self {
-        let layout = metadata_manager.get_layout(table_name.clone(), transaction.clone());
+    ) -> Result<Self, ValueNotFound> {
+        let layout = metadata_manager.get_layout(table_name.clone(), transaction.clone())?;
         let stat_info = metadata_manager.get_table_stats(
             table_name.clone(),
             transaction.clone(),
             layout.clone(),
-        );
+        )?;
 
-        TablePlanV2 {
+        Ok(TablePlanV2 {
             table_name,
             layout,
             stat_info,
             transaction: transaction.clone(),
-        }
+        })
     }
 }
 
 impl PlanV2 for TablePlanV2 {
-    fn open(&mut self) -> Box<dyn ScanV2> {
-        return Box::new(TableScan::new(
+    fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
+        return Ok(Box::new(TableScan::new(
             self.table_name.clone(),
             self.transaction.clone(),
             self.layout.clone(),
-        ));
+        )));
     }
 
     fn get_schema(&self) -> &TableSchema {
@@ -101,9 +100,9 @@ impl SelectPlanV2 {
 }
 
 impl PlanV2 for SelectPlanV2 {
-    fn open(&mut self) -> Box<dyn ScanV2> {
-        let scan = self.table_plan.open();
-        return Box::new(SelectScanV2::new(scan, self.predicate.clone()));
+    fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
+        let scan = self.table_plan.open()?;
+        return Ok(Box::new(SelectScanV2::new(scan, self.predicate.clone())));
     }
 
     fn get_schema(&self) -> &TableSchema {
@@ -160,10 +159,10 @@ impl ProjectPlanV2 {
 }
 
 impl PlanV2 for ProjectPlanV2 {
-    fn open(&mut self) -> Box<dyn ScanV2> {
-        let scan = self.plan.open();
+    fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
+        let scan = self.plan.open()?;
         let field_names = self.schema.fields().clone(); // Assuming `fields()` returns `Vec<String>`
-        return Box::new(ProjectScanV2::new(scan, field_names));
+        return Ok(Box::new(ProjectScanV2::new(scan, field_names)));
     }
 
     fn get_schema(&self) -> &TableSchema {
@@ -205,10 +204,10 @@ impl ProductPlanV2 {
 }
 
 impl PlanV2 for ProductPlanV2 {
-    fn open(&mut self) -> Box<dyn ScanV2> {
-        let scan1 = self.left_plan.open();
-        let scan2 = self.right_plan.open();
-        return Box::new(ProductScanV2::new(scan1, scan2));
+    fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
+        let scan1 = self.left_plan.open()?;
+        let scan2 = self.right_plan.open()?;
+        return Ok(Box::new(ProductScanV2::new(scan1, scan2)));
     }
 
     fn get_schema(&self) -> &TableSchema {
@@ -237,13 +236,13 @@ pub fn create_query_plan(
     query_data: &QueryData,
     transaction: Rc<RefCell<TransactionV2>>,
     metadata_manager: &mut MetadataManager,
-) -> Box<dyn PlanV2> {
+) -> Result<Box<dyn PlanV2>, ValueNotFound> {
     let mut plans: Vec<Box<dyn PlanV2>> = Vec::new();
 
     for table_name in query_data.table_name_list.iter() {
         let layout = Layout::new(TableSchema::new());
         let table_plan =
-            TablePlanV2::new(table_name.clone(), transaction.clone(), metadata_manager);
+            TablePlanV2::new(table_name.clone(), transaction.clone(), metadata_manager)?;
         let mut plan: Box<dyn PlanV2> = Box::new(table_plan);
         plans.push(plan);
     }
@@ -260,21 +259,21 @@ pub fn create_query_plan(
     let project_plan =
         ProjectPlanV2::new(Box::new(select_plan), query_data.field_name_list.clone());
 
-    return Box::new(project_plan);
+    return Ok(Box::new(project_plan));
 }
 
 pub fn execute_insert(
     transaction: Rc<RefCell<TransactionV2>>,
     metadata_manager: &mut MetadataManager,
     insert_data: InsertData,
-) {
+) -> Result<(), ValueNotFound> {
     let mut plan = TablePlanV2::new(
         insert_data.table_name.clone(),
         transaction,
         metadata_manager,
-    );
+    )?;
 
-    let mut scan = plan.open();
+    let mut scan = plan.open()?;
 
     scan.insert();
 
@@ -286,55 +285,57 @@ pub fn execute_insert(
     }
 
     scan.close();
+
+    return Ok(());
 }
 
 pub fn execute_delete(
     transaction: Rc<RefCell<TransactionV2>>,
     metadata_manager: &mut MetadataManager,
     delete_data: DeleteData,
-) -> u32 {
+) -> Result<u32, ValueNotFound> {
     let mut plan = TablePlanV2::new(
         delete_data.table_name.clone(),
         transaction.clone(),
         metadata_manager,
-    );
+    )?;
     let mut select_plan = SelectPlanV2::new(Box::new(plan), delete_data.predicate.clone());
-    let mut scan = select_plan.open();
+    let mut scan = select_plan.open()?;
 
     let mut count = 0;
 
-    while scan.next() {
+    while scan.next()? {
         scan.delete();
         count += 1;
     }
 
     scan.close();
-    return count;
+    return Ok(count);
 }
 
 pub fn execute_update(
     transaction: Rc<RefCell<TransactionV2>>,
     metadata_manager: &mut MetadataManager,
     update_data: UpdateData,
-) -> u32 {
+) -> Result<u32, ValueNotFound> {
     let mut plan = TablePlanV2::new(
         update_data.table_name.clone(),
         transaction.clone(),
         metadata_manager,
-    );
+    )?;
     let mut select_plan = SelectPlanV2::new(Box::new(plan), update_data.predicate.clone());
-    let mut scan = select_plan.open();
+    let mut scan = select_plan.open()?;
 
     let mut count = 0;
 
-    while scan.next() {
+    while scan.next()? {
         let field = update_data.field_name.clone();
         let value = update_data.new_value.clone();
         scan.set_value(field.clone(), value.value);
     }
 
     scan.close();
-    return count;
+    return Ok(count);
 }
 
 pub fn execute_create_table(
@@ -367,16 +368,16 @@ mod tests {
         predicate::{Constant, ConstantValue, ExpressionValue},
         predicate_v3::{ExpressionV2, TermV2},
         record_page::TableSchema,
-        stat_manager, transaction,
+        transaction,
     };
 
     use super::*;
 
     #[test]
-    fn test_insert_plan() {
+    fn test_insert_plan() -> Result<(), ValueNotFound> {
         let database = Database::new();
         let transaction = database.new_transaction(1);
-        let mut metadata_manager = MetadataManager::new(false, transaction.clone());
+        let mut metadata_manager = MetadataManager::new(false, transaction.clone())?;
 
         let parsed_sql =
             parse_sql("insert into posts_2 (title, content) values ('title1', 'body')".to_string())
@@ -390,12 +391,14 @@ mod tests {
         execute_insert(transaction.clone(), &mut metadata_manager, insert_data);
 
         transaction.borrow_mut().commit();
+
+        return Ok(());
     }
 
-    fn test_plan() {
+    fn test_plan() -> Result<(), ValueNotFound> {
         let database = Database::new();
         let transaction = database.new_transaction(1);
-        let mut metadata_manager = MetadataManager::new(false, transaction.clone());
+        let mut metadata_manager = MetadataManager::new(false, transaction.clone())?;
 
         // mutable_table_manager.create_table(
         //     "table_catalog".to_string(),
@@ -432,11 +435,11 @@ mod tests {
             _ => panic!("Expected a Query variant from parse_sql"),
         };
 
-        let mut plan = create_query_plan(&query_data, transaction.clone(), &mut metadata_manager);
+        let mut plan = create_query_plan(&query_data, transaction.clone(), &mut metadata_manager)?;
 
-        let mut scan = plan.open();
+        let mut scan = plan.open()?;
         scan.move_to_before_first();
-        while scan.next() {
+        while scan.next()? {
             let field1_value = scan.get_integer("A".to_string());
             let field2_value = scan.get_string("B".to_string());
 
@@ -452,5 +455,7 @@ mod tests {
                 println!("Field B: None");
             }
         }
+
+        return Ok(());
     }
 }

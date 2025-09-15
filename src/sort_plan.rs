@@ -56,13 +56,16 @@ impl SortPlan {
         return src_scan.next();
     }
 
-    fn do_merge_iteration(&mut self, runs: &mut Vec<TempTable>) -> Vec<TempTable> {
+    fn do_merge_iteration(
+        &mut self,
+        runs: &mut Vec<TempTable>,
+    ) -> Result<Vec<TempTable>, ValueNotFound> {
         let mut new_runs: Vec<TempTable> = Vec::new();
 
         while runs.len() > 1 {
             let mut run1 = runs.remove(0);
             let mut run2 = runs.remove(0);
-            let merged_run = self.merge_two_runs(&mut run1, &mut run2);
+            let merged_run = self.merge_two_runs(&mut run1, &mut run2)?;
             new_runs.push(merged_run);
         }
 
@@ -70,7 +73,7 @@ impl SortPlan {
             new_runs.push(runs.remove(0));
         }
 
-        return new_runs;
+        return Ok(new_runs);
     }
 
     fn split_into_runs(
@@ -149,20 +152,19 @@ impl SortPlan {
 
 impl PlanV2 for SortPlan {
     fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
-        let mut src_scan = self.plan.open();
+        let mut src_scan = self.plan.open()?;
         let runs = self.split_into_runs(&mut *src_scan);
         src_scan.close();
 
         let mut inner_runs = runs?;
 
         while inner_runs.len() > 2 {
-            inner_runs = self.do_merge_iteration(&mut inner_runs);
+            inner_runs = self.do_merge_iteration(&mut inner_runs)?;
         }
 
-        return Ok(Box::new(SortScan::new(
-            &mut inner_runs,
-            self.comparator.clone(),
-        )));
+        let sort_scan = SortScan::new(&mut inner_runs, self.comparator.clone())?;
+
+        return Ok(Box::new(sort_scan));
     }
 
     fn records_output(&self) -> u32 {

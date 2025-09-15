@@ -1,6 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, os::macos::raw::stat, rc::Rc};
 
 use crate::{
+    error::ValueNotFound,
     index_manager::{self, IndexInfo, IndexManager},
     record_page::{Layout, TableSchema},
     stat_manager_v2::{StatInfoV2, StatManagerV2},
@@ -15,15 +16,21 @@ pub struct MetadataManager {
 }
 
 impl MetadataManager {
-    pub fn new(is_new: bool, transaction: Rc<RefCell<transaction_v2::TransactionV2>>) -> Self {
+    pub fn new(
+        is_new: bool,
+        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+    ) -> Result<Self, ValueNotFound> {
         let table_manager = Rc::new(RefCell::new(TableManagerV2::new()));
         let stat_manager = Rc::new(RefCell::new(StatManagerV2::new(table_manager.clone())));
-        let index_manager = Rc::new(RefCell::new(IndexManager::new(
+
+        let _index_manager = index_manager::IndexManager::new(
             table_manager.clone(),
             stat_manager.clone(),
             is_new,
             transaction.clone(),
-        )));
+        )?;
+
+        let index_manager = Rc::new(RefCell::new(_index_manager));
 
         let copied_table_manager = table_manager.clone();
 
@@ -42,11 +49,11 @@ impl MetadataManager {
             );
         }
 
-        MetadataManager {
+        Ok(MetadataManager {
             table_manager: table_manager,
             stat_manager: stat_manager,
             index_manager: index_manager,
-        }
+        })
     }
 
     pub fn create_table(
@@ -64,7 +71,7 @@ impl MetadataManager {
         &self,
         table_name: String,
         transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
-    ) -> Layout {
+    ) -> Result<Layout, ValueNotFound> {
         self.table_manager
             .borrow()
             .get_layout(table_name, transaction)
@@ -75,7 +82,7 @@ impl MetadataManager {
         table_name: String,
         transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
         layout: Layout,
-    ) -> StatInfoV2 {
+    ) -> Result<StatInfoV2, ValueNotFound> {
         self.stat_manager
             .borrow_mut()
             .get_table_stats(table_name, transaction, layout)
@@ -100,7 +107,7 @@ impl MetadataManager {
         &self,
         table_name: String,
         transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
-    ) -> HashMap<String, IndexInfo> {
+    ) -> Result<HashMap<String, IndexInfo>, ValueNotFound> {
         self.index_manager
             .borrow()
             .get_index_info(table_name, transaction)

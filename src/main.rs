@@ -57,7 +57,7 @@ use crate::plan_v2::{create_query_plan, execute_create_table, execute_delete, ex
 fn main() -> Result<()> {
     let database = Database::new();
     let transaction = database.new_transaction(1);
-    let mut metadata_manager = MetadataManager::new(true, transaction.clone());
+    let mut metadata_manager = MetadataManager::new(true, transaction.clone()).unwrap();
 
     // `()` can be used when no completer is required
     let mut rl = DefaultEditor::new()?;
@@ -80,39 +80,21 @@ fn main() -> Result<()> {
                             &select_query,
                             transaction.clone(),
                             &mut metadata_manager,
-                        );
-                        let mut scan = plan.open();
+                        )
+                        .unwrap();
+                        let mut scan = plan.open().unwrap();
                         scan.move_to_before_first();
-                        while scan.next() {
-                            // TODO: 可変のfield数に対応する,
-                            let field_1 = select_query.field_name_list[0].clone();
-                            let field_2 = select_query.field_name_list[1].clone();
-
-                            select_query
+                        while scan.next().unwrap() {
+                            let results = select_query
                                 .field_name_list
                                 .iter()
                                 .map(|field_name| {
                                     let value = scan.get_value(field_name.clone());
-                                    print!("{} ", value);
+                                    return value;
                                 })
-                                .collect::<Vec<()>>();
+                                .collect::<Vec<_>>();
 
-                            // TODO: integer, stringの両方に対応する, metadata_managerから型情報を取ってくる
-
-                            let field1_value = scan.get_string(field_1.clone());
-                            let field2_value = scan.get_string(field_2.clone());
-
-                            if let Some(value) = field1_value {
-                                println!("Field A: {}", value);
-                            } else {
-                                println!("Field A: None");
-                            }
-
-                            if let Some(value) = field2_value {
-                                println!("Field B: {}", value);
-                            } else {
-                                println!("Field B: None");
-                            }
+                            println!("Results: {:?}", results);
                         }
                     }
                     ParsedSQL::Insert(insert_data) => {

@@ -4,7 +4,7 @@ use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 
 use crate::{
-    predicate::{Constant, ConstantValue, Expression, ExpressionValue, Predicate, Term},
+    predicate::{Constant, ConstantValue, ExpressionValue},
     predicate_v3::{ExpressionV2, PredicateV2, TermV2},
     record_page::{TableFieldInfo, TableFieldType, TableSchema},
 };
@@ -515,7 +515,7 @@ mod tests {
         predicate::{Constant, ConstantValue, ExpressionValue},
         predicate_v3::{ExpressionV2, TermV2},
         record_page::TableSchema,
-        stat_manager, transaction,
+        transaction,
     };
 
     use super::*;

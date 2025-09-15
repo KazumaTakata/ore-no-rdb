@@ -43,8 +43,12 @@ impl ScanV2 for SelectScanV2 {
 
     fn next(&mut self) -> Result<bool, ValueNotFound> {
         while self.scan.next()? {
-            if self.predicate.is_satisfied(&mut *self.scan) {
-                return Ok(true);
+            let is_satisfied = self.predicate.is_satisfied(&mut *self.scan);
+            match is_satisfied {
+                Some(true) => return Ok(true),
+                Some(false) => continue,
+                // TODO: 適切なエラー処理
+                None => return Err(ValueNotFound::new("predicate evaluation".to_string(), None)),
             }
         }
         return Ok(false);

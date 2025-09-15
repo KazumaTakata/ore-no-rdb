@@ -15,13 +15,13 @@ impl ExpressionV2 {
         ExpressionV2 { value }
     }
 
-    pub fn evaluate(&self, scan: &mut dyn ScanV2) -> Constant {
+    pub fn evaluate(&self, scan: &mut dyn ScanV2) -> Option<Constant> {
         match self.value {
             ExpressionValue::FieldName(ref field_name) => {
-                let value = scan.get_value(field_name.clone());
-                return Constant { value };
+                let value = scan.get_value(field_name.clone())?;
+                return Some(Constant { value });
             }
-            ExpressionValue::Constant(ref constant) => constant.clone(),
+            ExpressionValue::Constant(ref constant) => return Some(constant.clone()),
         }
     }
 
@@ -55,10 +55,10 @@ impl TermV2 {
         TermV2 { lhs, rhs }
     }
 
-    pub fn is_satisfied(&self, scan: &mut dyn ScanV2) -> bool {
-        let lhs = self.lhs.evaluate(scan);
-        let rhs = self.rhs.evaluate(scan);
-        return lhs.equals(rhs.value.clone());
+    pub fn is_satisfied(&self, scan: &mut dyn ScanV2) -> Option<bool> {
+        let lhs = self.lhs.evaluate(scan)?;
+        let rhs = self.rhs.evaluate(scan)?;
+        return Some(lhs.equals(rhs.value.clone()));
     }
 
     pub fn can_apply_to(&self, schema: TableSchema) -> bool {
@@ -125,13 +125,13 @@ impl PredicateV2 {
         PredicateV2 { terms }
     }
 
-    pub fn is_satisfied(&self, scan: &mut dyn ScanV2) -> bool {
+    pub fn is_satisfied(&self, scan: &mut dyn ScanV2) -> Option<bool> {
         for term in &self.terms {
-            if !term.is_satisfied(scan) {
-                return false;
+            if !term.is_satisfied(scan)? {
+                return Some(false);
             }
         }
-        return true;
+        return Some(true);
     }
 
     pub fn conjunction_with(&mut self, predicate: PredicateV2) {
