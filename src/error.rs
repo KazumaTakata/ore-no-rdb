@@ -33,3 +33,28 @@ impl std::error::Error for ValueNotFound {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct TableAlreadyExists {
+    table_name: String,
+}
+
+impl TableAlreadyExists {
+    pub fn new(table_name: String) -> Self {
+        TableAlreadyExists { table_name }
+    }
+}
+
+impl fmt::Display for TableAlreadyExists {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Table already exists: {}", self.table_name)
+    }
+}
+
+impl std::error::Error for TableAlreadyExists {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            _ => None,
+        }
+    }
+}

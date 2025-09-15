@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, os::macos::raw::stat, rc::Rc};
 
 use crate::{
-    error::ValueNotFound,
+    error::{TableAlreadyExists, ValueNotFound},
     index_manager::{self, IndexInfo, IndexManager},
     record_page::{Layout, TableSchema},
     stat_manager_v2::{StatInfoV2, StatManagerV2},
@@ -61,10 +61,10 @@ impl MetadataManager {
         table_name: String,
         schema: &TableSchema,
         transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
-    ) {
+    ) -> Result<(), TableAlreadyExists> {
         self.table_manager
             .borrow_mut()
-            .create_table(table_name, schema, transaction);
+            .create_table(table_name, schema, transaction)
     }
 
     pub fn get_layout(

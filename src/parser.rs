@@ -17,6 +17,7 @@ use crate::{
 #[grammar = "pest/sql.pest"]
 pub struct SQLParser;
 
+#[derive(Debug, Clone)]
 pub struct InsertData {
     pub table_name: String,
     pub field_name_list: Vec<String>,
@@ -531,6 +532,13 @@ mod tests {
     #[test]
     fn test_delete_sql() {
         let sql = "delete from test_table where A = 44".to_string();
+        let parsed_sql = parse_sql(sql);
+        parsed_sql.unwrap().debug_print();
+    }
+
+    #[test]
+    fn test_select_join_query() {
+        let sql = "select A, B from test_table, test_table2 where C = D".to_string();
         let parsed_sql = parse_sql(sql);
         parsed_sql.unwrap().debug_print();
     }

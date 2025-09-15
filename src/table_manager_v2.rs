@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     buffer_manager,
-    error::ValueNotFound,
+    error::{TableAlreadyExists, ValueNotFound},
     file_manager,
     record_page::{self, TableFieldType, TableSchema},
     scan_v2::ScanV2,
@@ -38,12 +38,40 @@ impl TableManagerV2 {
         }
     }
 
+    fn check_if_table_exists(
+        &self,
+        table_name: String,
+        transaction: Rc<RefCell<TransactionV2>>,
+    ) -> bool {
+        let mut table_scan = TableScan::new(
+            "table_catalog".to_string(),
+            transaction.clone(),
+            self.table_catalog_layout.clone(),
+        );
+
+        while table_scan.next().unwrap() {
+            let name = table_scan.get_string("table_name".to_string());
+
+            match name {
+                Some(name) => {
+                    if name == table_name {
+                        table_scan.close();
+                        return true;
+                    }
+                }
+                None => continue,
+            }
+        }
+        table_scan.close();
+        return false;
+    }
+
     pub fn create_table(
         &self,
         table_name: String,
         schema: &TableSchema,
         transaction: Rc<RefCell<TransactionV2>>,
-    ) {
+    ) -> Result<(), TableAlreadyExists> {
         let layout = record_page::Layout::new(schema.clone());
 
         let mut table_scan = TableScan::new(
@@ -51,6 +79,12 @@ impl TableManagerV2 {
             transaction.clone(),
             self.table_catalog_layout.clone(),
         );
+
+        if self.check_if_table_exists(table_name.clone(), transaction.clone()) {
+            table_scan.close();
+            return Err(TableAlreadyExists::new(table_name));
+        }
+
         table_scan.insert();
         table_scan.set_string("table_name".to_string(), table_name.clone());
         let slot_size = layout.get_slot_size() as i32;
@@ -82,6 +116,8 @@ impl TableManagerV2 {
         field_scan.close();
 
         transaction.borrow_mut().commit();
+
+        return Ok(());
     }
 
     pub fn get_layout(
