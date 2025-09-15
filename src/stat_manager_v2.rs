@@ -8,7 +8,6 @@ use crate::{
     scan_v2::ScanV2,
     table_manager_v2::TableManagerV2,
     table_scan_v2::TableScan,
-    transaction::Transaction,
     transaction_v2::TransactionV2,
 };
 

@@ -9,9 +9,10 @@ use rand::seq::index;
 
 use crate::{
     error::ValueNotFound,
+    index_manager::IndexInfo,
     plan_v2::PlanV2,
     predicate::{Constant, ConstantValue},
-    record_page::Layout,
+    record_page::{Layout, TableSchema},
     scan_v2::ScanV2,
     table_scan_v2::{RecordID, TableScan},
     transaction_v2::TransactionV2,
@@ -150,4 +151,97 @@ impl HashIndex {
 
 struct IndexSelectPlan {
     plan: Box<dyn PlanV2>,
+    index_info: IndexInfo,
+    key: Constant,
+}
+
+impl IndexSelectPlan {
+    pub fn new(plan: Box<dyn PlanV2>, index_info: IndexInfo, key: Constant) -> Self {
+        IndexSelectPlan {
+            plan,
+            index_info,
+            key,
+        }
+    }
+
+    pub fn open(&mut self) -> IndexSelectScan {
+        let table_scan = self.plan.open().unwrap();
+        let index = Rc::new(RefCell::new(self.index_info.open()));
+        return IndexSelectScan::new(table_scan, index, self.key.clone());
+    }
+
+    pub fn blocks_accessed(&self) -> i32 {
+        return self.index_info.blocks_accessed();
+    }
+
+    pub fn records_output(&self) -> u32 {
+        self.index_info.records_output()
+    }
+
+    pub fn distinct_values(&self, field_name: String) -> u32 {
+        self.index_info.distinct_values(&field_name)
+    }
+
+    pub fn get_schema(&self) -> &TableSchema {
+        self.plan.get_schema()
+    }
+}
+
+struct IndexSelectScan {
+    table_scan: Box<dyn ScanV2>,
+    index: Rc<RefCell<HashIndex>>,
+    key: Constant,
+}
+
+impl IndexSelectScan {
+    pub fn new(table_scan: Box<dyn ScanV2>, index: Rc<RefCell<HashIndex>>, key: Constant) -> Self {
+        IndexSelectScan::before_first(index.clone(), key.clone());
+        let index_select_scan = IndexSelectScan {
+            table_scan,
+            index: index.clone(),
+            key,
+        };
+        index_select_scan
+    }
+
+    pub fn before_first(index: Rc<RefCell<HashIndex>>, key: Constant) {
+        index.borrow_mut().before_first(key);
+    }
+
+    pub fn next(&mut self) -> Result<bool, ValueNotFound> {
+        let has_next = self.index.borrow_mut().next()?;
+
+        if has_next {
+            let record_id = self.index.borrow_mut().get_data_record_id()?;
+
+            if let Some(rid) = record_id {
+                self.table_scan.move_to_record_id(rid);
+                return Ok(true);
+            } else {
+                return Ok(false);
+            }
+        }
+        return Ok(has_next);
+    }
+
+    pub fn get_integer(&mut self, field_name: String) -> Option<i32> {
+        self.table_scan.get_integer(field_name)
+    }
+
+    pub fn get_string(&mut self, field_name: String) -> Option<String> {
+        self.table_scan.get_string(field_name)
+    }
+
+    pub fn get_value(&mut self, field_name: String) -> Option<ConstantValue> {
+        self.table_scan.get_value(field_name)
+    }
+
+    pub fn has_field(&self, field_name: String) -> bool {
+        self.table_scan.has_field(field_name)
+    }
+
+    pub fn close(&mut self) {
+        self.index.borrow_mut().close();
+        self.table_scan.close();
+    }
 }

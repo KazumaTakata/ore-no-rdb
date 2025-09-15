@@ -8,7 +8,6 @@ use crate::{
     stat_manager_v2::{StatInfoV2, StatManagerV2},
     table_manager_v2::TableManagerV2,
     table_scan_v2::TableScan,
-    transaction,
     transaction_v2::TransactionV2,
 };
 
@@ -151,18 +150,18 @@ impl IndexInfo {
         )
     }
 
-    fn blocks_accessed(&self) -> i32 {
+    pub fn blocks_accessed(&self) -> i32 {
         let record_per_block =
             self.transaction.borrow().get_block_size() as i32 / self.index_layout.get_slot_size();
         let number_of_blocks = self.stat_info.get_num_records() / record_per_block as u32;
         return HashIndex::get_search_cost(number_of_blocks as i32);
     }
 
-    fn records_output(&self) -> u32 {
+    pub fn records_output(&self) -> u32 {
         self.stat_info.get_num_records() / self.stat_info.distinct_value(self.field_name.clone())
     }
 
-    fn distinct_values(&self, field_name: &str) -> u32 {
+    pub fn distinct_values(&self, field_name: &str) -> u32 {
         if field_name != self.field_name {
             return self.stat_info.distinct_value(self.field_name.clone());
         }
