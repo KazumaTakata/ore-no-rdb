@@ -1,6 +1,7 @@
 use std::{cell::RefCell, rc::Rc, sync::Mutex};
 
 use crate::{
+    error::ValueNotFound,
     plan_v2::PlanV2,
     record_page::{Layout, TableSchema},
     scan_v2::ScanV2,
@@ -65,26 +66,30 @@ impl MaterializePlan {
 }
 
 impl PlanV2 for MaterializePlan {
-    fn open(&mut self) -> Box<dyn ScanV2> {
+    fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
         let schema = self.src_plan.get_schema().clone();
 
         let mut temp_table = TempTable::new(self.transaction.clone(), schema.clone());
 
-        let mut src = self.src_plan.open();
+        let mut src = self.src_plan.open()?;
 
         let mut dest = temp_table.open();
 
-        while src.next() {
+        while src.next()? {
             dest.insert();
             for field in schema.fields.iter() {
                 let value = src.get_value(field.clone());
-                dest.set_value(field.clone(), value);
+                if let Some(value) = value {
+                    dest.set_value(field.clone(), value);
+                } else {
+                    return Err(ValueNotFound::new(field.clone(), None));
+                }
             }
         }
 
         src.close();
         dest.move_to_before_first();
-        dest
+        Ok(dest)
     }
 
     fn blocks_accessed(&self) -> u32 {

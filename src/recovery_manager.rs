@@ -4,7 +4,6 @@ use crate::{
     file_manager::{self, FileManager},
     log_manager,
     page::Page,
-    scan::SelectScan,
     transaction::{self, Transaction},
 };
 

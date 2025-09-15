@@ -1,6 +1,7 @@
 use std::{cell::RefCell, ops::Index, rc::Rc};
 
 use crate::{
+    error::ValueNotFound,
     metadata_manager::MetadataManager,
     parser::InsertData,
     plan_v2::{PlanV2, TablePlanV2},
@@ -16,22 +17,26 @@ impl IndexUpdatePlanner {
         IndexUpdatePlanner { metadata_manager }
     }
 
-    pub fn execute_insert(&self, insert_data: InsertData, transaction: Rc<RefCell<TransactionV2>>) {
+    pub fn execute_insert(
+        &self,
+        insert_data: InsertData,
+        transaction: Rc<RefCell<TransactionV2>>,
+    ) -> Result<(), ValueNotFound> {
         let table_name = insert_data.table_name.clone();
         let mut plan = TablePlanV2::new(
             table_name.clone(),
             transaction.clone(),
             &mut self.metadata_manager.borrow_mut(),
-        );
+        )?;
 
-        let mut update_scan = plan.open();
+        let mut update_scan = plan.open()?;
         update_scan.insert();
         let record_id = update_scan.get_record_id();
 
         let mut indexes = self
             .metadata_manager
             .borrow()
-            .get_index_info(table_name, transaction.clone());
+            .get_index_info(table_name, transaction.clone())?;
 
         insert_data
             .field_name_list
@@ -50,6 +55,8 @@ impl IndexUpdatePlanner {
                 }
             });
         update_scan.close();
+
+        return Ok(());
     }
 }
 
@@ -75,10 +82,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_index_update_planner() {
+    fn test_index_update_planner() -> Result<(), ValueNotFound> {
         let database = Database::new();
         let transaction = database.new_transaction(1);
-        let mut metadata_manager = MetadataManager::new(true, transaction.clone());
+        let mut metadata_manager = MetadataManager::new(true, transaction.clone())?;
 
         let mut schema = TableSchema::new();
         schema.add_integer_field("A".to_string());
@@ -110,5 +117,7 @@ mod tests {
         index_update_planner.execute_insert(insert_data, transaction.clone());
 
         transaction.borrow_mut().commit();
+
+        return Ok(());
     }
 }

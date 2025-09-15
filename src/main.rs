@@ -18,6 +18,7 @@ mod concurrency_manager;
 mod concurrency_manager_v2;
 mod constant;
 mod database;
+mod error;
 mod file_manager;
 mod hash_index;
 mod index_manager;
@@ -34,14 +35,10 @@ mod predicate_v3;
 mod record_page;
 mod record_page_v2;
 mod recovery_manager;
-mod scan;
 mod scan_v2;
 mod sort_plan;
-mod stat_manager;
 mod stat_manager_v2;
-mod table_manager;
 mod table_manager_v2;
-mod table_scan;
 mod table_scan_v2;
 mod transaction;
 mod transaction_v2;
@@ -55,12 +52,12 @@ use pest::Parser;
 use crate::database::Database;
 use crate::metadata_manager::MetadataManager;
 use crate::parser::ParsedSQL;
-use crate::plan_v2::{create_query_plan, execute_delete, execute_insert};
+use crate::plan_v2::{create_query_plan, execute_create_table, execute_delete, execute_insert};
 
 fn main() -> Result<()> {
     let database = Database::new();
     let transaction = database.new_transaction(1);
-    let mut metadata_manager = MetadataManager::new(true, transaction.clone());
+    let mut metadata_manager = MetadataManager::new(true, transaction.clone()).unwrap();
 
     // `()` can be used when no completer is required
     let mut rl = DefaultEditor::new()?;
@@ -78,26 +75,26 @@ fn main() -> Result<()> {
 
                 let parsed_sql = parse_sql(line.to_string()).unwrap();
                 match parsed_sql {
-                    ParsedSQL::Query(q) => {
-                        let mut plan =
-                            create_query_plan(q, transaction.clone(), &mut metadata_manager);
-                        let mut scan = plan.open();
+                    ParsedSQL::Query(select_query) => {
+                        let mut plan = create_query_plan(
+                            &select_query,
+                            transaction.clone(),
+                            &mut metadata_manager,
+                        )
+                        .unwrap();
+                        let mut scan = plan.open().unwrap();
                         scan.move_to_before_first();
-                        while scan.next() {
-                            let field1_value = scan.get_integer("A".to_string());
-                            let field2_value = scan.get_string("B".to_string());
+                        while scan.next().unwrap() {
+                            let results = select_query
+                                .field_name_list
+                                .iter()
+                                .map(|field_name| {
+                                    let value = scan.get_value(field_name.clone());
+                                    return value;
+                                })
+                                .collect::<Vec<_>>();
 
-                            if let Some(value) = field1_value {
-                                println!("Field A: {}", value);
-                            } else {
-                                println!("Field A: None");
-                            }
-
-                            if let Some(value) = field2_value {
-                                println!("Field B: {}", value);
-                            } else {
-                                println!("Field B: None");
-                            }
+                            println!("Results: {:?}", results);
                         }
                     }
                     ParsedSQL::Insert(insert_data) => {
@@ -107,6 +104,13 @@ fn main() -> Result<()> {
                     ParsedSQL::Delete(delete_data) => {
                         execute_delete(transaction.clone(), &mut metadata_manager, delete_data);
                         transaction.borrow_mut().commit();
+                    }
+                    ParsedSQL::CreateTable(create_table_data) => {
+                        execute_create_table(
+                            transaction.clone(),
+                            &mut metadata_manager,
+                            create_table_data,
+                        );
                     }
                     _ => panic!("Expected a Query variant from parse_sql"),
                 };

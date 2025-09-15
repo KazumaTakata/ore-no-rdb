@@ -1,9 +1,10 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    buffer_manager, file_manager,
+    buffer_manager,
+    error::ValueNotFound,
+    file_manager,
     record_page::{self, TableFieldType, TableSchema},
-    scan::Scan,
     scan_v2::ScanV2,
     table_scan_v2::TableScan,
     transaction,
@@ -87,7 +88,7 @@ impl TableManagerV2 {
         &self,
         table_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
-    ) -> record_page::Layout {
+    ) -> Result<record_page::Layout, ValueNotFound> {
         let mut table_scan = TableScan::new(
             "table_catalog".to_string(),
             transaction.clone(),
@@ -96,7 +97,7 @@ impl TableManagerV2 {
 
         let mut slot_size: Option<i32> = None;
 
-        while table_scan.next() {
+        while table_scan.next()? {
             let name = table_scan.get_string("table_name".to_string());
 
             match name {
@@ -127,7 +128,7 @@ impl TableManagerV2 {
 
         let mut offsets = HashMap::new();
 
-        while field_scan.next() {
+        while field_scan.next()? {
             let name = field_scan.get_string("table_name".to_string());
 
             match name {
@@ -151,11 +152,11 @@ impl TableManagerV2 {
 
         field_scan.close();
 
-        return record_page::Layout::new_with_offset_and_size(
+        return Ok(record_page::Layout::new_with_offset_and_size(
             table_schema,
             offsets,
             slot_size.unwrap(),
-        );
+        ));
     }
 }
 
@@ -220,6 +221,8 @@ mod tests {
 
         table_manager.create_table("test_table".to_string(), &schema, transaction.clone());
         let layout = table_manager.get_layout("test_table".to_string(), transaction.clone());
+
+        let layout = layout.unwrap();
 
         println!("Layout for test_table:");
         println!("Slot Size: {}", layout.get_slot_size());

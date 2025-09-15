@@ -2,10 +2,10 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     buffer_manager::{self, BufferList},
+    error::ValueNotFound,
     file_manager::FileManager,
     record_page,
     scan_v2::ScanV2,
-    table_manager::TableManager,
     table_manager_v2::TableManagerV2,
     table_scan_v2::TableScan,
     transaction::Transaction,
@@ -59,26 +59,29 @@ impl StatManagerV2 {
         table_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
         layout: record_page::Layout,
-    ) -> StatInfoV2 {
+    ) -> Result<StatInfoV2, ValueNotFound> {
         self.num_calls += 1;
         if let Some(stats) = self.table_stats.get(&table_name) {
-            return stats.clone();
+            return Ok(stats.clone());
         }
 
         let stat_info =
-            self.calc_table_stats(table_name.clone(), transaction.clone(), layout.clone());
+            self.calc_table_stats(table_name.clone(), transaction.clone(), layout.clone())?;
 
         self.table_stats.insert(table_name, stat_info.clone());
 
-        return stat_info;
+        return Ok(stat_info);
     }
 
-    fn refresh_table_stats(&mut self, transaction: Rc<RefCell<TransactionV2>>) {
+    fn refresh_table_stats(
+        &mut self,
+        transaction: Rc<RefCell<TransactionV2>>,
+    ) -> Result<(), ValueNotFound> {
         self.num_calls = 0;
         let table_layout = self
             .table_manager
             .borrow()
-            .get_layout("table_catalog".to_string(), transaction.clone());
+            .get_layout("table_catalog".to_string(), transaction.clone())?;
 
         let mut table_scan = TableScan::new(
             "table_catalog".to_string(),
@@ -86,7 +89,7 @@ impl StatManagerV2 {
             table_layout.clone(),
         );
 
-        while table_scan.next() {
+        while table_scan.next()? {
             let table_name = table_scan.get_string("table_name".to_string());
 
             match table_name {
@@ -95,12 +98,12 @@ impl StatManagerV2 {
                     let layout = self
                         .table_manager
                         .borrow()
-                        .get_layout(table_name.clone(), transaction.clone());
+                        .get_layout(table_name.clone(), transaction.clone())?;
                     let table_stat = self.calc_table_stats(
                         table_name.clone(),
                         transaction.clone(),
                         layout.clone(),
-                    );
+                    )?;
                     self.table_stats
                         .insert(table_name.clone(), table_stat.clone());
                 }
@@ -109,6 +112,8 @@ impl StatManagerV2 {
         }
 
         table_scan.close();
+
+        return Ok(());
     }
 
     pub fn calc_table_stats(
@@ -116,22 +121,22 @@ impl StatManagerV2 {
         table_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
         layout: record_page::Layout,
-    ) -> StatInfoV2 {
+    ) -> Result<StatInfoV2, ValueNotFound> {
         let mut num_records = 0;
         let mut num_blocks = 0;
 
         let mut table_scan =
             TableScan::new(table_name.clone(), transaction.clone(), layout.clone());
 
-        while table_scan.next() {
+        while table_scan.next()? {
             num_records += 1;
             num_blocks += (table_scan.get_record_id().get_block_number() + 1) as u32;
         }
         table_scan.close();
 
-        return StatInfoV2 {
+        return Ok(StatInfoV2 {
             num_records,
             num_blocks,
-        };
+        });
     }
 }

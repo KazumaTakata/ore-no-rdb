@@ -4,7 +4,7 @@ use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 
 use crate::{
-    predicate::{Constant, ConstantValue, Expression, ExpressionValue, Predicate, Term},
+    predicate::{Constant, ConstantValue, ExpressionValue},
     predicate_v3::{ExpressionV2, PredicateV2, TermV2},
     record_page::{TableFieldInfo, TableFieldType, TableSchema},
 };
@@ -515,7 +515,7 @@ mod tests {
         predicate::{Constant, ConstantValue, ExpressionValue},
         predicate_v3::{ExpressionV2, TermV2},
         record_page::TableSchema,
-        stat_manager, transaction,
+        transaction,
     };
 
     use super::*;
@@ -531,6 +531,20 @@ mod tests {
     #[test]
     fn test_delete_sql() {
         let sql = "delete from test_table where A = 44".to_string();
+        let parsed_sql = parse_sql(sql);
+        parsed_sql.unwrap().debug_print();
+    }
+
+    #[test]
+    fn test_create_table() {
+        let sql = "create table posts (title varchar(10), content varchar(10))".to_string();
+        let parsed_sql = parse_sql(sql);
+        parsed_sql.unwrap().debug_print();
+    }
+
+    #[test]
+    fn test_insert_sql() {
+        let sql = "insert into test_table (A, B) values (44, 'Hello World')".to_string();
         let parsed_sql = parse_sql(sql);
         parsed_sql.unwrap().debug_print();
     }

@@ -1,6 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, ops::Index, rc::Rc};
 
 use crate::{
+    error::ValueNotFound,
     hash_index::HashIndex,
     record_page::{Layout, TableFieldType, TableSchema},
     scan_v2::ScanV2,
@@ -23,7 +24,7 @@ impl IndexManager {
         stat_manager: Rc<RefCell<StatManagerV2>>,
         is_new: bool,
         transaction: Rc<RefCell<TransactionV2>>,
-    ) -> Self {
+    ) -> Result<Self, ValueNotFound> {
         if is_new {
             let field_length = 20; // Example field length
             let mut schema = TableSchema::new();
@@ -39,13 +40,13 @@ impl IndexManager {
 
         let layout = table_manager
             .borrow()
-            .get_layout("index_catalog".to_string(), transaction);
+            .get_layout("index_catalog".to_string(), transaction)?;
 
-        IndexManager {
+        return Ok(IndexManager {
             layout,
             table_manager,
             stat_manager,
-        }
+        });
     }
 
     pub fn create_index(
@@ -71,7 +72,7 @@ impl IndexManager {
         &self,
         table_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
-    ) -> HashMap<String, IndexInfo> {
+    ) -> Result<HashMap<String, IndexInfo>, ValueNotFound> {
         let mut table_scan = TableScan::new(
             "index_catalog".to_string(),
             transaction.clone(),
@@ -80,19 +81,19 @@ impl IndexManager {
 
         let mut field_name_index_info_map = HashMap::new();
 
-        while table_scan.next() {
+        while table_scan.next()? {
             if table_scan.get_string("table_name".to_string()) == Some(table_name.clone()) {
                 let index_name = table_scan.get_string("index_name".to_string()).unwrap();
                 let field_name = table_scan.get_string("field_name".to_string()).unwrap();
                 let layout = self
                     .table_manager
                     .borrow()
-                    .get_layout(table_name.clone(), transaction.clone());
+                    .get_layout(table_name.clone(), transaction.clone())?;
                 let stat_info = self.stat_manager.borrow_mut().get_table_stats(
                     table_name.clone(),
                     transaction.clone(),
                     layout.clone(),
-                );
+                )?;
                 let index_info = IndexInfo::new(
                     index_name,
                     field_name.clone(),
@@ -105,7 +106,7 @@ impl IndexManager {
         }
 
         table_scan.close();
-        return field_name_index_info_map;
+        return Ok(field_name_index_info_map);
     }
 }
 
