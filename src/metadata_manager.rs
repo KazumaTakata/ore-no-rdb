@@ -3,6 +3,7 @@ use std::{cell::RefCell, collections::HashMap, os::macos::raw::stat, rc::Rc};
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
     index_manager::{self, IndexInfo, IndexManager},
+    parser::QueryData,
     record_page::{Layout, TableSchema},
     stat_manager_v2::{StatInfoV2, StatManagerV2},
     table_manager_v2::TableManagerV2,
@@ -17,7 +18,6 @@ pub struct MetadataManager {
 
 impl MetadataManager {
     pub fn new(
-        is_new: bool,
         transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
     ) -> Result<Self, ValueNotFound> {
         let table_manager = Rc::new(RefCell::new(TableManagerV2::new()));
@@ -26,7 +26,6 @@ impl MetadataManager {
         let _index_manager = index_manager::IndexManager::new(
             table_manager.clone(),
             stat_manager.clone(),
-            is_new,
             transaction.clone(),
         )?;
 
@@ -66,6 +65,22 @@ impl MetadataManager {
         self.table_manager
             .borrow_mut()
             .create_table(table_name, schema, transaction)
+    }
+
+    pub fn validate_select_sql(
+        &self,
+        query_data: &QueryData,
+        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+    ) -> bool {
+        self.table_manager
+            .borrow()
+            .check_if_table_exists(query_data.table_name_list[0].clone(), transaction.clone());
+
+        return self.table_manager.borrow().check_if_field_exists(
+            query_data.table_name_list[0].clone(),
+            query_data.field_name_list[0].clone(),
+            transaction.clone(),
+        );
     }
 
     pub fn get_layout(

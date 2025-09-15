@@ -59,7 +59,7 @@ use crate::predicate_v3::PredicateV2;
 fn main() -> Result<()> {
     let database = Database::new();
     let transaction = database.new_transaction(1);
-    let mut metadata_manager = MetadataManager::new(true, transaction.clone()).unwrap();
+    let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
 
     // `()` can be used when no completer is required
     let mut rl = DefaultEditor::new()?;
@@ -78,6 +78,14 @@ fn main() -> Result<()> {
                 let parsed_sql = parse_sql(line.to_string()).unwrap();
                 match parsed_sql {
                     ParsedSQL::Query(select_query) => {
+                        let table_exist = metadata_manager
+                            .validate_select_sql(&select_query, transaction.clone());
+
+                        if !table_exist {
+                            println!("Table or field does not exist");
+                            continue;
+                        }
+
                         let mut plan = create_query_plan(
                             &select_query,
                             transaction.clone(),

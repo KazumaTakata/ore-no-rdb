@@ -377,7 +377,7 @@ mod tests {
     fn test_insert_plan() -> Result<(), ValueNotFound> {
         let database = Database::new();
         let transaction = database.new_transaction(1);
-        let mut metadata_manager = MetadataManager::new(false, transaction.clone())?;
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
         let parsed_sql =
             parse_sql("insert into posts_2 (title, content) values ('title1', 'body')".to_string())
@@ -399,7 +399,7 @@ mod tests {
     fn insert_data() -> Result<(), ValueNotFound> {
         let database = Database::new();
         let transaction = database.new_transaction(1);
-        let mut metadata_manager = MetadataManager::new(false, transaction.clone())?;
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
         let create_table_sql =
             "create table test_table_11 (A_1 integer, B_1 varchar(10))".to_string();
@@ -460,7 +460,7 @@ mod tests {
     fn test_join_query() -> Result<(), ValueNotFound> {
         let database = Database::new();
         let transaction = database.new_transaction(1);
-        let mut metadata_manager = MetadataManager::new(false, transaction.clone())?;
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
         let parsed_sql = parse_sql(
             "select A, B, A_1, B_1 from test_table_10, test_table_11 where A = B_1".to_string(),
@@ -499,7 +499,7 @@ mod tests {
     fn test_plan() -> Result<(), ValueNotFound> {
         let database = Database::new();
         let transaction = database.new_transaction(1);
-        let mut metadata_manager = MetadataManager::new(false, transaction.clone())?;
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
         // mutable_table_manager.create_table(
         //     "table_catalog".to_string(),

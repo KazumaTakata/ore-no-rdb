@@ -85,7 +85,7 @@ mod tests {
     fn test_index_update_planner() -> Result<(), ValueNotFound> {
         let database = Database::new();
         let transaction = database.new_transaction(1);
-        let mut metadata_manager = MetadataManager::new(true, transaction.clone())?;
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
         let mut schema = TableSchema::new();
         schema.add_integer_field("A".to_string());

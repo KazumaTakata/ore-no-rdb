@@ -38,7 +38,44 @@ impl TableManagerV2 {
         }
     }
 
-    fn check_if_table_exists(
+    pub fn check_if_field_exists(
+        &self,
+        table_name: String,
+        field_name: String,
+        transaction: Rc<RefCell<TransactionV2>>,
+    ) -> bool {
+        let mut field_scan = TableScan::new(
+            "field_catalog".to_string(),
+            transaction.clone(),
+            self.field_catalog_layout.clone(),
+        );
+
+        while field_scan.next().unwrap() {
+            let t_name = field_scan.get_string("table_name".to_string());
+            let f_name = field_scan.get_string("field_name".to_string());
+
+            match t_name {
+                Some(t_name) => {
+                    if t_name == table_name {
+                        match f_name {
+                            Some(f_name) => {
+                                if f_name == field_name {
+                                    field_scan.close();
+                                    return true;
+                                }
+                            }
+                            None => continue,
+                        }
+                    }
+                }
+                None => continue,
+            }
+        }
+        field_scan.close();
+        return false;
+    }
+
+    pub fn check_if_table_exists(
         &self,
         table_name: String,
         transaction: Rc<RefCell<TransactionV2>>,

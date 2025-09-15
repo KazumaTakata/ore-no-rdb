@@ -22,16 +22,19 @@ impl IndexManager {
     pub fn new(
         table_manager: Rc<RefCell<TableManagerV2>>,
         stat_manager: Rc<RefCell<StatManagerV2>>,
-        is_new: bool,
         transaction: Rc<RefCell<TransactionV2>>,
     ) -> Result<Self, ValueNotFound> {
-        if is_new {
+        let table_exists = table_manager
+            .borrow()
+            .check_if_table_exists("index_catalog".to_string(), transaction.clone());
+
+        if !table_exists {
             let field_length = 20; // Example field length
             let mut schema = TableSchema::new();
             schema.add_string_field("index_name".to_string(), field_length);
             schema.add_string_field("table_name".to_string(), field_length);
             schema.add_string_field("field_name".to_string(), field_length);
-            table_manager.borrow_mut().create_table(
+            let _ = table_manager.borrow_mut().create_table(
                 "index_catalog".to_string(),
                 &schema,
                 transaction.clone(),
