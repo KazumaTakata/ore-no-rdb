@@ -33,6 +33,7 @@ mod parser;
 mod plan_v2;
 mod predicate;
 mod predicate_v3;
+mod query_handler;
 mod record_page;
 mod record_page_v2;
 mod recovery_manager;
@@ -56,6 +57,7 @@ use crate::parser::{ParsedSQL, QueryData};
 use crate::plan_v2::{create_query_plan, execute_create_table, execute_delete, execute_insert};
 use crate::predicate::{ConstantValue, TableNameAndFieldName};
 use crate::predicate_v3::PredicateV2;
+use crate::query_handler::handle_select_query;
 
 fn main() -> Result<()> {
     let database = Database::new();
@@ -79,51 +81,11 @@ fn main() -> Result<()> {
                 let parsed_sql = parse_sql(line.to_string()).unwrap();
                 match parsed_sql {
                     ParsedSQL::Query(select_query) => {
-                        println!("Parsed Query: {:?}", select_query);
-
-                        let table_exist = metadata_manager
-                            .validate_select_sql(&select_query, transaction.clone());
-
-                        if !table_exist {
-                            println!("Table or field does not exist");
-                            continue;
-                        }
-
-                        let mut plan = create_query_plan(
-                            &select_query,
-                            transaction.clone(),
+                        handle_select_query(
+                            select_query,
                             &mut metadata_manager,
-                        )
-                        .unwrap();
-                        let mut scan = plan.open().unwrap();
-                        scan.move_to_before_first();
-
-                        loop {
-                            match scan.next() {
-                                Ok(has_next) => {
-                                    if !has_next {
-                                        break;
-                                    }
-                                    let results = select_query
-                                        .field_name_list
-                                        .iter()
-                                        .map(|field_name| {
-                                            let value = scan.get_value(TableNameAndFieldName::new(
-                                                None,
-                                                field_name.clone(),
-                                            ));
-                                            return value;
-                                        })
-                                        .collect::<Vec<_>>();
-
-                                    println!("Results: {:?}", results);
-                                }
-                                Err(e) => {
-                                    println!("Error during scan: {:?}", e);
-                                    break;
-                                }
-                            }
-                        }
+                            transaction.clone(),
+                        );
                     }
                     ParsedSQL::Insert(insert_data) => {
                         execute_insert(transaction.clone(), &mut metadata_manager, insert_data);
@@ -139,6 +101,14 @@ fn main() -> Result<()> {
                             &mut metadata_manager,
                             create_table_data,
                         );
+                    }
+
+                    ParsedSQL::DescribeTable { table_name } => {
+                        let layout = metadata_manager
+                            .get_layout(table_name.clone(), transaction.clone())
+                            .unwrap();
+
+                        println!("schema for table '{:?}'", layout.schema);
                     }
 
                     ParsedSQL::ShowTables => {

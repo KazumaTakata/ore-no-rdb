@@ -140,7 +140,7 @@ impl TableSchema {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Layout {
     pub schema: TableSchema,
     offsets: HashMap<String, i32>,

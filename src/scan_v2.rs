@@ -44,10 +44,6 @@ impl ScanV2 for SelectScanV2 {
     }
 
     fn next(&mut self) -> Result<bool, ValueNotFound> {
-        println!(
-            "SelectScanV2: Moving to next record with predicate: {:?}",
-            self.predicate
-        );
         while self.scan.next()? {
             let is_satisfied = self.predicate.is_satisfied(&mut *self.scan);
             match is_satisfied {
@@ -68,7 +64,6 @@ impl ScanV2 for SelectScanV2 {
         self.scan.get_string(field_name)
     }
     fn get_value(&mut self, field_name: TableNameAndFieldName) -> Option<ConstantValue> {
-        println!("Getting value for field: {:?}", field_name);
         self.scan.get_value(field_name)
     }
 

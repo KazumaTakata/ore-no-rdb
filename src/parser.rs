@@ -97,6 +97,7 @@ pub enum ParsedSQL {
     Delete(DeleteData),
     Update(UpdateData),
     ShowTables,
+    DescribeTable { table_name: String },
 }
 
 impl ParsedSQL {
@@ -132,6 +133,9 @@ impl ParsedSQL {
             }
             ParsedSQL::ShowTables => {
                 println!("Parsed Show Tables Command");
+            }
+            ParsedSQL::DescribeTable { table_name } => {
+                println!("Parsed Describe Table Command for table: {}", table_name);
             }
         }
     }
@@ -209,12 +213,6 @@ pub fn parse_predicate(inner_value: Pair<'_, Rule>) -> Option<PredicateV2> {
                                                     inner_iter.next().unwrap().as_str();
                                                 let field_name =
                                                     inner_iter.next().unwrap().as_str();
-                                                let qualified_field_name =
-                                                    format!("{}.{}", table_name, field_name);
-                                                println!(
-                                                    "Rule::qualified_field {}",
-                                                    qualified_field_name
-                                                );
 
                                                 let expression = ExpressionV2::new(
                                                     ExpressionValue::TableNameAndFieldName(
@@ -232,8 +230,6 @@ pub fn parse_predicate(inner_value: Pair<'_, Rule>) -> Option<PredicateV2> {
                                                 }
                                             }
                                             Rule::id_token => {
-                                                println!("Rule::id_token {}", inner_value.as_str());
-
                                                 let expression = ExpressionV2::new(
                                                     ExpressionValue::TableNameAndFieldName(
                                                         TableNameAndFieldName::new(
@@ -274,7 +270,11 @@ pub fn parse_predicate(inner_value: Pair<'_, Rule>) -> Option<PredicateV2> {
                                                 }
                                             }
                                             Rule::string_token => {
-                                                let value = inner_value.as_str().to_string();
+                                                let value = inner_value
+                                                    .into_inner()
+                                                    .find(|p| p.as_rule() == Rule::string_content)
+                                                    .map(|p| p.as_str().to_string())
+                                                    .unwrap_or_default();
                                                 let string_constant_value =
                                                     ConstantValue::String(value.clone());
                                                 let constant = Constant::new(string_constant_value);
@@ -396,7 +396,11 @@ pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
                                                 constant_list.push(constant);
                                             }
                                             Rule::string_token => {
-                                                let value = inner_value.as_str().to_string();
+                                                let value = inner_value
+                                                    .into_inner()
+                                                    .find(|p| p.as_rule() == Rule::string_content)
+                                                    .map(|p| p.as_str().to_string())
+                                                    .unwrap_or_default();
                                                 let string_constant_value =
                                                     ConstantValue::String(value.clone());
                                                 let constant = Constant::new(string_constant_value);
@@ -468,7 +472,11 @@ pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
                                             new_value = Some(constant);
                                         }
                                         Rule::string_token => {
-                                            let value = inner_value.as_str().to_string();
+                                            let value = inner_value
+                                                .into_inner()
+                                                .find(|p| p.as_rule() == Rule::string_content)
+                                                .map(|p| p.as_str().to_string())
+                                                .unwrap_or_default();
                                             let string_constant_value =
                                                 ConstantValue::String(value.clone());
                                             let constant = Constant::new(string_constant_value);
@@ -562,6 +570,23 @@ pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
                 return Some(ParsedSQL::ShowTables);
             }
 
+            Rule::describe_table_sql => {
+                let mut table_name: Option<String> = None;
+
+                record
+                    .into_inner()
+                    .for_each(|inner_value| match inner_value.as_rule() {
+                        Rule::id_token => {
+                            table_name = Some(inner_value.as_str().to_string());
+                        }
+                        _ => {}
+                    });
+
+                return Some(ParsedSQL::DescribeTable {
+                    table_name: table_name.unwrap(),
+                });
+            }
+
             _ => {
                 return None;
             }
@@ -608,7 +633,7 @@ mod tests {
 
     #[test]
     fn test_select_join_query() {
-        let sql = "select A, B from test_table, test_table2 where C = D".to_string();
+        let sql = "select A, B from test_table, test_table2 where C = 'content'".to_string();
         let parsed_sql = parse_sql(sql);
         parsed_sql.unwrap().debug_print();
     }
