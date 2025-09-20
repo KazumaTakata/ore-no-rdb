@@ -272,6 +272,8 @@ impl ScanV2 for TableScan {
 
     fn has_field(&self, field_name: TableNameAndFieldName) -> bool {
         self.layout.schema.has_field(field_name.field_name)
+            && (field_name.table_name.is_none()
+                || field_name.table_name.as_ref().unwrap() == &self.table_name)
     }
 
     fn close(&mut self) {
