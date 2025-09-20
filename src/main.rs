@@ -54,6 +54,7 @@ use crate::database::Database;
 use crate::metadata_manager::MetadataManager;
 use crate::parser::{ParsedSQL, QueryData};
 use crate::plan_v2::{create_query_plan, execute_create_table, execute_delete, execute_insert};
+use crate::predicate::ConstantValue;
 use crate::predicate_v3::PredicateV2;
 
 fn main() -> Result<()> {
@@ -146,8 +147,25 @@ fn main() -> Result<()> {
                                     let value = scan.get_value(field_name.clone());
                                     return value;
                                 })
+                                .filter(|v| {
+                                    if let Some(constant_value) = v {
+                                        return match constant_value.clone() {
+                                            ConstantValue::String(s) => {
+                                                s != "table_catalog"
+                                                    && s != "field_catalog"
+                                                    && s != "index_catalog"
+                                            }
+                                            _ => true,
+                                        };
+                                    }
+                                    return false;
+                                })
+                                // 空になったvectorは除外
                                 .collect::<Vec<_>>();
 
+                            if results.len() == 0 {
+                                continue;
+                            }
                             println!("Results: {:?}", results);
                         }
                     }

@@ -240,10 +240,9 @@ pub fn create_query_plan(
     let mut plans: Vec<Box<dyn PlanV2>> = Vec::new();
 
     for table_name in query_data.table_name_list.iter() {
-        let layout = Layout::new(TableSchema::new());
         let table_plan =
             TablePlanV2::new(table_name.clone(), transaction.clone(), metadata_manager)?;
-        let mut plan: Box<dyn PlanV2> = Box::new(table_plan);
+        let plan: Box<dyn PlanV2> = Box::new(table_plan);
         plans.push(plan);
     }
 

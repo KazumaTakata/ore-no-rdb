@@ -137,7 +137,7 @@ impl TableManagerV2 {
         );
 
         // schemaのfieldsをループして、各フィールドの情報を挿入
-        for (i, field_name) in schema.fields.iter().enumerate() {
+        for (_, field_name) in schema.fields.iter().enumerate() {
             let field_type = schema.get_field_type(field_name.to_string()).unwrap();
             let field_length = schema.get_field_length(field_name.to_string()).unwrap();
             let field_offset = layout.get_offset(&field_name).unwrap();
