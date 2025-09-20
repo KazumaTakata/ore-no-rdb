@@ -1,18 +1,20 @@
 use pest::pratt_parser::Op;
 
 use crate::{
-    error::ValueNotFound, predicate::ConstantValue, predicate_v3::PredicateV2,
+    error::ValueNotFound,
+    predicate::{ConstantValue, TableNameAndFieldName},
+    predicate_v3::PredicateV2,
     table_scan_v2::RecordID,
 };
 
 pub trait ScanV2 {
     fn move_to_before_first(&mut self) -> Result<(), ValueNotFound>;
     fn next(&mut self) -> Result<bool, ValueNotFound>;
-    fn get_integer(&mut self, field_name: String) -> Option<i32>;
-    fn get_string(&mut self, field_name: String) -> Option<String>;
-    fn get_value(&mut self, field_name: String) -> Option<ConstantValue>;
+    fn get_integer(&mut self, field_name: TableNameAndFieldName) -> Option<i32>;
+    fn get_string(&mut self, field_name: TableNameAndFieldName) -> Option<String>;
+    fn get_value(&mut self, field_name: TableNameAndFieldName) -> Option<ConstantValue>;
     fn close(&mut self);
-    fn has_field(&self, field_name: String) -> bool;
+    fn has_field(&self, field_name: TableNameAndFieldName) -> bool;
     fn set_integer(&mut self, field_name: String, value: i32);
     fn set_string(&mut self, field_name: String, value: String);
     fn set_value(&mut self, field_name: String, value: ConstantValue);
@@ -42,6 +44,10 @@ impl ScanV2 for SelectScanV2 {
     }
 
     fn next(&mut self) -> Result<bool, ValueNotFound> {
+        println!(
+            "SelectScanV2: Moving to next record with predicate: {:?}",
+            self.predicate
+        );
         while self.scan.next()? {
             let is_satisfied = self.predicate.is_satisfied(&mut *self.scan);
             match is_satisfied {
@@ -54,14 +60,15 @@ impl ScanV2 for SelectScanV2 {
         return Ok(false);
     }
 
-    fn get_integer(&mut self, field_name: String) -> Option<i32> {
+    fn get_integer(&mut self, field_name: TableNameAndFieldName) -> Option<i32> {
         self.scan.get_integer(field_name)
     }
 
-    fn get_string(&mut self, field_name: String) -> Option<String> {
+    fn get_string(&mut self, field_name: TableNameAndFieldName) -> Option<String> {
         self.scan.get_string(field_name)
     }
-    fn get_value(&mut self, field_name: String) -> Option<ConstantValue> {
+    fn get_value(&mut self, field_name: TableNameAndFieldName) -> Option<ConstantValue> {
+        println!("Getting value for field: {:?}", field_name);
         self.scan.get_value(field_name)
     }
 
@@ -69,7 +76,7 @@ impl ScanV2 for SelectScanV2 {
         self.scan.close();
     }
 
-    fn has_field(&self, field_name: String) -> bool {
+    fn has_field(&self, field_name: TableNameAndFieldName) -> bool {
         self.scan.has_field(field_name)
     }
 
@@ -104,11 +111,11 @@ impl ScanV2 for SelectScanV2 {
 
 pub struct ProjectScanV2 {
     scan: Box<dyn ScanV2>,
-    fields: Vec<String>,
+    fields: Vec<TableNameAndFieldName>,
 }
 
 impl ProjectScanV2 {
-    pub fn new(scan: Box<dyn ScanV2>, fields: Vec<String>) -> Self {
+    pub fn new(scan: Box<dyn ScanV2>, fields: Vec<TableNameAndFieldName>) -> Self {
         ProjectScanV2 { scan, fields }
     }
 }
@@ -122,22 +129,22 @@ impl ScanV2 for ProjectScanV2 {
         self.scan.next()
     }
 
-    fn get_integer(&mut self, field_name: String) -> Option<i32> {
-        if self.fields.contains(&field_name) {
+    fn get_integer(&mut self, field_name: TableNameAndFieldName) -> Option<i32> {
+        if self.has_field(field_name.clone()) {
             return self.scan.get_integer(field_name);
         }
         None
     }
 
-    fn get_string(&mut self, field_name: String) -> Option<String> {
-        if self.fields.contains(&field_name) {
+    fn get_string(&mut self, field_name: TableNameAndFieldName) -> Option<String> {
+        if self.has_field(field_name.clone()) {
             return self.scan.get_string(field_name);
         }
         None
     }
 
-    fn get_value(&mut self, field_name: String) -> Option<ConstantValue> {
-        if self.fields.contains(&field_name) {
+    fn get_value(&mut self, field_name: TableNameAndFieldName) -> Option<ConstantValue> {
+        if self.has_field(field_name.clone()) {
             return self.scan.get_value(field_name);
         }
 
@@ -148,8 +155,12 @@ impl ScanV2 for ProjectScanV2 {
         self.scan.close();
     }
 
-    fn has_field(&self, field_name: String) -> bool {
-        self.fields.contains(&field_name)
+    fn has_field(&self, table_name_and_field_name: TableNameAndFieldName) -> bool {
+        self.fields.iter().any(|table_and_field| {
+            table_and_field.field_name == table_name_and_field_name.field_name
+                && (table_and_field.table_name.is_none()
+                    || table_and_field.table_name == table_name_and_field_name.table_name)
+        })
     }
 
     fn set_integer(&mut self, field_name: String, value: i32) {
@@ -218,7 +229,7 @@ impl ScanV2 for ProductScanV2 {
         return Ok(right_scan_next && left_scan_next);
     }
 
-    fn get_integer(&mut self, field_name: String) -> Option<i32> {
+    fn get_integer(&mut self, field_name: TableNameAndFieldName) -> Option<i32> {
         if self.left_scan.has_field(field_name.clone()) {
             return self.left_scan.get_integer(field_name);
         } else {
@@ -226,7 +237,7 @@ impl ScanV2 for ProductScanV2 {
         }
     }
 
-    fn get_string(&mut self, field_name: String) -> Option<String> {
+    fn get_string(&mut self, field_name: TableNameAndFieldName) -> Option<String> {
         if self.left_scan.has_field(field_name.clone()) {
             return self.left_scan.get_string(field_name);
         } else {
@@ -234,7 +245,7 @@ impl ScanV2 for ProductScanV2 {
         }
     }
 
-    fn get_value(&mut self, field_name: String) -> Option<ConstantValue> {
+    fn get_value(&mut self, field_name: TableNameAndFieldName) -> Option<ConstantValue> {
         if self.left_scan.has_field(field_name.clone()) {
             return self.left_scan.get_value(field_name);
         } else {
@@ -242,7 +253,7 @@ impl ScanV2 for ProductScanV2 {
         }
     }
 
-    fn has_field(&self, field_name: String) -> bool {
+    fn has_field(&self, field_name: TableNameAndFieldName) -> bool {
         self.left_scan.has_field(field_name.clone()) || self.right_scan.has_field(field_name)
     }
 

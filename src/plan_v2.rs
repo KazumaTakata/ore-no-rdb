@@ -8,6 +8,7 @@ use crate::{
     log_manager_v2::LogManagerV2,
     metadata_manager::{self, MetadataManager},
     parser::{CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
+    predicate::TableNameAndFieldName,
     predicate_v3::PredicateV2,
     record_page::{Layout, TableSchema},
     scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
@@ -102,6 +103,7 @@ impl SelectPlanV2 {
 impl PlanV2 for SelectPlanV2 {
     fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
         let scan = self.table_plan.open()?;
+        println!("Opening SelectPlanV2 with predicate: {:?}", self.predicate);
         return Ok(Box::new(SelectScanV2::new(scan, self.predicate.clone())));
     }
 
@@ -161,7 +163,12 @@ impl ProjectPlanV2 {
 impl PlanV2 for ProjectPlanV2 {
     fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
         let scan = self.plan.open()?;
-        let field_names = self.schema.fields().clone(); // Assuming `fields()` returns `Vec<String>`
+        let field_names = self
+            .schema
+            .fields()
+            .iter()
+            .map(|f| TableNameAndFieldName::new(None, f.clone()))
+            .collect(); // Assuming `fields()` returns `Vec<String>`
         return Ok(Box::new(ProjectScanV2::new(scan, field_names)));
     }
 
@@ -476,8 +483,8 @@ mod tests {
         let mut scan = plan.open()?;
         scan.move_to_before_first();
         while scan.next()? {
-            let field1_value = scan.get_value("A".to_string());
-            let field2_value = scan.get_value("B_1".to_string());
+            let field1_value = scan.get_value(TableNameAndFieldName::new(None, "A".to_string()));
+            let field2_value = scan.get_value(TableNameAndFieldName::new(None, "B_1".to_string()));
 
             if let Some(value) = field1_value {
                 println!("Field A: {:?}", value);
@@ -540,8 +547,8 @@ mod tests {
         let mut scan = plan.open()?;
         scan.move_to_before_first();
         while scan.next()? {
-            let field1_value = scan.get_integer("A".to_string());
-            let field2_value = scan.get_string("B".to_string());
+            let field1_value = scan.get_integer(TableNameAndFieldName::new(None, "A".to_string()));
+            let field2_value = scan.get_string(TableNameAndFieldName::new(None, "B".to_string()));
 
             if let Some(value) = field1_value {
                 println!("Field A: {}", value);

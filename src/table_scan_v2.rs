@@ -3,6 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     block::BlockId,
     error::ValueNotFound,
+    predicate::TableNameAndFieldName,
     record_page::{Layout, TableFieldType},
     record_page_v2::RecordPage,
     scan_v2::ScanV2,
@@ -42,6 +43,7 @@ impl RecordID {
 
 pub struct TableScan {
     file_name: String,
+    table_name: String,
     record_page: RecordPage,
     transaction: Rc<RefCell<TransactionV2>>,
     current_slot: i32,
@@ -63,6 +65,7 @@ impl TableScan {
             record_page.format();
             return TableScan {
                 file_name,
+                table_name,
                 record_page,
                 transaction: transaction.clone(),
                 layout: layout.clone(),
@@ -73,6 +76,7 @@ impl TableScan {
             let record_page = RecordPage::new(transaction.clone(), layout.clone(), block_id);
             return TableScan {
                 file_name,
+                table_name,
                 record_page,
                 transaction: transaction.clone(),
                 layout,
@@ -176,16 +180,51 @@ impl ScanV2 for TableScan {
         Ok(())
     }
 
-    fn get_integer(&mut self, field_name: String) -> Option<i32> {
-        self.record_page.get_integer(field_name, self.current_slot)
+    fn get_integer(&mut self, field_name: TableNameAndFieldName) -> Option<i32> {
+        match field_name.table_name.clone() {
+            Some(name) => {
+                if name != self.table_name {
+                    return None;
+                }
+            }
+            None => {}
+        }
+
+        self.record_page
+            .get_integer(field_name.field_name, self.current_slot)
     }
 
-    fn get_string(&mut self, field_name: String) -> Option<String> {
-        self.record_page.get_string(field_name, self.current_slot)
+    fn get_string(&mut self, field_name: TableNameAndFieldName) -> Option<String> {
+        match field_name.table_name.clone() {
+            Some(name) => {
+                if name != self.table_name {
+                    return None;
+                }
+            }
+            None => {}
+        }
+
+        self.record_page
+            .get_string(field_name.field_name, self.current_slot)
     }
 
-    fn get_value(&mut self, field_name: String) -> Option<crate::predicate::ConstantValue> {
-        let field_type = self.layout.schema.get_field_type(field_name.clone());
+    fn get_value(
+        &mut self,
+        field_name: TableNameAndFieldName,
+    ) -> Option<crate::predicate::ConstantValue> {
+        match field_name.table_name.clone() {
+            Some(name) => {
+                if name != self.table_name {
+                    return None;
+                }
+            }
+            None => {}
+        }
+
+        let field_type = self
+            .layout
+            .schema
+            .get_field_type(field_name.field_name.clone());
 
         match field_type {
             None => return None,
@@ -231,8 +270,8 @@ impl ScanV2 for TableScan {
         return Ok(true);
     }
 
-    fn has_field(&self, field_name: String) -> bool {
-        self.layout.schema.has_field(field_name)
+    fn has_field(&self, field_name: TableNameAndFieldName) -> bool {
+        self.layout.schema.has_field(field_name.field_name)
     }
 
     fn close(&mut self) {
@@ -311,8 +350,10 @@ mod tests {
         table_scan.move_to_before_first();
 
         while table_scan.next()? {
-            let field1_value = table_scan.get_integer("Field1".to_string());
-            let field2_value = table_scan.get_string("Field2".to_string());
+            let field1_value =
+                table_scan.get_integer(TableNameAndFieldName::new(None, "Field1".to_string()));
+            let field2_value =
+                table_scan.get_string(TableNameAndFieldName::new(None, "Field2".to_string()));
 
             if let Some(value) = field1_value {
                 println!("Field1: {}", value);

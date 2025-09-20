@@ -3,6 +3,7 @@ use std::{cell::RefCell, collections::HashMap, ops::Index, rc::Rc};
 use crate::{
     error::ValueNotFound,
     hash_index::HashIndex,
+    predicate::TableNameAndFieldName,
     record_page::{Layout, TableFieldType, TableSchema},
     scan_v2::ScanV2,
     stat_manager_v2::{StatInfoV2, StatManagerV2},
@@ -84,9 +85,15 @@ impl IndexManager {
         let mut field_name_index_info_map = HashMap::new();
 
         while table_scan.next()? {
-            if table_scan.get_string("table_name".to_string()) == Some(table_name.clone()) {
-                let index_name = table_scan.get_string("index_name".to_string()).unwrap();
-                let field_name = table_scan.get_string("field_name".to_string()).unwrap();
+            if table_scan.get_string(TableNameAndFieldName::new(None, "table_name".to_string()))
+                == Some(table_name.clone())
+            {
+                let index_name = table_scan
+                    .get_string(TableNameAndFieldName::new(None, "index_name".to_string()))
+                    .unwrap();
+                let field_name = table_scan
+                    .get_string(TableNameAndFieldName::new(None, "field_name".to_string()))
+                    .unwrap();
                 let layout = self
                     .table_manager
                     .borrow()

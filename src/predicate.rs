@@ -92,6 +92,21 @@ impl Constant {
 
 #[derive(Debug, Clone)]
 pub enum ExpressionValue {
-    FieldName(String),
+    TableNameAndFieldName(TableNameAndFieldName),
     Constant(Constant),
+}
+
+#[derive(Debug, Clone)]
+pub struct TableNameAndFieldName {
+    pub table_name: Option<String>,
+    pub field_name: String,
+}
+
+impl TableNameAndFieldName {
+    pub fn new(table_name: Option<String>, field_name: String) -> Self {
+        TableNameAndFieldName {
+            table_name,
+            field_name,
+        }
+    }
 }

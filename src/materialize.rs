@@ -3,6 +3,7 @@ use std::{cell::RefCell, rc::Rc, sync::Mutex};
 use crate::{
     error::ValueNotFound,
     plan_v2::PlanV2,
+    predicate::TableNameAndFieldName,
     record_page::{Layout, TableSchema},
     scan_v2::ScanV2,
     table_scan_v2::TableScan,
@@ -78,7 +79,10 @@ impl PlanV2 for MaterializePlan {
         while src.next()? {
             dest.insert();
             for field in schema.fields.iter() {
-                let value = src.get_value(field.clone());
+                let value = src.get_value(TableNameAndFieldName {
+                    table_name: None,
+                    field_name: field.clone(),
+                });
                 if let Some(value) = value {
                     dest.set_value(field.clone(), value);
                 } else {

@@ -11,7 +11,7 @@ use crate::{
     error::ValueNotFound,
     index_manager::IndexInfo,
     plan_v2::PlanV2,
-    predicate::{Constant, ConstantValue},
+    predicate::{Constant, ConstantValue, TableNameAndFieldName},
     record_page::{Layout, TableSchema},
     scan_v2::ScanV2,
     table_scan_v2::{RecordID, TableScan},
@@ -73,7 +73,8 @@ impl HashIndex {
     fn next(&mut self) -> Result<bool, ValueNotFound> {
         if let Some(scan) = &mut self.table_scan {
             while scan.next()? {
-                let data_value = scan.get_value("data_value".to_string());
+                let data_value =
+                    scan.get_value(TableNameAndFieldName::new(None, "data_value".to_string()));
 
                 if let Some(inner_value) = data_value {
                     match self.search_key {
@@ -96,8 +97,8 @@ impl HashIndex {
     fn get_data_record_id(&mut self) -> Result<Option<RecordID>, ValueNotFound> {
         if let Some(scan) = &mut self.table_scan {
             if scan.next()? {
-                let value = scan.get_integer("block".to_string());
-                let id = scan.get_integer("id".to_string());
+                let value = scan.get_integer(TableNameAndFieldName::new(None, "block".to_string()));
+                let id = scan.get_integer(TableNameAndFieldName::new(None, "id".to_string()));
 
                 if let (Some(block), Some(id)) = (value, id) {
                     return Ok(Some(RecordID::new(block as u64, id)));
@@ -224,19 +225,19 @@ impl IndexSelectScan {
         return Ok(has_next);
     }
 
-    pub fn get_integer(&mut self, field_name: String) -> Option<i32> {
+    pub fn get_integer(&mut self, field_name: TableNameAndFieldName) -> Option<i32> {
         self.table_scan.get_integer(field_name)
     }
 
-    pub fn get_string(&mut self, field_name: String) -> Option<String> {
+    pub fn get_string(&mut self, field_name: TableNameAndFieldName) -> Option<String> {
         self.table_scan.get_string(field_name)
     }
 
-    pub fn get_value(&mut self, field_name: String) -> Option<ConstantValue> {
+    pub fn get_value(&mut self, field_name: TableNameAndFieldName) -> Option<ConstantValue> {
         self.table_scan.get_value(field_name)
     }
 
-    pub fn has_field(&self, field_name: String) -> bool {
+    pub fn has_field(&self, field_name: TableNameAndFieldName) -> bool {
         self.table_scan.has_field(field_name)
     }
 

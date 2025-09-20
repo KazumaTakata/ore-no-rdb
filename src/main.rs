@@ -54,7 +54,7 @@ use crate::database::Database;
 use crate::metadata_manager::MetadataManager;
 use crate::parser::{ParsedSQL, QueryData};
 use crate::plan_v2::{create_query_plan, execute_create_table, execute_delete, execute_insert};
-use crate::predicate::ConstantValue;
+use crate::predicate::{ConstantValue, TableNameAndFieldName};
 use crate::predicate_v3::PredicateV2;
 
 fn main() -> Result<()> {
@@ -79,6 +79,8 @@ fn main() -> Result<()> {
                 let parsed_sql = parse_sql(line.to_string()).unwrap();
                 match parsed_sql {
                     ParsedSQL::Query(select_query) => {
+                        println!("Parsed Query: {:?}", select_query);
+
                         let table_exist = metadata_manager
                             .validate_select_sql(&select_query, transaction.clone());
 
@@ -95,17 +97,32 @@ fn main() -> Result<()> {
                         .unwrap();
                         let mut scan = plan.open().unwrap();
                         scan.move_to_before_first();
-                        while scan.next().unwrap() {
-                            let results = select_query
-                                .field_name_list
-                                .iter()
-                                .map(|field_name| {
-                                    let value = scan.get_value(field_name.clone());
-                                    return value;
-                                })
-                                .collect::<Vec<_>>();
 
-                            println!("Results: {:?}", results);
+                        loop {
+                            match scan.next() {
+                                Ok(has_next) => {
+                                    if !has_next {
+                                        break;
+                                    }
+                                    let results = select_query
+                                        .field_name_list
+                                        .iter()
+                                        .map(|field_name| {
+                                            let value = scan.get_value(TableNameAndFieldName::new(
+                                                None,
+                                                field_name.clone(),
+                                            ));
+                                            return value;
+                                        })
+                                        .collect::<Vec<_>>();
+
+                                    println!("Results: {:?}", results);
+                                }
+                                Err(e) => {
+                                    println!("Error during scan: {:?}", e);
+                                    break;
+                                }
+                            }
                         }
                     }
                     ParsedSQL::Insert(insert_data) => {
@@ -144,7 +161,10 @@ fn main() -> Result<()> {
                                 .field_name_list
                                 .iter()
                                 .map(|field_name| {
-                                    let value = scan.get_value(field_name.clone());
+                                    let value = scan.get_value(TableNameAndFieldName::new(
+                                        None,
+                                        field_name.clone(),
+                                    ));
                                     return value;
                                 })
                                 .filter(|v| {

@@ -4,6 +4,7 @@ use crate::{
     buffer_manager,
     error::{TableAlreadyExists, ValueNotFound},
     file_manager,
+    predicate::TableNameAndFieldName,
     record_page::{self, TableFieldType, TableSchema},
     scan_v2::ScanV2,
     table_scan_v2::TableScan,
@@ -51,8 +52,10 @@ impl TableManagerV2 {
         );
 
         while field_scan.next().unwrap() {
-            let t_name = field_scan.get_string("table_name".to_string());
-            let f_name = field_scan.get_string("field_name".to_string());
+            let t_name =
+                field_scan.get_string(TableNameAndFieldName::new(None, "table_name".to_string()));
+            let f_name =
+                field_scan.get_string(TableNameAndFieldName::new(None, "field_name".to_string()));
 
             match t_name {
                 Some(t_name) => {
@@ -87,7 +90,8 @@ impl TableManagerV2 {
         );
 
         while table_scan.next().unwrap() {
-            let name = table_scan.get_string("table_name".to_string());
+            let name =
+                table_scan.get_string(TableNameAndFieldName::new(None, "table_name".to_string()));
 
             match name {
                 Some(name) => {
@@ -171,12 +175,14 @@ impl TableManagerV2 {
         let mut slot_size: Option<i32> = None;
 
         while table_scan.next()? {
-            let name = table_scan.get_string("table_name".to_string());
+            let name =
+                table_scan.get_string(TableNameAndFieldName::new(None, "table_name".to_string()));
 
             match name {
                 Some(name) => {
                     if name == table_name {
-                        let size = table_scan.get_integer("slot_size".to_string());
+                        let size = table_scan
+                            .get_integer(TableNameAndFieldName::new(None, "slot_size".to_string()));
                         match size {
                             Some(size) => {
                                 slot_size = Some(size);
@@ -202,15 +208,26 @@ impl TableManagerV2 {
         let mut offsets = HashMap::new();
 
         while field_scan.next()? {
-            let name = field_scan.get_string("table_name".to_string());
+            let name =
+                field_scan.get_string(TableNameAndFieldName::new(None, "table_name".to_string()));
 
             match name {
                 Some(name) => {
                     if name == table_name {
-                        let field_name = field_scan.get_string("field_name".to_string());
-                        let field_type = field_scan.get_integer("field_type".to_string());
-                        let field_length = field_scan.get_integer("field_length".to_string());
-                        let field_offset = field_scan.get_integer("field_offset".to_string());
+                        let field_name = field_scan
+                            .get_string(TableNameAndFieldName::new(None, "field_name".to_string()));
+                        let field_type = field_scan.get_integer(TableNameAndFieldName::new(
+                            None,
+                            "field_type".to_string(),
+                        ));
+                        let field_length = field_scan.get_integer(TableNameAndFieldName::new(
+                            None,
+                            "field_length".to_string(),
+                        ));
+                        let field_offset = field_scan.get_integer(TableNameAndFieldName::new(
+                            None,
+                            "field_offset".to_string(),
+                        ));
                         offsets.insert(field_name.clone().unwrap(), field_offset.unwrap());
                         table_schema.add_field(
                             field_name.unwrap(),

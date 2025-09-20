@@ -4,6 +4,7 @@ use crate::{
     buffer_manager::{self, BufferList},
     error::ValueNotFound,
     file_manager::FileManager,
+    predicate::TableNameAndFieldName,
     record_page,
     scan_v2::ScanV2,
     table_manager_v2::TableManagerV2,
@@ -89,7 +90,8 @@ impl StatManagerV2 {
         );
 
         while table_scan.next()? {
-            let table_name = table_scan.get_string("table_name".to_string());
+            let table_name =
+                table_scan.get_string(TableNameAndFieldName::new(None, "table_name".to_string()));
 
             match table_name {
                 Some(name) => {

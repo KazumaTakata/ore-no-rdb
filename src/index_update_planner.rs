@@ -7,7 +7,7 @@ use crate::{
     metadata_manager::MetadataManager,
     parser::{DeleteData, InsertData, UpdateData},
     plan_v2::{PlanV2, SelectPlanV2, TablePlanV2},
-    predicate::Constant,
+    predicate::{Constant, TableNameAndFieldName},
     transaction_v2::TransactionV2,
 };
 
@@ -87,7 +87,8 @@ impl IndexUpdatePlanner {
             let record_id = update_scan.get_record_id();
 
             for (field_name, index_info) in indexes.iter_mut() {
-                let value = update_scan.get_value(field_name.clone());
+                let value =
+                    update_scan.get_value(TableNameAndFieldName::new(None, field_name.clone()));
                 let constant = Constant::new(value.unwrap());
                 let mut index = index_info.open();
                 index.delete(constant, record_id.clone());
@@ -134,7 +135,8 @@ impl IndexUpdatePlanner {
 
         while update_scan.next()? {
             let new_value = update_data.new_value.clone();
-            let old_value = update_scan.get_value(field_name.clone());
+            let old_value =
+                update_scan.get_value(TableNameAndFieldName::new(None, field_name.clone()));
             update_scan.set_value(update_data.field_name.clone(), new_value.value.clone());
 
             if let Some(idx) = index.as_mut() {

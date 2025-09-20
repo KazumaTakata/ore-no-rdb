@@ -1,12 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
-use pest::pratt_parser::Op;
-
 use crate::{
     error::ValueNotFound,
     materialize::{self, MaterializePlan, TempTable},
     plan_v2::PlanV2,
-    predicate::Constant,
+    predicate::{Constant, TableNameAndFieldName},
     record_page::TableSchema,
     scan_v2::ScanV2,
     table_scan_v2::RecordID,
@@ -24,7 +22,7 @@ impl SortPlan {
     pub fn new(
         transaction: Rc<RefCell<TransactionV2>>,
         plan: Box<dyn PlanV2>,
-        sort_fields: Vec<String>,
+        sort_fields: Vec<TableNameAndFieldName>,
     ) -> Self {
         let table_schema = plan.get_schema().clone();
         let comparator = RecordComparator::new(sort_fields);
@@ -45,7 +43,7 @@ impl SortPlan {
         dest.insert();
 
         for field in self.table_schema.fields.iter() {
-            let value = src_scan.get_value(field.clone());
+            let value = src_scan.get_value(TableNameAndFieldName::new(None, field.clone()));
             if let Some(inner_value) = value {
                 dest.set_value(field.clone(), inner_value);
             } else {
@@ -187,11 +185,11 @@ impl PlanV2 for SortPlan {
 
 #[derive(Clone)]
 struct RecordComparator {
-    field_name_list: Vec<String>,
+    field_name_list: Vec<TableNameAndFieldName>,
 }
 
 impl RecordComparator {
-    pub fn new(field_name_list: Vec<String>) -> Self {
+    pub fn new(field_name_list: Vec<TableNameAndFieldName>) -> Self {
         RecordComparator { field_name_list }
     }
 
@@ -214,7 +212,10 @@ impl RecordComparator {
                     std::cmp::Ordering::Greater => return Ok(std::cmp::Ordering::Greater),
                 }
             } else {
-                return Err(ValueNotFound::new(field_name.clone(), None));
+                return Err(ValueNotFound::new(
+                    field_name.field_name.clone(),
+                    field_name.table_name.clone(),
+                ));
             }
         }
         Ok(std::cmp::Ordering::Equal)
@@ -322,7 +323,7 @@ impl ScanV2 for SortScan {
         return Ok(true);
     }
 
-    fn get_integer(&mut self, field_name: String) -> Option<i32> {
+    fn get_integer(&mut self, field_name: TableNameAndFieldName) -> Option<i32> {
         if self.current_scan == CurrentScan::Scan1 {
             self.scan1.get_integer(field_name)
         } else if self.current_scan == CurrentScan::Scan2 {
@@ -336,7 +337,7 @@ impl ScanV2 for SortScan {
         }
     }
 
-    fn get_string(&mut self, field_name: String) -> Option<String> {
+    fn get_string(&mut self, field_name: TableNameAndFieldName) -> Option<String> {
         if self.current_scan == CurrentScan::Scan1 {
             self.scan1.get_string(field_name)
         } else if self.current_scan == CurrentScan::Scan2 {
@@ -350,7 +351,7 @@ impl ScanV2 for SortScan {
         }
     }
 
-    fn has_field(&self, field_name: String) -> bool {
+    fn has_field(&self, field_name: TableNameAndFieldName) -> bool {
         if self.current_scan == CurrentScan::Scan1 {
             self.scan1.has_field(field_name)
         } else if self.current_scan == CurrentScan::Scan2 {
@@ -364,7 +365,10 @@ impl ScanV2 for SortScan {
         }
     }
 
-    fn get_value(&mut self, field_name: String) -> Option<crate::predicate::ConstantValue> {
+    fn get_value(
+        &mut self,
+        field_name: TableNameAndFieldName,
+    ) -> Option<crate::predicate::ConstantValue> {
         if self.current_scan == CurrentScan::Scan1 {
             self.scan1.get_value(field_name)
         } else if self.current_scan == CurrentScan::Scan2 {

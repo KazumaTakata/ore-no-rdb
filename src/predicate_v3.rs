@@ -17,8 +17,8 @@ impl ExpressionV2 {
 
     pub fn evaluate(&self, scan: &mut dyn ScanV2) -> Option<Constant> {
         match self.value {
-            ExpressionValue::FieldName(ref field_name) => {
-                let value = scan.get_value(field_name.clone())?;
+            ExpressionValue::TableNameAndFieldName(ref table_name_and_field_name) => {
+                let value = scan.get_value(table_name_and_field_name.clone())?;
                 return Some(Constant { value });
             }
             ExpressionValue::Constant(ref constant) => return Some(constant.clone()),
@@ -27,14 +27,25 @@ impl ExpressionV2 {
 
     pub fn can_apply_to(&self, schema: TableSchema) -> bool {
         match self.value {
-            ExpressionValue::FieldName(ref field) => schema.has_field(field.clone()),
+            ExpressionValue::TableNameAndFieldName(ref table_name_and_field_name) => {
+                schema.has_field(table_name_and_field_name.field_name.clone())
+            }
             ExpressionValue::Constant(_) => return true,
         }
     }
 
     pub fn to_string(&self) -> String {
         match self.value {
-            ExpressionValue::FieldName(ref field_name) => field_name.clone(),
+            ExpressionValue::TableNameAndFieldName(ref table_name_and_field_name) => {
+                format!(
+                    "{}.{}",
+                    table_name_and_field_name
+                        .table_name
+                        .clone()
+                        .unwrap_or_default(),
+                    table_name_and_field_name.field_name
+                )
+            }
             ExpressionValue::Constant(ref constant) => match constant.value {
                 ConstantValue::String(ref str) => str.clone(),
                 ConstantValue::Number(n) => n.to_string(),
@@ -73,10 +84,10 @@ impl TermV2 {
 
     pub fn equate_with_constant(&self, field_name: String) -> Option<Constant> {
         match &self.lhs.value {
-            ExpressionValue::FieldName(_field_name) => match self.rhs.value {
-                ExpressionValue::FieldName(_) => return None,
+            ExpressionValue::TableNameAndFieldName(_field_name) => match self.rhs.value {
+                ExpressionValue::TableNameAndFieldName(_) => return None,
                 ExpressionValue::Constant(ref constant2) => {
-                    if *_field_name == field_name {
+                    if *_field_name.field_name == field_name {
                         return Some(constant2.clone());
                     } else {
                         return None;
@@ -84,8 +95,8 @@ impl TermV2 {
                 }
             },
             ExpressionValue::Constant(ref constant) => match &self.rhs.value {
-                ExpressionValue::FieldName(_field_name) => {
-                    if *_field_name == field_name {
+                ExpressionValue::TableNameAndFieldName(_field_name) => {
+                    if *_field_name.field_name == field_name {
                         return Some(constant.clone());
                     } else {
                         return None;
@@ -98,12 +109,12 @@ impl TermV2 {
 
     pub fn equate_with_field(&self, field_name: String) -> Option<String> {
         match &self.lhs.value {
-            ExpressionValue::FieldName(_field_name) => match &self.rhs.value {
-                ExpressionValue::FieldName(_field_name2) => {
-                    if *_field_name == field_name {
-                        return Some(_field_name2.clone());
-                    } else if *_field_name2 == field_name {
-                        return Some(_field_name.clone());
+            ExpressionValue::TableNameAndFieldName(_field_name) => match &self.rhs.value {
+                ExpressionValue::TableNameAndFieldName(_field_name2) => {
+                    if *_field_name.field_name == field_name {
+                        return Some(_field_name2.field_name.clone());
+                    } else if *_field_name2.field_name == field_name {
+                        return Some(_field_name.field_name.clone());
                     } else {
                         return None;
                     }

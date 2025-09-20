@@ -4,7 +4,7 @@ use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 
 use crate::{
-    predicate::{Constant, ConstantValue, ExpressionValue},
+    predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
     predicate_v3::{ExpressionV2, PredicateV2, TermV2},
     record_page::{TableFieldInfo, TableFieldType, TableSchema},
 };
@@ -150,6 +150,7 @@ impl fmt::Display for CreateTableData {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct QueryData {
     pub table_name_list: Vec<String>,
     pub field_name_list: Vec<String>,
@@ -200,35 +201,97 @@ pub fn parse_predicate(inner_value: Pair<'_, Rule>) -> Option<PredicateV2> {
                         Rule::expression => {
                             inner_value.into_inner().for_each(|inner_value| {
                                 match inner_value.as_rule() {
-                                    Rule::field => {
-                                        println!("Rule::id_token {}", inner_value.as_str());
+                                    Rule::field => match inner_value.into_inner().next() {
+                                        Some(inner_value) => match inner_value.as_rule() {
+                                            Rule::qualified_field => {
+                                                let mut inner_iter = inner_value.into_inner();
+                                                let table_name =
+                                                    inner_iter.next().unwrap().as_str();
+                                                let field_name =
+                                                    inner_iter.next().unwrap().as_str();
+                                                let qualified_field_name =
+                                                    format!("{}.{}", table_name, field_name);
+                                                println!(
+                                                    "Rule::qualified_field {}",
+                                                    qualified_field_name
+                                                );
 
-                                        let expression = inner_value.as_str();
+                                                let expression = ExpressionV2::new(
+                                                    ExpressionValue::TableNameAndFieldName(
+                                                        TableNameAndFieldName::new(
+                                                            Some(table_name.to_string()),
+                                                            field_name.to_string(),
+                                                        ),
+                                                    ),
+                                                );
 
-                                        let expression =
-                                            ExpressionV2::new(ExpressionValue::FieldName(
-                                                inner_value.as_str().to_string(),
-                                            ));
+                                                if lhs.is_none() {
+                                                    lhs = Some(expression);
+                                                } else {
+                                                    rhs = Some(expression);
+                                                }
+                                            }
+                                            Rule::id_token => {
+                                                println!("Rule::id_token {}", inner_value.as_str());
 
-                                        if lhs.is_none() {
-                                            lhs = Some(expression);
-                                        } else {
-                                            rhs = Some(expression);
-                                        }
-                                    }
-                                    Rule::constant => {
-                                        let value = inner_value.as_str().parse::<i32>().unwrap();
-                                        let int_constant_value = ConstantValue::Number(value);
+                                                let expression = ExpressionV2::new(
+                                                    ExpressionValue::TableNameAndFieldName(
+                                                        TableNameAndFieldName::new(
+                                                            None,
+                                                            inner_value.as_str().to_string(),
+                                                        ),
+                                                    ),
+                                                );
 
-                                        let constant = Constant::new(int_constant_value);
+                                                if lhs.is_none() {
+                                                    lhs = Some(expression);
+                                                } else {
+                                                    rhs = Some(expression);
+                                                }
+                                            }
+                                            _ => {}
+                                        },
+                                        None => {}
+                                    },
+                                    Rule::constant => match inner_value.into_inner().next() {
+                                        Some(inner_value) => match inner_value.as_rule() {
+                                            Rule::int_token => {
+                                                let value =
+                                                    inner_value.as_str().parse::<i32>().unwrap();
+                                                let int_constant_value =
+                                                    ConstantValue::Number(value);
 
-                                        let expression = ExpressionV2::new(
-                                            ExpressionValue::Constant(constant.clone()),
-                                        );
-                                        println!("parsed constant value: {:?}", constant);
+                                                let constant = Constant::new(int_constant_value);
 
-                                        rhs = Some(expression);
-                                    }
+                                                let expression = ExpressionV2::new(
+                                                    ExpressionValue::Constant(constant.clone()),
+                                                );
+
+                                                if lhs.is_none() {
+                                                    lhs = Some(expression);
+                                                } else {
+                                                    rhs = Some(expression);
+                                                }
+                                            }
+                                            Rule::string_token => {
+                                                let value = inner_value.as_str().to_string();
+                                                let string_constant_value =
+                                                    ConstantValue::String(value.clone());
+                                                let constant = Constant::new(string_constant_value);
+                                                let expression = ExpressionV2::new(
+                                                    ExpressionValue::Constant(constant.clone()),
+                                                );
+
+                                                if lhs.is_none() {
+                                                    lhs = Some(expression);
+                                                } else {
+                                                    rhs = Some(expression);
+                                                }
+                                            }
+                                            _ => {}
+                                        },
+                                        None => {}
+                                    },
                                     _ => {}
                                 }
                             });
