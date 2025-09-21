@@ -157,14 +157,14 @@ impl fmt::Display for CreateTableData {
 #[derive(Debug, Clone)]
 pub struct QueryData {
     pub table_name_list: Vec<String>,
-    pub field_name_list: Vec<String>,
+    pub field_name_list: Vec<TableNameAndFieldName>,
     pub predicate: PredicateV2,
 }
 
 impl QueryData {
     pub fn new(
         table_name_list: Vec<String>,
-        field_name_list: Vec<String>,
+        field_name_list: Vec<TableNameAndFieldName>,
         predicate: PredicateV2,
     ) -> Self {
         QueryData {
@@ -182,7 +182,11 @@ impl QueryData {
         }
         result.push_str("\nFields: ");
         for field in &self.field_name_list {
-            result.push_str(&format!("{} ", field));
+            result.push_str(&format!(
+                "{} {} ",
+                field.table_name.clone().unwrap_or("".to_string()),
+                field.field_name
+            ));
         }
         result.push_str("\nPredicate: ");
         result.push_str(&self.predicate.to_string());
@@ -315,13 +319,12 @@ pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
         .unwrap(); // get and unwrap the `file` rule; never fails
 
     let mut table_name = String::new();
-    let mut field_name_vec: Vec<String> = Vec::new();
 
     for record in file.into_inner() {
         match record.as_rule() {
             Rule::select_sql => {
                 let mut table_name_list: Vec<String> = Vec::new();
-                let mut field_name_list: Vec<String> = Vec::new();
+                let mut field_name_list: Vec<TableNameAndFieldName> = Vec::new();
 
                 let mut predicate: Option<PredicateV2> = None;
 
@@ -342,8 +345,30 @@ pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
                         Rule::select_list => inner_value.into_inner().for_each(|inner_value| {
                             match inner_value.as_rule() {
                                 Rule::field => {
-                                    field_name_vec.push(inner_value.as_str().to_string());
-                                    field_name_list.push(inner_value.as_str().to_string());
+                                    inner_value.into_inner().for_each(|inner_value| {
+                                        match inner_value.as_rule() {
+                                            Rule::id_token => {
+                                                let field_name = inner_value.as_str().to_string();
+                                                field_name_list.push(TableNameAndFieldName::new(
+                                                    None,
+                                                    field_name.to_string(),
+                                                ));
+                                            }
+                                            Rule::qualified_field => {
+                                                let mut inner_iter = inner_value.into_inner();
+                                                let table_name =
+                                                    inner_iter.next().unwrap().as_str();
+                                                let field_name =
+                                                    inner_iter.next().unwrap().as_str();
+
+                                                field_name_list.push(TableNameAndFieldName::new(
+                                                    Some(table_name.to_string()),
+                                                    field_name.to_string(),
+                                                ));
+                                            }
+                                            _ => {}
+                                        }
+                                    });
                                 }
                                 _ => {}
                             }
@@ -634,6 +659,14 @@ mod tests {
     #[test]
     fn test_select_join_query() {
         let sql = "select A, B from test_table, test_table2 where C = 'content'".to_string();
+        let parsed_sql = parse_sql(sql);
+        parsed_sql.unwrap().debug_print();
+    }
+
+    #[test]
+    fn test_select_table_name() {
+        let sql =
+            "select test_table.A, B from test_table, test_table2 where C = 'content'".to_string();
         let parsed_sql = parse_sql(sql);
         parsed_sql.unwrap().debug_print();
     }

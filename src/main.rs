@@ -114,7 +114,7 @@ fn main() -> Result<()> {
                     ParsedSQL::ShowTables => {
                         let select_query = QueryData::new(
                             vec!["table_catalog".to_string()],
-                            vec!["table_name".to_string()],
+                            vec![TableNameAndFieldName::new(None, "table_name".to_string())],
                             PredicateV2::new(vec![]),
                         );
 
@@ -131,10 +131,7 @@ fn main() -> Result<()> {
                                 .field_name_list
                                 .iter()
                                 .map(|field_name| {
-                                    let value = scan.get_value(TableNameAndFieldName::new(
-                                        None,
-                                        field_name.clone(),
-                                    ));
+                                    let value = scan.get_value(field_name.clone());
                                     return value;
                                 })
                                 .filter(|v| {

@@ -146,30 +146,29 @@ struct ProjectPlanV2 {
     // Fields for the plan
     plan: Box<dyn PlanV2>,
     schema: TableSchema,
+    fields: Vec<TableNameAndFieldName>,
 }
 
 impl ProjectPlanV2 {
-    pub fn new(plan: Box<dyn PlanV2>, field_list: Vec<String>) -> Self {
+    pub fn new(plan: Box<dyn PlanV2>, field_list: Vec<TableNameAndFieldName>) -> Self {
         let mut schema = TableSchema::new();
 
         for field in field_list.iter() {
-            schema.add(field.clone(), plan.get_schema().clone());
+            schema.add(field.field_name.clone(), plan.get_schema().clone());
         }
 
-        ProjectPlanV2 { plan, schema }
+        ProjectPlanV2 {
+            plan,
+            schema,
+            fields: field_list,
+        }
     }
 }
 
 impl PlanV2 for ProjectPlanV2 {
     fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
         let scan = self.plan.open()?;
-        let field_names = self
-            .schema
-            .fields()
-            .iter()
-            .map(|f| TableNameAndFieldName::new(None, f.clone()))
-            .collect(); // Assuming `fields()` returns `Vec<String>`
-        return Ok(Box::new(ProjectScanV2::new(scan, field_names)));
+        return Ok(Box::new(ProjectScanV2::new(scan, self.fields.clone())));
     }
 
     fn get_schema(&self) -> &TableSchema {

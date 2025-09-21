@@ -76,11 +76,22 @@ impl MetadataManager {
             .borrow()
             .check_if_table_exists(query_data.table_name_list[0].clone(), transaction.clone());
 
-        return self.table_manager.borrow().check_if_field_exists(
-            query_data.table_name_list[0].clone(),
-            query_data.field_name_list[0].clone(),
-            transaction.clone(),
-        );
+        match query_data.field_name_list[0].table_name {
+            Some(ref table_name) => {
+                return self.table_manager.borrow().check_if_field_exists(
+                    table_name.clone(),
+                    query_data.field_name_list[0].field_name.clone(),
+                    transaction.clone(),
+                )
+            }
+            None => {
+                return self.table_manager.borrow().check_if_field_exists(
+                    query_data.table_name_list[0].clone(),
+                    query_data.field_name_list[0].field_name.clone(),
+                    transaction.clone(),
+                );
+            }
+        }
     }
 
     pub fn get_layout(

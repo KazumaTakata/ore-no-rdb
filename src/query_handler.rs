@@ -33,8 +33,7 @@ pub fn handle_select_query(
                     .field_name_list
                     .iter()
                     .map(|field_name| {
-                        let value =
-                            scan.get_value(TableNameAndFieldName::new(None, field_name.clone()));
+                        let value = scan.get_value(field_name.clone());
                         return value;
                     })
                     .collect::<Vec<_>>();
@@ -79,7 +78,7 @@ mod tests {
         );
 
         let select_query = QueryData {
-            field_name_list: vec!["table_name".to_string()],
+            field_name_list: vec![TableNameAndFieldName::new(None, "table_name".to_string())],
             table_name_list: vec!["table_catalog".to_string()],
             predicate: PredicateV2::new(vec![term]),
         };
@@ -105,9 +104,39 @@ mod tests {
         );
 
         let select_query = QueryData {
-            field_name_list: vec!["table_name".to_string()],
+            field_name_list: vec![TableNameAndFieldName::new(None, "table_name".to_string())],
             table_name_list: vec!["field_catalog".to_string(), "table_catalog".to_string()],
             predicate: PredicateV2::new(vec![term]),
+        };
+
+        handle_select_query(select_query, &mut metadata_manager, transaction);
+    }
+
+    #[test]
+    fn test_handle_select_query_3() {
+        let database = Database::new();
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
+
+        let table_name_and_field_name =
+            TableNameAndFieldName::new(Some("table_catalog".to_string()), "table_name".to_string());
+
+        let term = TermV2::new(
+            ExpressionV2::new(ExpressionValue::TableNameAndFieldName(
+                table_name_and_field_name.clone(),
+            )),
+            ExpressionV2::new(ExpressionValue::Constant(Constant::new(
+                ConstantValue::String("posts".to_string()),
+            ))),
+        );
+
+        let select_query = QueryData {
+            field_name_list: vec![TableNameAndFieldName::new(
+                Some("table_catalog".to_string()),
+                "table_name".to_string(),
+            )],
+            table_name_list: vec!["field_catalog".to_string(), "table_catalog".to_string()],
+            predicate: PredicateV2::new(vec![]),
         };
 
         handle_select_query(select_query, &mut metadata_manager, transaction);
