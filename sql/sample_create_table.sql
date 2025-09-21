@@ -1,1 +1,1 @@
-CREATE TABLE posts ( title VARCHAR(200), content VARCHAR(200) )
+CREATE TABLE posts_2 ( title VARCHAR(10), content VARCHAR(10) )

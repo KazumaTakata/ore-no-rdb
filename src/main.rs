@@ -46,7 +46,9 @@ use parser::{parse_sql, Rule, SQLParser};
 use crate::database::Database;
 use crate::metadata_manager::MetadataManager;
 use crate::parser::{ParsedSQL, QueryData};
-use crate::plan_v2::{create_query_plan, execute_create_table, execute_delete, execute_insert};
+use crate::plan_v2::{
+    create_query_plan, execute_create_table, execute_delete, execute_insert, execute_update,
+};
 use crate::predicate::{ConstantValue, TableNameAndFieldName};
 use crate::predicate_v3::PredicateV2;
 use crate::query_handler::handle_select_query;
@@ -82,6 +84,10 @@ fn handle_parsed_sql(
                 metadata_manager,
                 create_table_data.clone(),
             );
+        }
+        ParsedSQL::Update(update_data) => {
+            // handle_update_query(update_data.clone(), metadata_manager, transaction.clone());
+            execute_update(transaction.clone(), metadata_manager, update_data.clone());
         }
 
         ParsedSQL::DescribeTable { table_name } => {
