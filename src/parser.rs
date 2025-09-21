@@ -312,283 +312,296 @@ pub fn parse_predicate(inner_value: Pair<'_, Rule>) -> Option<PredicateV2> {
     return Some(PredicateV2::new(terms));
 }
 
+fn parse_select_sql(record: Pair<Rule>) -> QueryData {
+    let mut table_name_list: Vec<String> = Vec::new();
+    let mut field_name_list: Vec<TableNameAndFieldName> = Vec::new();
+
+    let mut predicate: Option<PredicateV2> = None;
+
+    record
+        .into_inner()
+        .for_each(|inner_value| match inner_value.as_rule() {
+            Rule::table_list => {
+                inner_value
+                    .into_inner()
+                    .for_each(|inner_value| match inner_value.as_rule() {
+                        Rule::id_token => {
+                            let table_name = inner_value.as_str().to_string();
+                            table_name_list.push(table_name.clone());
+                        }
+                        _ => {}
+                    });
+            }
+            Rule::select_list => inner_value
+                .into_inner()
+                .for_each(|inner_value| match inner_value.as_rule() {
+                    Rule::field => {
+                        inner_value.into_inner().for_each(|inner_value| {
+                            match inner_value.as_rule() {
+                                Rule::id_token => {
+                                    let field_name = inner_value.as_str().to_string();
+                                    field_name_list.push(TableNameAndFieldName::new(
+                                        None,
+                                        field_name.to_string(),
+                                    ));
+                                }
+                                Rule::qualified_field => {
+                                    let mut inner_iter = inner_value.into_inner();
+                                    let table_name = inner_iter.next().unwrap().as_str();
+                                    let field_name = inner_iter.next().unwrap().as_str();
+
+                                    field_name_list.push(TableNameAndFieldName::new(
+                                        Some(table_name.to_string()),
+                                        field_name.to_string(),
+                                    ));
+                                }
+                                _ => {}
+                            }
+                        });
+                    }
+                    _ => {}
+                }),
+            Rule::predicate => {
+                predicate = parse_predicate(inner_value);
+            }
+            _ => {}
+        });
+    let query_data = QueryData::new(
+        table_name_list,
+        field_name_list,
+        predicate.unwrap_or(PredicateV2::new(vec![])),
+    );
+
+    return query_data;
+}
+
+fn parse_insert_sql(record: Pair<Rule>) -> InsertData {
+    // Handle INSERT SQL
+    let mut table_name: Option<String> = None;
+    let mut field_name_vec: Vec<String> = Vec::new();
+    let mut constant_list: Vec<Constant> = Vec::new();
+    record
+        .into_inner()
+        .for_each(|inner_value| match inner_value.as_rule() {
+            Rule::id_token => {
+                table_name = Some(inner_value.as_str().to_string());
+            }
+            Rule::field_list => {
+                inner_value
+                    .into_inner()
+                    .for_each(|inner_value| match inner_value.as_rule() {
+                        Rule::field => {
+                            field_name_vec.push(inner_value.as_str().to_string());
+                        }
+                        _ => {}
+                    });
+            }
+            Rule::constant_list => {
+                inner_value
+                    .into_inner()
+                    .for_each(|inner_value| match inner_value.as_rule() {
+                        Rule::constant => match inner_value.into_inner().next() {
+                            Some(inner_value) => match inner_value.as_rule() {
+                                Rule::int_token => {
+                                    let value = inner_value.as_str().parse::<i32>().unwrap();
+                                    let int_constant_value = ConstantValue::Number(value);
+                                    let constant = Constant::new(int_constant_value);
+                                    constant_list.push(constant);
+                                }
+                                Rule::string_token => {
+                                    let value = inner_value
+                                        .into_inner()
+                                        .find(|p| p.as_rule() == Rule::string_content)
+                                        .map(|p| p.as_str().to_string())
+                                        .unwrap_or_default();
+                                    let string_constant_value =
+                                        ConstantValue::String(value.clone());
+                                    let constant = Constant::new(string_constant_value);
+                                    constant_list.push(constant);
+                                }
+                                _ => {}
+                            },
+                            None => {}
+                        },
+                        _ => {}
+                    });
+            }
+            _ => {}
+        });
+
+    let insert_data = InsertData::new(table_name.unwrap(), field_name_vec, constant_list);
+
+    return insert_data;
+}
+
+fn parse_delete_sql(record: Pair<Rule>) -> DeleteData {
+    let mut table_name: Option<String> = None;
+    let mut predicate: Option<PredicateV2> = None;
+
+    record
+        .into_inner()
+        .for_each(|inner_value| match inner_value.as_rule() {
+            Rule::id_token => {
+                table_name = Some(inner_value.as_str().to_string());
+            }
+            Rule::predicate => {
+                predicate = parse_predicate(inner_value);
+            }
+            _ => {}
+        });
+
+    let delete_data = DeleteData::new(table_name.unwrap(), predicate.unwrap());
+
+    return delete_data;
+}
+
+fn parse_update_sql(record: Pair<Rule>) -> UpdateData {
+    let mut table_name: Option<String> = None;
+    let mut field_name: Option<String> = None;
+    let mut new_value: Option<Constant> = None;
+    let mut predicate: Option<PredicateV2> = None;
+
+    record
+        .into_inner()
+        .for_each(|inner_value| match inner_value.as_rule() {
+            Rule::id_token => {
+                table_name = Some(inner_value.as_str().to_string());
+            }
+            Rule::field => {
+                if field_name.is_none() {
+                    field_name = Some(inner_value.as_str().to_string());
+                }
+            }
+            Rule::constant => {
+                if new_value.is_none() {
+                    inner_value
+                        .into_inner()
+                        .for_each(|inner_value| match inner_value.as_rule() {
+                            Rule::int_token => {
+                                let value = inner_value.as_str().parse::<i32>().unwrap();
+                                let int_constant_value = ConstantValue::Number(value);
+                                let constant = Constant::new(int_constant_value);
+                                new_value = Some(constant);
+                            }
+                            Rule::string_token => {
+                                let value = inner_value
+                                    .into_inner()
+                                    .find(|p| p.as_rule() == Rule::string_content)
+                                    .map(|p| p.as_str().to_string())
+                                    .unwrap_or_default();
+                                let string_constant_value = ConstantValue::String(value.clone());
+                                let constant = Constant::new(string_constant_value);
+                                new_value = Some(constant);
+                            }
+                            _ => {}
+                        });
+                }
+            }
+            Rule::predicate => {
+                predicate = parse_predicate(inner_value);
+            }
+            _ => {}
+        });
+
+    let update_data = UpdateData::new(
+        table_name.unwrap(),
+        field_name.unwrap(),
+        new_value.unwrap(),
+        predicate.unwrap(),
+    );
+
+    return update_data;
+}
+
+fn parse_create_table_sql(record: Pair<Rule>) -> CreateTableData {
+    let mut table_name: Option<String> = None;
+    let mut schema = TableSchema {
+        fields: Vec::new(),
+        field_infos: HashMap::new(),
+    };
+
+    record
+        .into_inner()
+        .for_each(|inner_value| match inner_value.as_rule() {
+            Rule::id_token => {
+                table_name = Some(inner_value.as_str().to_string());
+            }
+            Rule::field_definitions => {
+                let mut table_field_infos: Vec<TableFieldInfo> = vec![];
+                inner_value
+                    .into_inner()
+                    .for_each(|inner_value| match inner_value.as_rule() {
+                        Rule::field_definition => {
+                            let mut field_name = String::new();
+                            let mut field_type = TableFieldType::INTEGER;
+                            let mut field_length: Option<i32> = None;
+
+                            inner_value.into_inner().for_each(|inner_value| {
+                                match inner_value.as_rule() {
+                                    Rule::id_token => {
+                                        field_name = inner_value.as_str().to_string();
+                                    }
+                                    Rule::text => {
+                                        field_type = TableFieldType::VARCHAR;
+                                    }
+                                    Rule::integer => {
+                                        field_type = TableFieldType::INTEGER;
+                                    }
+                                    Rule::int_token => {
+                                        field_length =
+                                            Some(inner_value.as_str().parse::<i32>().unwrap());
+                                    }
+
+                                    _ => {}
+                                }
+                            });
+
+                            schema.add_field(field_name, field_type, field_length.unwrap_or(0));
+                        }
+                        _ => {}
+                    });
+            }
+            _ => {}
+        });
+
+    let create_table_data = CreateTableData {
+        table_name: table_name.unwrap(),
+        schema,
+    };
+
+    return create_table_data;
+}
+
 pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
     let file = SQLParser::parse(Rule::sql, &sql)
         .expect("unsuccessful parse") // unwrap the parse result
         .next()
         .unwrap(); // get and unwrap the `file` rule; never fails
 
-    let mut table_name = String::new();
-
     for record in file.into_inner() {
         match record.as_rule() {
             Rule::select_sql => {
-                let mut table_name_list: Vec<String> = Vec::new();
-                let mut field_name_list: Vec<TableNameAndFieldName> = Vec::new();
-
-                let mut predicate: Option<PredicateV2> = None;
-
-                record
-                    .into_inner()
-                    .for_each(|inner_value| match inner_value.as_rule() {
-                        Rule::table_list => {
-                            inner_value.into_inner().for_each(|inner_value| {
-                                match inner_value.as_rule() {
-                                    Rule::id_token => {
-                                        table_name = inner_value.as_str().to_string();
-                                        table_name_list.push(table_name.clone());
-                                    }
-                                    _ => {}
-                                }
-                            });
-                        }
-                        Rule::select_list => inner_value.into_inner().for_each(|inner_value| {
-                            match inner_value.as_rule() {
-                                Rule::field => {
-                                    inner_value.into_inner().for_each(|inner_value| {
-                                        match inner_value.as_rule() {
-                                            Rule::id_token => {
-                                                let field_name = inner_value.as_str().to_string();
-                                                field_name_list.push(TableNameAndFieldName::new(
-                                                    None,
-                                                    field_name.to_string(),
-                                                ));
-                                            }
-                                            Rule::qualified_field => {
-                                                let mut inner_iter = inner_value.into_inner();
-                                                let table_name =
-                                                    inner_iter.next().unwrap().as_str();
-                                                let field_name =
-                                                    inner_iter.next().unwrap().as_str();
-
-                                                field_name_list.push(TableNameAndFieldName::new(
-                                                    Some(table_name.to_string()),
-                                                    field_name.to_string(),
-                                                ));
-                                            }
-                                            _ => {}
-                                        }
-                                    });
-                                }
-                                _ => {}
-                            }
-                        }),
-                        Rule::predicate => {
-                            predicate = parse_predicate(inner_value);
-                        }
-                        _ => {}
-                    });
-                let query_data = QueryData::new(
-                    table_name_list,
-                    field_name_list,
-                    predicate.unwrap_or(PredicateV2::new(vec![])),
-                );
-
-                return Some(ParsedSQL::Query(query_data));
+                let select_query = parse_select_sql(record);
+                return Some(ParsedSQL::Query(select_query));
             }
-            Rule::insert_sql => {
-                // Handle INSERT SQL
-                let mut table_name: Option<String> = None;
-                let mut field_name_vec: Vec<String> = Vec::new();
-                let mut constant_list: Vec<Constant> = Vec::new();
-                record
-                    .into_inner()
-                    .for_each(|inner_value| match inner_value.as_rule() {
-                        Rule::id_token => {
-                            table_name = Some(inner_value.as_str().to_string());
-                        }
-                        Rule::field_list => {
-                            inner_value.into_inner().for_each(|inner_value| {
-                                match inner_value.as_rule() {
-                                    Rule::field => {
-                                        field_name_vec.push(inner_value.as_str().to_string());
-                                    }
-                                    _ => {}
-                                }
-                            });
-                        }
-                        Rule::constant_list => {
-                            inner_value.into_inner().for_each(|inner_value| {
-                                match inner_value.as_rule() {
-                                    Rule::constant => match inner_value.into_inner().next() {
-                                        Some(inner_value) => match inner_value.as_rule() {
-                                            Rule::int_token => {
-                                                let value =
-                                                    inner_value.as_str().parse::<i32>().unwrap();
-                                                let int_constant_value =
-                                                    ConstantValue::Number(value);
-                                                let constant = Constant::new(int_constant_value);
-                                                constant_list.push(constant);
-                                            }
-                                            Rule::string_token => {
-                                                let value = inner_value
-                                                    .into_inner()
-                                                    .find(|p| p.as_rule() == Rule::string_content)
-                                                    .map(|p| p.as_str().to_string())
-                                                    .unwrap_or_default();
-                                                let string_constant_value =
-                                                    ConstantValue::String(value.clone());
-                                                let constant = Constant::new(string_constant_value);
-                                                constant_list.push(constant);
-                                            }
-                                            _ => {}
-                                        },
-                                        None => {}
-                                    },
-                                    _ => {}
-                                }
-                            });
-                        }
-                        _ => {}
-                    });
 
-                let insert_data =
-                    InsertData::new(table_name.unwrap(), field_name_vec, constant_list);
+            Rule::insert_sql => {
+                let insert_data = parse_insert_sql(record);
                 return Some(ParsedSQL::Insert(insert_data));
             }
 
             Rule::delete_sql => {
-                let mut table_name: Option<String> = None;
-                let mut predicate: Option<PredicateV2> = None;
-
-                record
-                    .into_inner()
-                    .for_each(|inner_value| match inner_value.as_rule() {
-                        Rule::id_token => {
-                            table_name = Some(inner_value.as_str().to_string());
-                        }
-                        Rule::predicate => {
-                            predicate = parse_predicate(inner_value);
-                        }
-                        _ => {}
-                    });
-
-                let delete_data = DeleteData::new(table_name.unwrap(), predicate.unwrap());
+                let delete_data = parse_delete_sql(record);
                 return Some(ParsedSQL::Delete(delete_data));
             }
 
             Rule::update_sql => {
-                let mut table_name: Option<String> = None;
-                let mut field_name: Option<String> = None;
-                let mut new_value: Option<Constant> = None;
-                let mut predicate: Option<PredicateV2> = None;
-
-                record
-                    .into_inner()
-                    .for_each(|inner_value| match inner_value.as_rule() {
-                        Rule::id_token => {
-                            table_name = Some(inner_value.as_str().to_string());
-                        }
-                        Rule::field => {
-                            if field_name.is_none() {
-                                field_name = Some(inner_value.as_str().to_string());
-                            }
-                        }
-                        Rule::constant => {
-                            if new_value.is_none() {
-                                inner_value
-                                    .into_inner()
-                                    .for_each(|inner_value| match inner_value.as_rule() {
-                                        Rule::int_token => {
-                                            let value =
-                                                inner_value.as_str().parse::<i32>().unwrap();
-                                            let int_constant_value = ConstantValue::Number(value);
-                                            let constant = Constant::new(int_constant_value);
-                                            new_value = Some(constant);
-                                        }
-                                        Rule::string_token => {
-                                            let value = inner_value
-                                                .into_inner()
-                                                .find(|p| p.as_rule() == Rule::string_content)
-                                                .map(|p| p.as_str().to_string())
-                                                .unwrap_or_default();
-                                            let string_constant_value =
-                                                ConstantValue::String(value.clone());
-                                            let constant = Constant::new(string_constant_value);
-                                            new_value = Some(constant);
-                                        }
-                                        _ => {}
-                                    });
-                            }
-                        }
-                        Rule::predicate => {
-                            predicate = parse_predicate(inner_value);
-                        }
-                        _ => {}
-                    });
-
-                let update_data = UpdateData::new(
-                    table_name.unwrap(),
-                    field_name.unwrap(),
-                    new_value.unwrap(),
-                    predicate.unwrap(),
-                );
+                let update_data = parse_update_sql(record);
                 return Some(ParsedSQL::Update(update_data));
             }
 
             Rule::create_table_sql => {
-                let mut table_name: Option<String> = None;
-                let mut schema = TableSchema {
-                    fields: Vec::new(),
-                    field_infos: HashMap::new(),
-                };
-
-                record
-                    .into_inner()
-                    .for_each(|inner_value| match inner_value.as_rule() {
-                        Rule::id_token => {
-                            table_name = Some(inner_value.as_str().to_string());
-                        }
-                        Rule::field_definitions => {
-                            let mut table_field_infos: Vec<TableFieldInfo> = vec![];
-                            inner_value.into_inner().for_each(|inner_value| {
-                                match inner_value.as_rule() {
-                                    Rule::field_definition => {
-                                        let mut field_name = String::new();
-                                        let mut field_type = TableFieldType::INTEGER;
-                                        let mut field_length: Option<i32> = None;
-
-                                        inner_value.into_inner().for_each(|inner_value| {
-                                            match inner_value.as_rule() {
-                                                Rule::id_token => {
-                                                    field_name = inner_value.as_str().to_string();
-                                                }
-                                                Rule::text => {
-                                                    field_type = TableFieldType::VARCHAR;
-                                                }
-                                                Rule::integer => {
-                                                    field_type = TableFieldType::INTEGER;
-                                                }
-                                                Rule::int_token => {
-                                                    field_length = Some(
-                                                        inner_value
-                                                            .as_str()
-                                                            .parse::<i32>()
-                                                            .unwrap(),
-                                                    );
-                                                }
-
-                                                _ => {}
-                                            }
-                                        });
-
-                                        schema.add_field(
-                                            field_name,
-                                            field_type,
-                                            field_length.unwrap_or(0),
-                                        );
-                                    }
-                                    _ => {}
-                                }
-                            });
-                        }
-                        _ => {}
-                    });
-
-                let create_table_data = CreateTableData {
-                    table_name: table_name.unwrap(),
-                    schema,
-                };
+                let create_table_data = parse_create_table_sql(record);
                 return Some(ParsedSQL::CreateTable(create_table_data));
             }
             Rule::show_tables_sql => {
