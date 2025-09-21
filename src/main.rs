@@ -1,16 +1,8 @@
 use rustyline::error::ReadlineError;
 use rustyline::{DefaultEditor, Result};
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::vec;
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    fs::{self, File},
-    io::Write,
-    iter::Map,
-    os::unix::fs::FileExt,
-    path::Path,
-    rc::Rc,
-};
 
 mod block;
 mod buffer_manager;
@@ -58,6 +50,86 @@ use crate::plan_v2::{create_query_plan, execute_create_table, execute_delete, ex
 use crate::predicate::{ConstantValue, TableNameAndFieldName};
 use crate::predicate_v3::PredicateV2;
 use crate::query_handler::handle_select_query;
+use crate::transaction_v2::TransactionV2;
+
+fn handle_parsed_sql(
+    parsed_sql: &ParsedSQL,
+    metadata_manager: &mut MetadataManager,
+    transaction: Rc<RefCell<TransactionV2>>,
+) -> () {
+    match parsed_sql {
+        ParsedSQL::Query(select_query) => {
+            handle_select_query(select_query.clone(), metadata_manager, transaction.clone());
+        }
+        ParsedSQL::Insert(insert_data) => {
+            execute_insert(transaction.clone(), metadata_manager, insert_data.clone());
+            transaction.borrow_mut().commit();
+        }
+        ParsedSQL::Delete(delete_data) => {
+            execute_delete(transaction.clone(), metadata_manager, delete_data.clone());
+            transaction.borrow_mut().commit();
+        }
+        ParsedSQL::CreateTable(create_table_data) => {
+            execute_create_table(
+                transaction.clone(),
+                metadata_manager,
+                create_table_data.clone(),
+            );
+        }
+
+        ParsedSQL::DescribeTable { table_name } => {
+            let layout = metadata_manager
+                .get_layout(table_name.clone(), transaction.clone())
+                .unwrap();
+
+            println!("schema for table '{:?}'", layout.schema);
+        }
+
+        ParsedSQL::ShowTables => {
+            let select_query = QueryData::new(
+                vec!["table_catalog".to_string()],
+                vec![TableNameAndFieldName::new(None, "table_name".to_string())],
+                PredicateV2::new(vec![]),
+            );
+
+            let mut plan =
+                create_query_plan(&select_query, transaction.clone(), metadata_manager).unwrap();
+            let mut scan = plan.open().unwrap();
+            scan.move_to_before_first();
+            while scan.next().unwrap() {
+                let results = select_query
+                    .field_name_list
+                    .iter()
+                    .map(|field_name| {
+                        let value = scan.get_value(field_name.clone());
+                        return value;
+                    })
+                    .filter(|v| {
+                        if let Some(constant_value) = v {
+                            return match constant_value.clone() {
+                                ConstantValue::String(s) => {
+                                    s != "table_catalog"
+                                        && s != "field_catalog"
+                                        && s != "index_catalog"
+                                }
+                                _ => true,
+                            };
+                        }
+                        return false;
+                    })
+                    // 空になったvectorは除外
+                    .collect::<Vec<_>>();
+
+                if results.len() == 0 {
+                    continue;
+                }
+                println!("Results: {:?}", results);
+            }
+        }
+        _ => panic!("Expected a Query variant from parse_sql"),
+    };
+    // ここにParsedSQLを処理するコードを追加
+}
 
 fn main() -> Result<()> {
     let database = Database::new();
@@ -79,93 +151,7 @@ fn main() -> Result<()> {
                 println!("Line: {}", line);
 
                 let parsed_sql = parse_sql(line.to_string());
-                match &parsed_sql[0] {
-                    ParsedSQL::Query(select_query) => {
-                        handle_select_query(
-                            select_query.clone(),
-                            &mut metadata_manager,
-                            transaction.clone(),
-                        );
-                    }
-                    ParsedSQL::Insert(insert_data) => {
-                        execute_insert(
-                            transaction.clone(),
-                            &mut metadata_manager,
-                            insert_data.clone(),
-                        );
-                        transaction.borrow_mut().commit();
-                    }
-                    ParsedSQL::Delete(delete_data) => {
-                        execute_delete(
-                            transaction.clone(),
-                            &mut metadata_manager,
-                            delete_data.clone(),
-                        );
-                        transaction.borrow_mut().commit();
-                    }
-                    ParsedSQL::CreateTable(create_table_data) => {
-                        execute_create_table(
-                            transaction.clone(),
-                            &mut metadata_manager,
-                            create_table_data.clone(),
-                        );
-                    }
-
-                    ParsedSQL::DescribeTable { table_name } => {
-                        let layout = metadata_manager
-                            .get_layout(table_name.clone(), transaction.clone())
-                            .unwrap();
-
-                        println!("schema for table '{:?}'", layout.schema);
-                    }
-
-                    ParsedSQL::ShowTables => {
-                        let select_query = QueryData::new(
-                            vec!["table_catalog".to_string()],
-                            vec![TableNameAndFieldName::new(None, "table_name".to_string())],
-                            PredicateV2::new(vec![]),
-                        );
-
-                        let mut plan = create_query_plan(
-                            &select_query,
-                            transaction.clone(),
-                            &mut metadata_manager,
-                        )
-                        .unwrap();
-                        let mut scan = plan.open().unwrap();
-                        scan.move_to_before_first();
-                        while scan.next().unwrap() {
-                            let results = select_query
-                                .field_name_list
-                                .iter()
-                                .map(|field_name| {
-                                    let value = scan.get_value(field_name.clone());
-                                    return value;
-                                })
-                                .filter(|v| {
-                                    if let Some(constant_value) = v {
-                                        return match constant_value.clone() {
-                                            ConstantValue::String(s) => {
-                                                s != "table_catalog"
-                                                    && s != "field_catalog"
-                                                    && s != "index_catalog"
-                                            }
-                                            _ => true,
-                                        };
-                                    }
-                                    return false;
-                                })
-                                // 空になったvectorは除外
-                                .collect::<Vec<_>>();
-
-                            if results.len() == 0 {
-                                continue;
-                            }
-                            println!("Results: {:?}", results);
-                        }
-                    }
-                    _ => panic!("Expected a Query variant from parse_sql"),
-                };
+                handle_parsed_sql(&parsed_sql[0], &mut metadata_manager, transaction.clone());
             }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
