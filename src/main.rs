@@ -78,28 +78,36 @@ fn main() -> Result<()> {
                 rl.add_history_entry(line.as_str())?;
                 println!("Line: {}", line);
 
-                let parsed_sql = parse_sql(line.to_string()).unwrap();
-                match parsed_sql {
+                let parsed_sql = parse_sql(line.to_string());
+                match &parsed_sql[0] {
                     ParsedSQL::Query(select_query) => {
                         handle_select_query(
-                            select_query,
+                            select_query.clone(),
                             &mut metadata_manager,
                             transaction.clone(),
                         );
                     }
                     ParsedSQL::Insert(insert_data) => {
-                        execute_insert(transaction.clone(), &mut metadata_manager, insert_data);
+                        execute_insert(
+                            transaction.clone(),
+                            &mut metadata_manager,
+                            insert_data.clone(),
+                        );
                         transaction.borrow_mut().commit();
                     }
                     ParsedSQL::Delete(delete_data) => {
-                        execute_delete(transaction.clone(), &mut metadata_manager, delete_data);
+                        execute_delete(
+                            transaction.clone(),
+                            &mut metadata_manager,
+                            delete_data.clone(),
+                        );
                         transaction.borrow_mut().commit();
                     }
                     ParsedSQL::CreateTable(create_table_data) => {
                         execute_create_table(
                             transaction.clone(),
                             &mut metadata_manager,
-                            create_table_data,
+                            create_table_data.clone(),
                         );
                     }
 

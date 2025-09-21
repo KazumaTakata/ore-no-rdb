@@ -384,16 +384,21 @@ mod tests {
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let parsed_sql =
-            parse_sql("insert into posts_2 (title, content) values ('title1', 'body')".to_string())
-                .unwrap();
+        let parsed_sql_list =
+            parse_sql("insert into posts_2 (title, content) values ('title1', 'body')".to_string());
+
+        let parsed_sql = &parsed_sql_list[0];
 
         let insert_data = match parsed_sql {
             crate::parser::ParsedSQL::Insert(q) => q,
             _ => panic!("Expected a Insert variant from parse_sql"),
         };
 
-        execute_insert(transaction.clone(), &mut metadata_manager, insert_data);
+        execute_insert(
+            transaction.clone(),
+            &mut metadata_manager,
+            insert_data.clone(),
+        );
 
         transaction.borrow_mut().commit();
 
@@ -409,7 +414,9 @@ mod tests {
         let create_table_sql =
             "create table test_table_11 (A_1 integer, B_1 varchar(10))".to_string();
 
-        let create_table_data = match parse_sql(create_table_sql).unwrap() {
+        let parsed_sql_list = parse_sql(create_table_sql.clone());
+
+        let create_table_data = match &parsed_sql_list[0] {
             crate::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
@@ -417,7 +424,7 @@ mod tests {
         let result = execute_create_table(
             transaction.clone(),
             &mut metadata_manager,
-            create_table_data,
+            create_table_data.clone(),
         );
 
         if result.is_err() {
@@ -433,7 +440,9 @@ mod tests {
         let insert_sql =
             "insert into test_table_11 (A_1, B_1) values (42, 'Hello World!')".to_string();
 
-        let insert_data = match parse_sql(insert_sql).unwrap() {
+        let parsed_sql_list = parse_sql(insert_sql.clone());
+
+        let insert_data = match &parsed_sql_list[0] {
             crate::parser::ParsedSQL::Insert(q) => q,
             _ => panic!("Expected a Insert variant from parse_sql"),
         };
@@ -447,7 +456,9 @@ mod tests {
         let insert_sql_2 =
             "insert into test_table_11 (A_1, B_1) values (42, 'Hello World!')".to_string();
 
-        let insert_data_2 = match parse_sql(insert_sql_2).unwrap() {
+        let parsed_sql_list = parse_sql(insert_sql_2.clone());
+
+        let insert_data_2 = match &parsed_sql_list[0] {
             crate::parser::ParsedSQL::Insert(q) => q,
             _ => panic!("Expected a Insert variant from parse_sql"),
         };
@@ -467,10 +478,9 @@ mod tests {
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let parsed_sql = parse_sql(
+        let parsed_sql = &parse_sql(
             "select A, B, A_1, B_1 from test_table_10, test_table_11 where A = B_1".to_string(),
-        )
-        .unwrap();
+        )[0];
 
         let query_data = match parsed_sql {
             crate::parser::ParsedSQL::Query(q) => q,
@@ -520,12 +530,11 @@ mod tests {
 
         // mutable_table_manager.create_table("test_table".to_string(), &schema, transaction.clone());
 
-        let parsed_sql = parse_sql(
+        let parsed_sql_list = parse_sql(
             "insert into test_table (A, B) values (44, 'Hello World yay!111')".to_string(),
-        )
-        .unwrap();
+        );
 
-        let insert_data = match parsed_sql {
+        let insert_data = match &parsed_sql_list[0] {
             crate::parser::ParsedSQL::Insert(q) => q,
             _ => panic!("Expected a Insert variant from parse_sql"),
         };
@@ -534,9 +543,9 @@ mod tests {
 
         // transaction.borrow_mut().commit();
 
-        let parsed_sql = parse_sql("select A, B from test_table where A = 42".to_string()).unwrap();
+        let parsed_sql_list = parse_sql("select A, B from test_table where A = 42".to_string());
 
-        let query_data = match parsed_sql {
+        let query_data = match &parsed_sql_list[0] {
             crate::parser::ParsedSQL::Query(q) => q,
             _ => panic!("Expected a Query variant from parse_sql"),
         };

@@ -220,10 +220,9 @@ mod tests {
 
         let parsed_sql = parse_sql(
             "insert into test_table (A, B) values (44, 'Hello World yay!111')".to_string(),
-        )
-        .unwrap();
+        );
 
-        let insert_data = match parsed_sql {
+        let insert_data = match &parsed_sql[0] {
             crate::parser::ParsedSQL::Insert(q) => q,
             _ => panic!("Expected a Insert variant from parse_sql"),
         };
@@ -237,7 +236,7 @@ mod tests {
 
         let index_update_planner = IndexUpdatePlanner::new(Rc::new(RefCell::new(metadata_manager)));
 
-        index_update_planner.execute_insert(insert_data, transaction.clone());
+        index_update_planner.execute_insert(insert_data.clone(), transaction.clone());
 
         transaction.borrow_mut().commit();
 

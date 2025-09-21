@@ -1,4 +1,5 @@
-WHITESPACE = _{ " " | "\t" }
+
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
 id_token = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 qualified_field = { id_token ~ "." ~ id_token }
 field = { qualified_field | id_token }
@@ -22,13 +23,15 @@ create = @{ ^"create" ~ !(ASCII_ALPHANUMERIC | "_") }
 table = @{ ^"table" ~ !(ASCII_ALPHANUMERIC | "_") }
 table_name = @{ (ASCII_ALPHA | "_")+ }
 column_name = @{ (ASCII_ALPHA | "_")+ }
-select_sql = { SOI ~ select ~ select_list ~ from ~ table_list ~ ( "where" ~ predicate )? ~EOI }
-insert_sql = { SOI ~ insert ~ "into" ~ id_token ~ field_list ~ "values" ~ constant_list ~ EOI }
-delete_sql = { SOI ~ ^"delete" ~ "from" ~ id_token ~ ( "where" ~ predicate )? ~ EOI }
-update_sql = { SOI ~ ^"update" ~ id_token ~ "set" ~ field ~ "=" ~ constant ~ ( "where" ~ predicate )? ~ EOI }
-show_tables_sql = { SOI ~ ^"show" ~ "tables" ~ EOI }
-describe_table_sql = { SOI ~ ^"describe" ~ id_token ~ EOI }
+select_sql = { select ~ select_list ~ from ~ table_list ~ ( "where" ~ predicate )? }
+insert_sql = { insert ~ "into" ~ id_token ~ field_list ~ "values" ~ constant_list }
+delete_sql = { ^"delete" ~ "from" ~ id_token ~ ( "where" ~ predicate )? }
+update_sql = { ^"update" ~ id_token ~ "set" ~ field ~ "=" ~ constant ~ ( "where" ~ predicate )? }
+show_tables_sql = { ^"show" ~ "tables" }
+describe_table_sql = { ^"describe" ~ id_token }
 field_definition = { id_token ~ integer | id_token ~ text ~ "(" ~ int_token ~ ")" }
 field_definitions = { "(" ~ ( field_definition ) ~ ("," ~ ( field_definition )) ~ ")" }
-create_table_sql = { SOI ~ create ~ table ~ id_token ~ field_definitions ~ EOI }
-sql = { select_sql | insert_sql | create_table_sql | delete_sql | update_sql | show_tables_sql | describe_table_sql }
+create_table_sql = { create ~ table ~ id_token ~ field_definitions }
+sql_statement = { select_sql | insert_sql | create_table_sql | delete_sql | update_sql | show_tables_sql | describe_table_sql }
+sql_list = { sql_statement ~ (";" ~ sql_statement)* ~ ";"? }
+sql = { SOI ~ sql_list ~ EOI }

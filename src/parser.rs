@@ -24,6 +24,7 @@ pub struct InsertData {
     pub value_list: Vec<Constant>,
 }
 
+#[derive(Debug, Clone)]
 pub struct DeleteData {
     pub table_name: String,
     pub predicate: PredicateV2,
@@ -38,6 +39,7 @@ impl DeleteData {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct UpdateData {
     pub table_name: String,
     pub field_name: String,
@@ -141,6 +143,7 @@ impl ParsedSQL {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct CreateTableData {
     pub table_name: String,
     pub schema: TableSchema,
@@ -572,66 +575,85 @@ fn parse_create_table_sql(record: Pair<Rule>) -> CreateTableData {
     return create_table_data;
 }
 
-pub fn parse_sql(sql: String) -> Option<ParsedSQL> {
+pub fn parse_sql(sql: String) -> Vec<ParsedSQL> {
     let file = SQLParser::parse(Rule::sql, &sql)
         .expect("unsuccessful parse") // unwrap the parse result
         .next()
         .unwrap(); // get and unwrap the `file` rule; never fails
 
     for record in file.into_inner() {
+        let mut result: Vec<ParsedSQL> = Vec::new();
         match record.as_rule() {
-            Rule::select_sql => {
-                let select_query = parse_select_sql(record);
-                return Some(ParsedSQL::Query(select_query));
-            }
-
-            Rule::insert_sql => {
-                let insert_data = parse_insert_sql(record);
-                return Some(ParsedSQL::Insert(insert_data));
-            }
-
-            Rule::delete_sql => {
-                let delete_data = parse_delete_sql(record);
-                return Some(ParsedSQL::Delete(delete_data));
-            }
-
-            Rule::update_sql => {
-                let update_data = parse_update_sql(record);
-                return Some(ParsedSQL::Update(update_data));
-            }
-
-            Rule::create_table_sql => {
-                let create_table_data = parse_create_table_sql(record);
-                return Some(ParsedSQL::CreateTable(create_table_data));
-            }
-            Rule::show_tables_sql => {
-                return Some(ParsedSQL::ShowTables);
-            }
-
-            Rule::describe_table_sql => {
-                let mut table_name: Option<String> = None;
-
+            Rule::sql_list => {
                 record
                     .into_inner()
                     .for_each(|inner_value| match inner_value.as_rule() {
-                        Rule::id_token => {
-                            table_name = Some(inner_value.as_str().to_string());
+                        Rule::sql_statement => {
+                            inner_value.into_inner().for_each(|inner_value| {
+                                match inner_value.as_rule() {
+                                    Rule::select_sql => {
+                                        let select_query = parse_select_sql(inner_value);
+                                        result.push(ParsedSQL::Query(select_query));
+                                    }
+
+                                    Rule::insert_sql => {
+                                        let insert_data = parse_insert_sql(inner_value);
+                                        result.push(ParsedSQL::Insert(insert_data));
+                                    }
+
+                                    Rule::delete_sql => {
+                                        let delete_data = parse_delete_sql(inner_value);
+                                        result.push(ParsedSQL::Delete(delete_data));
+                                    }
+
+                                    Rule::update_sql => {
+                                        let update_data = parse_update_sql(inner_value);
+                                        result.push(ParsedSQL::Update(update_data));
+                                    }
+
+                                    Rule::create_table_sql => {
+                                        let create_table_data = parse_create_table_sql(inner_value);
+                                        result.push(ParsedSQL::CreateTable(create_table_data));
+                                    }
+                                    Rule::show_tables_sql => {
+                                        result.push(ParsedSQL::ShowTables);
+                                    }
+
+                                    Rule::describe_table_sql => {
+                                        let mut table_name: Option<String> = None;
+
+                                        inner_value.into_inner().for_each(|inner_value| {
+                                            match inner_value.as_rule() {
+                                                Rule::id_token => {
+                                                    table_name =
+                                                        Some(inner_value.as_str().to_string());
+                                                }
+                                                _ => {}
+                                            }
+                                        });
+
+                                        result.push(ParsedSQL::DescribeTable {
+                                            table_name: table_name.unwrap(),
+                                        });
+                                    }
+
+                                    _ => {}
+                                }
+                            });
                         }
                         _ => {}
                     });
-
-                return Some(ParsedSQL::DescribeTable {
-                    table_name: table_name.unwrap(),
-                });
             }
 
             _ => {
-                return None;
+                return vec![];
             }
         }
+
+        return result;
     }
 
-    return None;
+    return vec![];
 }
 
 #[cfg(test)]
@@ -659,21 +681,21 @@ mod tests {
         let unparsed_file =
             fs::read_to_string("./sql/sample_create_table.sql").expect("cannot read file");
         let parsed_sql = parse_sql(unparsed_file);
-        parsed_sql.unwrap().debug_print();
+        parsed_sql[0].debug_print();
     }
 
     #[test]
     fn test_delete_sql() {
         let sql = "delete from test_table where A = 44".to_string();
         let parsed_sql = parse_sql(sql);
-        parsed_sql.unwrap().debug_print();
+        parsed_sql[0].debug_print();
     }
 
     #[test]
     fn test_select_join_query() {
         let sql = "select A, B from test_table, test_table2 where C = 'content'".to_string();
         let parsed_sql = parse_sql(sql);
-        parsed_sql.unwrap().debug_print();
+        parsed_sql[0].debug_print();
     }
 
     #[test]
@@ -681,27 +703,27 @@ mod tests {
         let sql =
             "select test_table.A, B from test_table, test_table2 where C = 'content'".to_string();
         let parsed_sql = parse_sql(sql);
-        parsed_sql.unwrap().debug_print();
+        parsed_sql[0].debug_print();
     }
 
     #[test]
     fn test_create_table() {
         let sql = "create table posts (title varchar(10), content varchar(10))".to_string();
         let parsed_sql = parse_sql(sql);
-        parsed_sql.unwrap().debug_print();
+        parsed_sql[0].debug_print();
     }
 
     #[test]
     fn test_insert_sql() {
         let sql = "insert into test_table (A, B) values (44, 'Hello World')".to_string();
         let parsed_sql = parse_sql(sql);
-        parsed_sql.unwrap().debug_print();
+        parsed_sql[0].debug_print();
     }
 
     #[test]
     fn test_update_sql() {
         let sql = "update test_table set B = 'Updated Value' where A = 44".to_string();
         let parsed_sql = parse_sql(sql);
-        parsed_sql.unwrap().debug_print();
+        parsed_sql[0].debug_print();
     }
 }
