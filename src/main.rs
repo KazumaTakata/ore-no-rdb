@@ -38,10 +38,10 @@ mod transaction;
 mod transaction_v2;
 
 use block::BlockId;
+use clap::Parser;
 use file_manager::FileManager;
 use page::Page;
 use parser::{parse_sql, Rule, SQLParser};
-use pest::Parser;
 
 use crate::database::Database;
 use crate::metadata_manager::MetadataManager;
@@ -51,6 +51,13 @@ use crate::predicate::{ConstantValue, TableNameAndFieldName};
 use crate::predicate_v3::PredicateV2;
 use crate::query_handler::handle_select_query;
 use crate::transaction_v2::TransactionV2;
+
+#[derive(Parser)]
+struct Args {
+    /// 名前を指定
+    #[arg(short, long)]
+    file: Option<String>,
+}
 
 fn handle_parsed_sql(
     parsed_sql: &ParsedSQL,
@@ -135,6 +142,17 @@ fn main() -> Result<()> {
     let database = Database::new();
     let transaction = database.new_transaction(1);
     let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
+
+    let args = Args::parse();
+
+    if let Some(file_path) = args.file {
+        let sql = std::fs::read_to_string(file_path).expect("Failed to read SQL file");
+        let parsed_sql_list = parse_sql(sql);
+        for parsed_sql in &parsed_sql_list {
+            handle_parsed_sql(parsed_sql, &mut metadata_manager, transaction.clone());
+        }
+        return Ok(());
+    }
 
     // `()` can be used when no completer is required
     let mut rl = DefaultEditor::new()?;
