@@ -96,6 +96,7 @@ pub enum ParsedSQL {
     Query(QueryData),
     Insert(InsertData),
     CreateTable(CreateTableData),
+    CreateIndex(CreateIndexData),
     Delete(DeleteData),
     Update(UpdateData),
     ShowTables,
@@ -139,6 +140,15 @@ impl ParsedSQL {
             ParsedSQL::DescribeTable { table_name } => {
                 println!("Parsed Describe Table Command for table: {}", table_name);
             }
+
+            ParsedSQL::CreateIndex(create_index_data) => {
+                println!(
+                    "Parsed Create Index Data: \nIndex Name: {}\nTable Name: {}\nField Name: {}",
+                    create_index_data.index_name,
+                    create_index_data.table_name,
+                    create_index_data.field_name
+                );
+            }
         }
     }
 }
@@ -147,6 +157,13 @@ impl ParsedSQL {
 pub struct CreateTableData {
     pub table_name: String,
     pub schema: TableSchema,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateIndexData {
+    pub index_name: String,
+    pub table_name: String,
+    pub field_name: String,
 }
 
 use std::fmt;
@@ -516,6 +533,40 @@ fn parse_update_sql(record: Pair<Rule>) -> UpdateData {
     return update_data;
 }
 
+fn parse_create_index_sql(record: Pair<Rule>) -> CreateIndexData {
+    // Currently not implemented
+    let mut index_name: Option<String> = None;
+    let mut table_name: Option<String> = None;
+    let mut field_name: Option<String> = None;
+
+    record
+        .into_inner()
+        .for_each(|inner_value| match inner_value.as_rule() {
+            Rule::id_token => {
+                if index_name.is_none() {
+                    index_name = Some(inner_value.as_str().to_string());
+                } else if table_name.is_none() {
+                    table_name = Some(inner_value.as_str().to_string());
+                }
+            }
+            Rule::field => {
+                if field_name.is_none() {
+                    field_name = Some(inner_value.as_str().to_string());
+                }
+            }
+            Rule::constant => {}
+            _ => {}
+        });
+
+    let create_index_data = CreateIndexData {
+        index_name: index_name.unwrap(),
+        table_name: table_name.unwrap(),
+        field_name: field_name.unwrap(),
+    };
+
+    return create_index_data;
+}
+
 fn parse_create_table_sql(record: Pair<Rule>) -> CreateTableData {
     let mut table_name: Option<String> = None;
     let mut schema = TableSchema {
@@ -615,6 +666,12 @@ pub fn parse_sql(sql: String) -> Vec<ParsedSQL> {
                                         let create_table_data = parse_create_table_sql(inner_value);
                                         result.push(ParsedSQL::CreateTable(create_table_data));
                                     }
+
+                                    Rule::create_index_sql => {
+                                        let create_index_data = parse_create_index_sql(inner_value);
+                                        result.push(ParsedSQL::CreateIndex(create_index_data));
+                                    }
+
                                     Rule::show_tables_sql => {
                                         result.push(ParsedSQL::ShowTables);
                                     }
@@ -723,6 +780,13 @@ mod tests {
     #[test]
     fn test_update_sql() {
         let sql = "update test_table set B = 'Updated Value' where A = 44".to_string();
+        let parsed_sql = parse_sql(sql);
+        parsed_sql[0].debug_print();
+    }
+
+    #[test]
+    fn test_create_index_sql() {
+        let sql = "create index idx_test on test_table (A)".to_string();
         let parsed_sql = parse_sql(sql);
         parsed_sql[0].debug_print();
     }

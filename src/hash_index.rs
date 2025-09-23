@@ -2,6 +2,7 @@ use core::hash;
 use std::{
     cell::RefCell,
     hash::{DefaultHasher, Hash, Hasher},
+    iter::Scan,
     rc::Rc,
 };
 
@@ -145,7 +146,7 @@ impl HashIndex {
         // Logic to close the index
     }
 
-    pub fn get_search_cost(number_of_blocks: i32) -> i32 {
+    pub fn get_search_cost(number_of_blocks: u32) -> u32 {
         return number_of_blocks / 10;
     }
 }
@@ -164,26 +165,32 @@ impl IndexSelectPlan {
             key,
         }
     }
+}
 
-    pub fn open(&mut self) -> IndexSelectScan {
+impl PlanV2 for IndexSelectPlan {
+    fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
         let table_scan = self.plan.open().unwrap();
         let index = Rc::new(RefCell::new(self.index_info.open()));
-        return IndexSelectScan::new(table_scan, index, self.key.clone());
+        return Ok(Box::new(IndexSelectScan::new(
+            table_scan,
+            index,
+            self.key.clone(),
+        )));
     }
 
-    pub fn blocks_accessed(&self) -> i32 {
+    fn blocks_accessed(&self) -> u32 {
         return self.index_info.blocks_accessed();
     }
 
-    pub fn records_output(&self) -> u32 {
+    fn records_output(&self) -> u32 {
         self.index_info.records_output()
     }
 
-    pub fn distinct_values(&self, field_name: String) -> u32 {
+    fn get_distinct_value(&self, field_name: String) -> u32 {
         self.index_info.distinct_values(&field_name)
     }
 
-    pub fn get_schema(&self) -> &TableSchema {
+    fn get_schema(&self) -> &TableSchema {
         self.plan.get_schema()
     }
 }
@@ -196,7 +203,7 @@ struct IndexSelectScan {
 
 impl IndexSelectScan {
     pub fn new(table_scan: Box<dyn ScanV2>, index: Rc<RefCell<HashIndex>>, key: Constant) -> Self {
-        IndexSelectScan::before_first(index.clone(), key.clone());
+        index.borrow_mut().before_first(key.clone());
         let index_select_scan = IndexSelectScan {
             table_scan,
             index: index.clone(),
@@ -204,12 +211,15 @@ impl IndexSelectScan {
         };
         index_select_scan
     }
+}
 
-    pub fn before_first(index: Rc<RefCell<HashIndex>>, key: Constant) {
-        index.borrow_mut().before_first(key);
+impl ScanV2 for IndexSelectScan {
+    fn move_to_before_first(&mut self) -> Result<(), ValueNotFound> {
+        self.index.borrow_mut().before_first(self.key.clone());
+        return Ok(());
     }
 
-    pub fn next(&mut self) -> Result<bool, ValueNotFound> {
+    fn next(&mut self) -> Result<bool, ValueNotFound> {
         let has_next = self.index.borrow_mut().next()?;
 
         if has_next {
@@ -225,24 +235,51 @@ impl IndexSelectScan {
         return Ok(has_next);
     }
 
-    pub fn get_integer(&mut self, field_name: TableNameAndFieldName) -> Option<i32> {
+    fn get_integer(&mut self, field_name: TableNameAndFieldName) -> Option<i32> {
         self.table_scan.get_integer(field_name)
     }
 
-    pub fn get_string(&mut self, field_name: TableNameAndFieldName) -> Option<String> {
+    fn get_string(&mut self, field_name: TableNameAndFieldName) -> Option<String> {
         self.table_scan.get_string(field_name)
     }
 
-    pub fn get_value(&mut self, field_name: TableNameAndFieldName) -> Option<ConstantValue> {
+    fn get_value(&mut self, field_name: TableNameAndFieldName) -> Option<ConstantValue> {
         self.table_scan.get_value(field_name)
     }
 
-    pub fn has_field(&self, field_name: TableNameAndFieldName) -> bool {
+    fn has_field(&self, field_name: TableNameAndFieldName) -> bool {
         self.table_scan.has_field(field_name)
     }
-
-    pub fn close(&mut self) {
+    fn close(&mut self) {
         self.index.borrow_mut().close();
         self.table_scan.close();
+    }
+
+    fn delete(&mut self) {
+        panic!("IndexSelectScan does not support delete operation");
+    }
+
+    fn get_record_id(&self) -> RecordID {
+        panic!("IndexSelectScan does not support get_record_id operation");
+    }
+
+    fn insert(&mut self) {
+        panic!("IndexSelectScan does not support insert operation");
+    }
+
+    fn move_to_record_id(&mut self, record_id: RecordID) {
+        panic!("IndexSelectScan does not support move_to_record_id operation");
+    }
+
+    fn set_integer(&mut self, field_name: String, value: i32) {
+        panic!("IndexSelectScan does not support set_integer operation");
+    }
+
+    fn set_string(&mut self, field_name: String, value: String) {
+        panic!("IndexSelectScan does not support set_string operation");
+    }
+
+    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+        panic!("IndexSelectScan does not support set_value operation");
     }
 }

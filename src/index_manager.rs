@@ -157,11 +157,11 @@ impl IndexInfo {
         )
     }
 
-    pub fn blocks_accessed(&self) -> i32 {
+    pub fn blocks_accessed(&self) -> u32 {
         let record_per_block =
             self.transaction.borrow().get_block_size() as i32 / self.index_layout.get_slot_size();
         let number_of_blocks = self.stat_info.get_num_records() / record_per_block as u32;
-        return HashIndex::get_search_cost(number_of_blocks as i32);
+        return HashIndex::get_search_cost(number_of_blocks as u32);
     }
 
     pub fn records_output(&self) -> u32 {
