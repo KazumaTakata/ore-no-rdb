@@ -98,6 +98,15 @@ fn handle_parsed_sql(
             println!("schema for table '{:?}'", layout.schema);
         }
 
+        ParsedSQL::CreateIndex(create_index_data) => {
+            metadata_manager.create_index(
+                create_index_data.index_name.clone(),
+                create_index_data.table_name.clone(),
+                create_index_data.field_name.clone(),
+                transaction.clone(),
+            );
+        }
+
         ParsedSQL::ShowTables => {
             let select_query = QueryData::new(
                 vec!["table_catalog".to_string()],
