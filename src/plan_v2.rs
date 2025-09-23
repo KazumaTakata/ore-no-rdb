@@ -299,7 +299,7 @@ pub fn execute_delete(
     metadata_manager: &mut MetadataManager,
     delete_data: DeleteData,
 ) -> Result<u32, ValueNotFound> {
-    let mut plan = TablePlanV2::new(
+    let plan = TablePlanV2::new(
         delete_data.table_name.clone(),
         transaction.clone(),
         metadata_manager,

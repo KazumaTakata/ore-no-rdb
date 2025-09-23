@@ -4,59 +4,50 @@ use rand::seq::index;
 
 use crate::{
     error::ValueNotFound,
-    metadata_manager::MetadataManager,
+    metadata_manager::{self, MetadataManager},
     parser::{DeleteData, InsertData, UpdateData},
     plan_v2::{PlanV2, SelectPlanV2, TablePlanV2},
     predicate::{Constant, TableNameAndFieldName},
     transaction_v2::TransactionV2,
 };
 
-struct IndexUpdatePlanner {
-    metadata_manager: Rc<RefCell<MetadataManager>>,
-}
+pub struct IndexUpdatePlanner {}
 
 impl IndexUpdatePlanner {
-    pub fn new(metadata_manager: Rc<RefCell<MetadataManager>>) -> Self {
-        IndexUpdatePlanner { metadata_manager }
+    pub fn new() -> Self {
+        IndexUpdatePlanner {}
     }
 
     pub fn execute_insert(
         &self,
         insert_data: InsertData,
         transaction: Rc<RefCell<TransactionV2>>,
+        metadata_manager: &mut MetadataManager,
     ) -> Result<(), ValueNotFound> {
         let table_name = insert_data.table_name.clone();
-        let mut plan = TablePlanV2::new(
-            table_name.clone(),
-            transaction.clone(),
-            &mut self.metadata_manager.borrow_mut(),
-        )?;
+        let mut indexes =
+            metadata_manager.get_index_info(table_name.clone(), transaction.clone())?;
+        let mut plan = TablePlanV2::new(table_name.clone(), transaction.clone(), metadata_manager)?;
 
         let mut update_scan = plan.open()?;
         update_scan.insert();
         let record_id = update_scan.get_record_id();
 
-        let mut indexes = self
-            .metadata_manager
-            .borrow()
-            .get_index_info(table_name, transaction.clone())?;
+        let mut val_inter = insert_data.value_list.iter();
 
-        insert_data
-            .field_name_list
-            .iter()
-            .enumerate()
-            .for_each(|(i, field_name)| {
-                let insert_value = insert_data.value_list[i].clone();
-                update_scan.set_value(field_name.clone(), insert_value.value.clone());
+        for field in insert_data.field_name_list.iter() {
+            let value = val_inter.next().unwrap();
 
-                let index_info = indexes.get_mut(field_name);
+            update_scan.set_value(field.clone(), value.value.clone());
 
-                if let Some(info) = index_info {
-                    let mut index = info.open();
-                    index.insert(insert_value, record_id.clone());
-                    index.close();
-                }
-            });
+            let index_info = indexes.get_mut(field);
+
+            if let Some(info) = index_info {
+                let mut index = info.open();
+                index.insert(value.clone(), record_id.clone());
+                index.close();
+            }
+        }
         update_scan.close();
 
         return Ok(());
@@ -66,22 +57,16 @@ impl IndexUpdatePlanner {
         &mut self,
         delete_data: DeleteData,
         transaction: Rc<RefCell<TransactionV2>>,
+        metadata_manager: &mut MetadataManager,
     ) -> Result<(), ValueNotFound> {
         let table_name = delete_data.table_name.clone();
-        let mut plan = TablePlanV2::new(
-            table_name.clone(),
-            transaction.clone(),
-            &mut self.metadata_manager.borrow_mut(),
-        )?;
+        let plan = TablePlanV2::new(table_name.clone(), transaction.clone(), metadata_manager)?;
 
         let mut select_plan = SelectPlanV2::new(Box::new(plan), delete_data.predicate);
 
         let mut update_scan = select_plan.open()?;
 
-        let mut indexes = self
-            .metadata_manager
-            .borrow()
-            .get_index_info(table_name, transaction.clone())?;
+        let mut indexes = metadata_manager.get_index_info(table_name, transaction.clone())?;
 
         while update_scan.next()? {
             let record_id = update_scan.get_record_id();
@@ -105,22 +90,17 @@ impl IndexUpdatePlanner {
         &mut self,
         update_data: UpdateData,
         transaction: Rc<RefCell<TransactionV2>>,
+        metadata_manager: &mut MetadataManager,
     ) -> Result<(), ValueNotFound> {
         let table_name = update_data.table_name.clone();
         let field_name = update_data.field_name.clone();
 
-        let table_plan = TablePlanV2::new(
-            table_name.clone(),
-            transaction.clone(),
-            &mut self.metadata_manager.borrow_mut(),
-        )
-        .unwrap();
+        let table_plan =
+            TablePlanV2::new(table_name.clone(), transaction.clone(), metadata_manager).unwrap();
 
         let mut select_plan = SelectPlanV2::new(Box::new(table_plan), update_data.predicate);
 
-        let mut index_info_hash = self
-            .metadata_manager
-            .borrow()
+        let mut index_info_hash = metadata_manager
             .get_index_info(table_name.clone(), transaction.clone())
             .unwrap();
 
@@ -159,10 +139,9 @@ impl IndexUpdatePlanner {
         table_name: String,
         schema: &crate::record_page::TableSchema,
         transaction: Rc<RefCell<TransactionV2>>,
+        metadata_manager: &mut MetadataManager,
     ) -> Result<(), ValueNotFound> {
-        self.metadata_manager
-            .borrow_mut()
-            .create_table(table_name, schema, transaction);
+        metadata_manager.create_table(table_name, schema, transaction);
         return Ok(());
     }
 
@@ -172,13 +151,9 @@ impl IndexUpdatePlanner {
         table_name: String,
         field_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
+        metadata_manager: &mut MetadataManager,
     ) -> Result<(), ValueNotFound> {
-        self.metadata_manager.borrow_mut().create_index(
-            index_name,
-            table_name,
-            field_name,
-            transaction,
-        );
+        metadata_manager.create_index(index_name, table_name, field_name, transaction);
         return Ok(());
     }
 }
@@ -234,9 +209,13 @@ mod tests {
             transaction.clone(),
         );
 
-        let index_update_planner = IndexUpdatePlanner::new(Rc::new(RefCell::new(metadata_manager)));
+        let index_update_planner = IndexUpdatePlanner::new();
 
-        index_update_planner.execute_insert(insert_data.clone(), transaction.clone());
+        index_update_planner.execute_insert(
+            insert_data.clone(),
+            transaction.clone(),
+            &mut metadata_manager,
+        );
 
         transaction.borrow_mut().commit();
 

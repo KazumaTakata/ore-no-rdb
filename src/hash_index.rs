@@ -195,7 +195,7 @@ impl PlanV2 for IndexSelectPlan {
     }
 }
 
-struct IndexSelectScan {
+pub struct IndexSelectScan {
     table_scan: Box<dyn ScanV2>,
     index: Rc<RefCell<HashIndex>>,
     key: Constant,
