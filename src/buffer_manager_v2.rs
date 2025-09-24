@@ -140,6 +140,20 @@ impl BufferManagerV2 {
     pub fn try_to_pin(&mut self, block_id: BlockId) -> Option<Rc<RefCell<BufferV2>>> {
         let buffer = self.find_existing_buffer(&block_id);
 
+        let buffer = match buffer {
+            Some(buffer) => Some(buffer),
+            None => {
+                let buffer = self.choose_unpinned_buffer();
+                match buffer {
+                    Some(buffer) => {
+                        buffer.borrow_mut().assign_to_block(block_id);
+                        Some(buffer)
+                    }
+                    None => panic!("All buffers are pinned"),
+                }
+            }
+        };
+
         if let Some(buffer) = buffer {
             let mut buffer_mut = buffer.borrow_mut();
             if !buffer_mut.is_pinned() {
@@ -148,15 +162,7 @@ impl BufferManagerV2 {
             buffer_mut.pin();
             return Some(buffer.clone());
         } else {
-            let buffer = self.choose_unpinned_buffer();
-
-            if let Some(buffer) = buffer {
-                buffer.borrow_mut().assign_to_block(block_id);
-                buffer.borrow_mut().pin();
-                return Some(buffer);
-            } else {
-                return None;
-            }
+            return None;
         }
     }
 
@@ -219,17 +225,23 @@ impl BufferListV2 {
     }
 
     pub fn unpin(&mut self, block_id: BlockId) {
+        let mut should_remove_from_buffers = false;
+
         if let Some(buffer) = self.buffers.get(&block_id) {
             let mut buffer = buffer.borrow_mut();
-            buffer.unpin();
+            self.buffer_manager.borrow_mut().unpin(&mut buffer);
             // self.pinsから始めに見つかったblock_idを削除
             if let Some(index) = self.pins.iter().position(|x| *x == block_id) {
                 self.pins.remove(index);
             }
 
-            if !buffer.is_pinned() {
-                self.buffer_manager.borrow_mut().unpin(&mut buffer);
+            if (self.pins.iter().find(|x| **x == block_id)).is_none() {
+                should_remove_from_buffers = true;
             }
+        }
+
+        if (should_remove_from_buffers) {
+            self.buffers.remove(&block_id);
         }
     }
 

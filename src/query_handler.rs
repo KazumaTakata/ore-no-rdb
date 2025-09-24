@@ -141,4 +141,35 @@ mod tests {
 
         handle_select_query(select_query, &mut metadata_manager, transaction);
     }
+
+    #[test]
+    fn test_handle_select_query_4() {
+        let database = Database::new();
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
+
+        let table_name_and_field_name = TableNameAndFieldName::new(None, "content".to_string());
+
+        let term = TermV2::new(
+            ExpressionV2::new(ExpressionValue::TableNameAndFieldName(
+                table_name_and_field_name.clone(),
+            )),
+            ExpressionV2::new(ExpressionValue::Constant(Constant::new(
+                ConstantValue::String("Gold".to_string()),
+            ))),
+        );
+
+        let select_query = QueryData {
+            field_name_list: vec![TableNameAndFieldName::new(None, "content".to_string())],
+            table_name_list: vec!["posts".to_string()],
+            predicate: PredicateV2::new(vec![term]),
+        };
+
+        handle_select_query(
+            select_query.clone(),
+            &mut metadata_manager,
+            transaction.clone(),
+        );
+        handle_select_query(select_query.clone(), &mut metadata_manager, transaction);
+    }
 }
