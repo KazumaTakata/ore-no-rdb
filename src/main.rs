@@ -98,9 +98,12 @@ fn handle_parsed_sql(
         }
         ParsedSQL::Update(update_data) => {
             // handle_update_query(update_data.clone(), metadata_manager, transaction.clone());
-            execute_update(transaction.clone(), metadata_manager, update_data.clone());
+            index_update_planner.execute_modify(
+                update_data.clone(),
+                transaction.clone(),
+                metadata_manager,
+            );
         }
-
         ParsedSQL::DescribeTable { table_name } => {
             let layout = metadata_manager
                 .get_layout(table_name.clone(), transaction.clone())
@@ -108,7 +111,6 @@ fn handle_parsed_sql(
 
             println!("schema for table '{:?}'", layout.schema);
         }
-
         ParsedSQL::CreateIndex(create_index_data) => {
             metadata_manager.create_index(
                 create_index_data.index_name.clone(),
