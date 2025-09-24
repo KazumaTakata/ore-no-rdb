@@ -97,13 +97,11 @@ impl HashIndex {
 
     fn get_data_record_id(&mut self) -> Result<Option<RecordID>, ValueNotFound> {
         if let Some(scan) = &mut self.table_scan {
-            if scan.next()? {
-                let value = scan.get_integer(TableNameAndFieldName::new(None, "block".to_string()));
-                let id = scan.get_integer(TableNameAndFieldName::new(None, "id".to_string()));
+            let value = scan.get_integer(TableNameAndFieldName::new(None, "block".to_string()));
+            let id = scan.get_integer(TableNameAndFieldName::new(None, "id".to_string()));
 
-                if let (Some(block), Some(id)) = (value, id) {
-                    return Ok(Some(RecordID::new(block as u64, id)));
-                }
+            if let (Some(block), Some(id)) = (value, id) {
+                return Ok(Some(RecordID::new(block as u64, id)));
             }
         }
         Ok(None)

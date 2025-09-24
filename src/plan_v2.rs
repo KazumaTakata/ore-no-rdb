@@ -509,9 +509,8 @@ mod tests {
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let parsed_sql = &parse_sql(
-            "select A, B, A_1, B_1 from test_table_10, test_table_11 where A = B_1".to_string(),
-        )[0];
+        let parsed_sql =
+            &parse_sql("select content from posts where content = 'Best';".to_string())[0];
 
         let query_data = match parsed_sql {
             crate::parser::ParsedSQL::Query(q) => q,
