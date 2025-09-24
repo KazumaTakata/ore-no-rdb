@@ -119,6 +119,7 @@ impl IndexManager {
     }
 }
 
+#[derive(Clone)]
 pub struct IndexInfo {
     index_name: String,
     field_name: String,

@@ -1,14 +1,16 @@
-use std::{cell::RefCell, cmp::min, fs::Metadata, path::Path, rc::Rc};
+use std::{cell::RefCell, cmp::min, collections::HashMap, fs::Metadata, path::Path, rc::Rc};
 
 use crate::{
     buffer_manager_v2::BufferManagerV2,
     concurrency_manager::LockTable,
     error::{TableAlreadyExists, ValueNotFound},
     file_manager::FileManager,
+    hash_index::IndexSelectPlan,
+    index_manager::IndexInfo,
     log_manager_v2::LogManagerV2,
     metadata_manager::{self, MetadataManager},
     parser::{CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
-    predicate::TableNameAndFieldName,
+    predicate::{Constant, ConstantValue, TableNameAndFieldName},
     predicate_v3::PredicateV2,
     record_page::{Layout, TableSchema},
     scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
@@ -238,6 +240,20 @@ impl PlanV2 for ProductPlanV2 {
     }
 }
 
+fn create_index_select(
+    index_info_hash: HashMap<String, IndexInfo>,
+    predicate: PredicateV2,
+    table_plan: Box<dyn PlanV2>,
+) -> Box<dyn PlanV2> {
+    for (field_name, index_info) in index_info_hash.iter() {
+        if let Some(constant) = predicate.equates_with_constant(field_name.clone()) {
+            let index_select_plan = IndexSelectPlan::new(table_plan, index_info.clone(), constant);
+            return Box::new(index_select_plan);
+        }
+    }
+    return table_plan;
+}
+
 pub fn create_query_plan(
     query_data: &QueryData,
     transaction: Rc<RefCell<TransactionV2>>,
@@ -249,7 +265,22 @@ pub fn create_query_plan(
         let table_plan =
             TablePlanV2::new(table_name.clone(), transaction.clone(), metadata_manager)?;
         let plan: Box<dyn PlanV2> = Box::new(table_plan);
-        plans.push(plan);
+
+        let index_info_list =
+            metadata_manager.get_index_info(table_name.clone(), transaction.clone());
+
+        match index_info_list {
+            Err(_) => {
+                plans.push(plan);
+                continue;
+            }
+            Ok(info) => {
+                let index_select_plan =
+                    create_index_select(info.clone(), query_data.predicate.clone(), plan);
+
+                plans.push(index_select_plan);
+            }
+        };
     }
 
     let mut plan: Box<dyn PlanV2> = plans.pop().unwrap();

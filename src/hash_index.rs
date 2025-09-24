@@ -151,7 +151,7 @@ impl HashIndex {
     }
 }
 
-struct IndexSelectPlan {
+pub struct IndexSelectPlan {
     plan: Box<dyn PlanV2>,
     index_info: IndexInfo,
     key: Constant,
