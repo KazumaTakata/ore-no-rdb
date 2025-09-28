@@ -81,6 +81,7 @@ mod tests {
             field_name_list: vec![TableNameAndFieldName::new(None, "table_name".to_string())],
             table_name_list: vec!["table_catalog".to_string()],
             predicate: PredicateV2::new(vec![term]),
+            order_by_list: vec![],
         };
 
         handle_select_query(select_query, &mut metadata_manager, transaction);
@@ -107,6 +108,7 @@ mod tests {
             field_name_list: vec![TableNameAndFieldName::new(None, "table_name".to_string())],
             table_name_list: vec!["field_catalog".to_string(), "table_catalog".to_string()],
             predicate: PredicateV2::new(vec![term]),
+            order_by_list: vec![],
         };
 
         handle_select_query(select_query, &mut metadata_manager, transaction);
@@ -137,6 +139,7 @@ mod tests {
             )],
             table_name_list: vec!["field_catalog".to_string(), "table_catalog".to_string()],
             predicate: PredicateV2::new(vec![]),
+            order_by_list: vec![],
         };
 
         handle_select_query(select_query, &mut metadata_manager, transaction);
@@ -163,6 +166,7 @@ mod tests {
             field_name_list: vec![TableNameAndFieldName::new(None, "content".to_string())],
             table_name_list: vec!["posts".to_string()],
             predicate: PredicateV2::new(vec![term]),
+            order_by_list: vec![],
         };
 
         handle_select_query(

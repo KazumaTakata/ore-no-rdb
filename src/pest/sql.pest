@@ -23,7 +23,8 @@ create = @{ ^"create" ~ !(ASCII_ALPHANUMERIC | "_") }
 table = @{ ^"table" ~ !(ASCII_ALPHANUMERIC | "_") }
 table_name = @{ (ASCII_ALPHA | "_")+ }
 column_name = @{ (ASCII_ALPHA | "_")+ }
-select_sql = { select ~ select_list ~ from ~ table_list ~ ( "where" ~ predicate )? }
+order_by_list = { ( field ) ~ ("," ~ ( field ))* }
+select_sql = { select ~ select_list ~ from ~ table_list ~ ( "where" ~ predicate )? ~ ( "order" ~ "by" ~ order_by_list )? }
 insert_sql = { insert ~ "into" ~ id_token ~ field_list ~ "values" ~ constant_list }
 delete_sql = { ^"delete" ~ "from" ~ id_token ~ ( "where" ~ predicate )? }
 update_sql = { ^"update" ~ id_token ~ "set" ~ field ~ "=" ~ constant ~ ( "where" ~ predicate )? }

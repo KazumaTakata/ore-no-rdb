@@ -11,7 +11,7 @@ use crate::{
     transaction_v2::TransactionV2,
 };
 
-struct SortPlan {
+pub struct SortPlan {
     transaction: Rc<RefCell<TransactionV2>>,
     plan: Box<dyn PlanV2>,
     comparator: RecordComparator,
