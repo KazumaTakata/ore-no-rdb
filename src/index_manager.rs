@@ -61,7 +61,7 @@ impl IndexManager {
     ) {
         let mut table_scan = TableScan::new(
             "index_catalog".to_string(),
-            transaction,
+            transaction.clone(),
             self.layout.clone(),
         );
         table_scan.insert();
@@ -69,6 +69,8 @@ impl IndexManager {
         table_scan.set_string("table_name".to_string(), table_name.clone());
         table_scan.set_string("field_name".to_string(), field_name.clone());
         table_scan.close();
+
+        transaction.borrow_mut().commit();
     }
 
     pub fn get_index_info(
@@ -94,6 +96,12 @@ impl IndexManager {
                 let field_name = table_scan
                     .get_string(TableNameAndFieldName::new(None, "field_name".to_string()))
                     .unwrap();
+
+                println!(
+                    "Found index: {} on field: {} for table: {}",
+                    index_name, field_name, table_name
+                );
+
                 let layout = self
                     .table_manager
                     .borrow()
@@ -119,6 +127,7 @@ impl IndexManager {
     }
 }
 
+#[derive(Clone)]
 pub struct IndexInfo {
     index_name: String,
     field_name: String,

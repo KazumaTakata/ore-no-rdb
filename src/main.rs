@@ -44,6 +44,7 @@ use page::Page;
 use parser::{parse_sql, Rule, SQLParser};
 
 use crate::database::Database;
+use crate::index_update_planner::IndexUpdatePlanner;
 use crate::metadata_manager::MetadataManager;
 use crate::parser::{ParsedSQL, QueryData};
 use crate::plan_v2::{
@@ -65,17 +66,27 @@ fn handle_parsed_sql(
     parsed_sql: &ParsedSQL,
     metadata_manager: &mut MetadataManager,
     transaction: Rc<RefCell<TransactionV2>>,
+    index_update_planner: &mut IndexUpdatePlanner,
 ) -> () {
     match parsed_sql {
         ParsedSQL::Query(select_query) => {
             handle_select_query(select_query.clone(), metadata_manager, transaction.clone());
         }
         ParsedSQL::Insert(insert_data) => {
-            execute_insert(transaction.clone(), metadata_manager, insert_data.clone());
+            // execute_insert(transaction.clone(), metadata_manager, insert_data.clone());
+            index_update_planner.execute_insert(
+                insert_data.clone(),
+                transaction.clone(),
+                metadata_manager,
+            );
             transaction.borrow_mut().commit();
         }
         ParsedSQL::Delete(delete_data) => {
-            execute_delete(transaction.clone(), metadata_manager, delete_data.clone());
+            index_update_planner.execute_delete(
+                delete_data.clone(),
+                transaction.clone(),
+                metadata_manager,
+            );
             transaction.borrow_mut().commit();
         }
         ParsedSQL::CreateTable(create_table_data) => {
@@ -87,9 +98,12 @@ fn handle_parsed_sql(
         }
         ParsedSQL::Update(update_data) => {
             // handle_update_query(update_data.clone(), metadata_manager, transaction.clone());
-            execute_update(transaction.clone(), metadata_manager, update_data.clone());
+            index_update_planner.execute_modify(
+                update_data.clone(),
+                transaction.clone(),
+                metadata_manager,
+            );
         }
-
         ParsedSQL::DescribeTable { table_name } => {
             let layout = metadata_manager
                 .get_layout(table_name.clone(), transaction.clone())
@@ -97,7 +111,6 @@ fn handle_parsed_sql(
 
             println!("schema for table '{:?}'", layout.schema);
         }
-
         ParsedSQL::CreateIndex(create_index_data) => {
             metadata_manager.create_index(
                 create_index_data.index_name.clone(),
@@ -156,15 +169,23 @@ fn handle_parsed_sql(
 fn main() -> Result<()> {
     let database = Database::new();
     let transaction = database.new_transaction(1);
-    let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
+    let mut metadata_manager = Rc::new(RefCell::new(
+        MetadataManager::new(transaction.clone()).unwrap(),
+    ));
 
+    let mut index_update_planner = index_update_planner::IndexUpdatePlanner::new();
     let args = Args::parse();
 
     if let Some(file_path) = args.file {
         let sql = std::fs::read_to_string(file_path).expect("Failed to read SQL file");
         let parsed_sql_list = parse_sql(sql);
         for parsed_sql in &parsed_sql_list {
-            handle_parsed_sql(parsed_sql, &mut metadata_manager, transaction.clone());
+            handle_parsed_sql(
+                parsed_sql,
+                &mut metadata_manager.borrow_mut(),
+                transaction.clone(),
+                &mut index_update_planner,
+            );
         }
         return Ok(());
     }
@@ -184,7 +205,12 @@ fn main() -> Result<()> {
                 println!("Line: {}", line);
 
                 let parsed_sql = parse_sql(line.to_string());
-                handle_parsed_sql(&parsed_sql[0], &mut metadata_manager, transaction.clone());
+                handle_parsed_sql(
+                    &parsed_sql[0],
+                    &mut metadata_manager.borrow_mut(),
+                    transaction.clone(),
+                    &mut index_update_planner,
+                );
             }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");

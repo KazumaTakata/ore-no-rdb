@@ -174,9 +174,13 @@ impl TableManagerV2 {
 
         let mut slot_size: Option<i32> = None;
 
+        println!("Getting layout for table: {}", table_name);
+
         while table_scan.next()? {
             let name =
                 table_scan.get_string(TableNameAndFieldName::new(None, "table_name".to_string()));
+
+            println!("Found table in catalog: {:?}", name);
 
             match name {
                 Some(name) => {
