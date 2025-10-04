@@ -177,8 +177,26 @@ mod tests {
         handle_select_query(select_query.clone(), &mut metadata_manager, transaction);
     }
 
+    fn delete_temp_files() {
+        use glob::glob;
+        use std::fs;
+
+        let glob = glob("./data/temp_*.tbl");
+
+        for entry in glob.unwrap() {
+            match entry {
+                Ok(path) => {
+                    fs::remove_file(path).unwrap();
+                }
+                Err(e) => println!("{:?}", e),
+            }
+        }
+    }
+
     #[test]
     fn test_handle_select_query_5() {
+        delete_temp_files();
+
         let database = Database::new();
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
@@ -206,5 +224,7 @@ mod tests {
             &mut metadata_manager,
             transaction.clone(),
         );
+
+        delete_temp_files();
     }
 }
