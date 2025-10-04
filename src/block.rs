@@ -26,11 +26,6 @@ impl Hash for BlockId {
 
 impl BlockId {
     pub fn new(file_name: String, block_number: u64) -> BlockId {
-        // ファイルが存在していなければ作成
-        if !Path::new(&file_name).exists() {
-            File::create(&file_name).unwrap();
-        }
-
         BlockId {
             file_name,
             block_number,
