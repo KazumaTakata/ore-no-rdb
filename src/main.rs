@@ -125,6 +125,7 @@ fn handle_parsed_sql(
                 vec!["table_catalog".to_string()],
                 vec![TableNameAndFieldName::new(None, "table_name".to_string())],
                 PredicateV2::new(vec![]),
+                vec![],
             );
 
             let mut plan =

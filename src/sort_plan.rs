@@ -11,7 +11,7 @@ use crate::{
     transaction_v2::TransactionV2,
 };
 
-struct SortPlan {
+pub struct SortPlan {
     transaction: Rc<RefCell<TransactionV2>>,
     plan: Box<dyn PlanV2>,
     comparator: RecordComparator,
@@ -90,14 +90,16 @@ impl SortPlan {
             TempTable::new(self.transaction.clone(), self.table_schema.clone());
 
         let mut current_scan = current_temp_table.open();
+        temp_tables.push(current_temp_table);
 
         while self.copy(src_scan, &mut *current_scan)? {
             if self.comparator.compare(src_scan, &mut *current_scan)? == std::cmp::Ordering::Less {
                 current_scan.close();
-                temp_tables.push(current_temp_table);
                 current_temp_table =
                     TempTable::new(self.transaction.clone(), self.table_schema.clone());
+
                 current_scan = current_temp_table.open();
+                temp_tables.push(current_temp_table);
             }
         }
 
@@ -119,24 +121,24 @@ impl SortPlan {
 
         let mut destination_result = merged_table.open();
 
-        let mut has_more_data_1 = scan1.next();
-        let mut has_more_data_2 = scan2.next();
+        let mut has_more_data_1 = scan1.next()?;
+        let mut has_more_data_2 = scan2.next()?;
 
-        while has_more_data_1.clone()? && has_more_data_2.clone()? {
-            if self.comparator.compare(&mut *scan1, &mut *scan2)? != std::cmp::Ordering::Less {
-                has_more_data_1 = self.copy(&mut *scan1, &mut *destination_result);
+        while has_more_data_1 && has_more_data_2 {
+            if self.comparator.compare(&mut *scan1, &mut *scan2)? == std::cmp::Ordering::Less {
+                has_more_data_1 = self.copy(&mut *scan1, &mut *destination_result)?;
             } else {
-                has_more_data_2 = self.copy(&mut *scan2, &mut *destination_result);
+                has_more_data_2 = self.copy(&mut *scan2, &mut *destination_result)?;
             }
         }
 
-        if has_more_data_1.clone()? {
-            while has_more_data_1.clone()? {
-                has_more_data_1 = self.copy(&mut *scan1, &mut *destination_result);
+        if has_more_data_1 {
+            while has_more_data_1 {
+                has_more_data_1 = self.copy(&mut *scan1, &mut *destination_result)?;
             }
-        } else if has_more_data_2.clone()? {
-            while has_more_data_2.clone()? {
-                has_more_data_2 = self.copy(&mut *scan2, &mut *destination_result);
+        } else if has_more_data_2 {
+            while has_more_data_2 {
+                has_more_data_2 = self.copy(&mut *scan2, &mut *destination_result)?;
             }
         }
 
@@ -308,7 +310,7 @@ impl ScanV2 for SortScan {
         } else if self.has_more_data_1 && self.has_more_data_2 {
             if let Some(scan2) = &mut self.scan2 {
                 let compare_value = self.comparator.compare(&mut *self.scan1, &mut **scan2)?;
-                if compare_value != std::cmp::Ordering::Less {
+                if compare_value == std::cmp::Ordering::Less {
                     self.current_scan = CurrentScan::Scan1;
                 } else {
                     self.current_scan = CurrentScan::Scan2;

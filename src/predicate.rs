@@ -55,11 +55,11 @@ impl Constant {
 
     pub fn compare_to(&self, value: ConstantValue) -> std::cmp::Ordering {
         match value {
-            ConstantValue::String(s) => match self.value {
-                ConstantValue::String(ref str) => {
-                    if str == &s {
+            ConstantValue::String(s) => match self.value.clone() {
+                ConstantValue::String(str) => {
+                    if str.to_lowercase() == s.to_lowercase() {
                         return std::cmp::Ordering::Equal;
-                    } else if str < &s {
+                    } else if str.to_lowercase() < s.to_lowercase() {
                         return std::cmp::Ordering::Less;
                     } else {
                         return std::cmp::Ordering::Greater;

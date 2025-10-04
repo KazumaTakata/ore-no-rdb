@@ -179,6 +179,7 @@ pub struct QueryData {
     pub table_name_list: Vec<String>,
     pub field_name_list: Vec<TableNameAndFieldName>,
     pub predicate: PredicateV2,
+    pub order_by_list: Vec<TableNameAndFieldName>,
 }
 
 impl QueryData {
@@ -186,11 +187,13 @@ impl QueryData {
         table_name_list: Vec<String>,
         field_name_list: Vec<TableNameAndFieldName>,
         predicate: PredicateV2,
+        order_by_list: Vec<TableNameAndFieldName>,
     ) -> Self {
         QueryData {
             table_name_list,
             field_name_list,
             predicate,
+            order_by_list,
         }
     }
 
@@ -210,6 +213,14 @@ impl QueryData {
         }
         result.push_str("\nPredicate: ");
         result.push_str(&self.predicate.to_string());
+        result.push_str("\nOrder By: ");
+        for order_by in &self.order_by_list {
+            result.push_str(&format!(
+                "{} {} ",
+                order_by.table_name.clone().unwrap_or("".to_string()),
+                order_by.field_name
+            ));
+        }
         result
     }
 }
@@ -335,6 +346,7 @@ pub fn parse_predicate(inner_value: Pair<'_, Rule>) -> Option<PredicateV2> {
 fn parse_select_sql(record: Pair<Rule>) -> QueryData {
     let mut table_name_list: Vec<String> = Vec::new();
     let mut field_name_list: Vec<TableNameAndFieldName> = Vec::new();
+    let mut order_by_list: Vec<TableNameAndFieldName> = Vec::new();
 
     let mut predicate: Option<PredicateV2> = None;
 
@@ -384,12 +396,44 @@ fn parse_select_sql(record: Pair<Rule>) -> QueryData {
             Rule::predicate => {
                 predicate = parse_predicate(inner_value);
             }
+            Rule::order_by_list => {
+                inner_value
+                    .into_inner()
+                    .for_each(|inner_value| match inner_value.as_rule() {
+                        Rule::field => {
+                            inner_value.into_inner().for_each(|inner_value| {
+                                match inner_value.as_rule() {
+                                    Rule::id_token => {
+                                        let field_name = inner_value.as_str().to_string();
+                                        order_by_list.push(TableNameAndFieldName::new(
+                                            None,
+                                            field_name.to_string(),
+                                        ));
+                                    }
+                                    Rule::qualified_field => {
+                                        let mut inner_iter = inner_value.into_inner();
+                                        let table_name = inner_iter.next().unwrap().as_str();
+                                        let field_name = inner_iter.next().unwrap().as_str();
+
+                                        order_by_list.push(TableNameAndFieldName::new(
+                                            Some(table_name.to_string()),
+                                            field_name.to_string(),
+                                        ));
+                                    }
+                                    _ => {}
+                                }
+                            });
+                        }
+                        _ => {}
+                    })
+            }
             _ => {}
         });
     let query_data = QueryData::new(
         table_name_list,
         field_name_list,
         predicate.unwrap_or(PredicateV2::new(vec![])),
+        order_by_list,
     );
 
     return query_data;
@@ -787,6 +831,13 @@ mod tests {
     #[test]
     fn test_create_index_sql() {
         let sql = "create index idx_test on test_table (A)".to_string();
+        let parsed_sql = parse_sql(sql);
+        parsed_sql[0].debug_print();
+    }
+
+    #[test]
+    fn test_select_order_by() {
+        let sql = "select A, B from test_table order by A".to_string();
         let parsed_sql = parse_sql(sql);
         parsed_sql[0].debug_print();
     }

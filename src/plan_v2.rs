@@ -14,6 +14,7 @@ use crate::{
     predicate_v3::PredicateV2,
     record_page::{Layout, TableSchema},
     scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
+    sort_plan::SortPlan,
     stat_manager_v2::{StatInfoV2, StatManagerV2},
     table_manager_v2::TableManagerV2,
     table_scan_v2::TableScan,
@@ -294,6 +295,15 @@ pub fn create_query_plan(
 
     let project_plan =
         ProjectPlanV2::new(Box::new(select_plan), query_data.field_name_list.clone());
+
+    if query_data.order_by_list.len() > 0 {
+        let sort_plan = SortPlan::new(
+            transaction.clone(),
+            Box::new(project_plan),
+            query_data.order_by_list.clone(),
+        );
+        return Ok(Box::new(sort_plan));
+    }
 
     return Ok(Box::new(project_plan));
 }
