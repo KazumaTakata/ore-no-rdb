@@ -13,6 +13,7 @@ mod constant;
 mod database;
 mod error;
 mod file_manager;
+mod group_by;
 mod hash_index;
 mod index_manager;
 mod index_update_planner;
