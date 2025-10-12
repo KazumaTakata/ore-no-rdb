@@ -10,7 +10,7 @@ use crate::{
     transaction_v2::TransactionV2,
 };
 
-struct GroupByPlan {
+pub struct GroupByPlan {
     transaction: Rc<RefCell<TransactionV2>>,
     group_fields: Vec<TableNameAndFieldName>,
     aggregate_functions: Rc<RefCell<Vec<Box<dyn AggregateFunction>>>>,
@@ -29,7 +29,7 @@ impl GroupByPlan {
         let mut table_schema = TableSchema::new();
 
         for func in aggregate_functions.borrow_mut().iter() {
-            table_schema.add_field(func.get_field_name(), TableFieldType::INTEGER, 0);
+            table_schema.add_field(func.get_field().field_name, TableFieldType::INTEGER, 0);
         }
 
         for field in group_fields.iter() {
@@ -80,10 +80,11 @@ impl PlanV2 for GroupByPlan {
         self.plan.get_schema()
     }
 }
-trait AggregateFunction {
+
+pub trait AggregateFunction {
     fn process_first(&mut self, scan: &mut dyn ScanV2);
     fn process_next(&mut self, scan: &mut dyn ScanV2);
-    fn get_field_name(&self) -> String;
+    fn get_field(&self) -> TableNameAndFieldName;
     fn get_value(&self) -> Constant;
 }
 
@@ -183,17 +184,28 @@ impl ScanV2 for GroupByScan {
     }
 
     fn get_value(&mut self, field_name: TableNameAndFieldName) -> Option<ConstantValue> {
-        if let Some(value) = self.group_value.get_value(&field_name.field_name) {
-            return Some(value.value.clone());
+        let value = self.group_fields.iter().find(|f| {
+            f.field_name == field_name.field_name && f.table_name == field_name.table_name
+        });
+
+        if let Some(_) = value {
+            return self
+                .group_value
+                .as_ref()
+                .unwrap()
+                .get_value(&field_name.field_name)
+                .map(|c| c.value.clone());
         }
 
         for func in self.aggregate_functions.borrow_mut().iter() {
-            if func.get_field_name() == field_name.field_name {
+            if func.get_field().field_name == field_name.field_name
+                && func.get_field().field_name == field_name.field_name
+            {
                 return Some(func.get_value().value.clone());
             }
         }
 
-        None
+        panic!("Field not found: {}", field_name.field_name);
     }
 
     fn get_string(&mut self, field_name: TableNameAndFieldName) -> Option<String> {
@@ -212,7 +224,9 @@ impl ScanV2 for GroupByScan {
 
     fn has_field(&self, field_name: TableNameAndFieldName) -> bool {
         for func in self.aggregate_functions.borrow().iter() {
-            if func.get_field_name() == field_name.field_name {
+            if func.get_field().field_name == field_name.field_name
+                && func.get_field().table_name == field_name.table_name
+            {
                 return true;
             }
         }
@@ -235,11 +249,48 @@ impl ScanV2 for GroupByScan {
         self.more_groups = self.source_scan.next().unwrap();
         return Ok(());
     }
+
+    fn delete(&mut self) {
+        panic!("Cannot delete from GroupByScan")
+    }
+
+    fn insert(&mut self) {
+        panic!("Cannot insert into GroupByScan")
+    }
+
+    fn set_integer(&mut self, field_name: String, value: i32) {
+        panic!("Cannot set value in GroupByScan")
+    }
+
+    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+        panic!("Cannot set value in GroupByScan")
+    }
+
+    fn set_string(&mut self, field_name: String, value: String) {
+        panic!("Cannot set value in GroupByScan")
+    }
+
+    fn get_record_id(&self) -> crate::table_scan_v2::RecordID {
+        panic!("Cannot get RecordID from GroupByScan")
+    }
+
+    fn move_to_record_id(&mut self, record_id: crate::table_scan_v2::RecordID) {
+        panic!("Cannot move to RecordID in GroupByScan")
+    }
 }
 
-struct MaxFunction {
+pub struct MaxFunction {
     field_name: TableNameAndFieldName,
     max_value: Option<Constant>,
+}
+
+impl MaxFunction {
+    pub fn new(field_name: TableNameAndFieldName) -> Self {
+        MaxFunction {
+            field_name,
+            max_value: None,
+        }
+    }
 }
 
 impl AggregateFunction for MaxFunction {
@@ -257,8 +308,8 @@ impl AggregateFunction for MaxFunction {
         }
     }
 
-    fn get_field_name(&self) -> String {
-        format!("max({})", self.field_name.field_name)
+    fn get_field(&self) -> TableNameAndFieldName {
+        self.field_name.clone()
     }
 
     fn get_value(&self) -> Constant {

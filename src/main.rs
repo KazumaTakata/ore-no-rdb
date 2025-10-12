@@ -127,6 +127,8 @@ fn handle_parsed_sql(
                 vec![TableNameAndFieldName::new(None, "table_name".to_string())],
                 PredicateV2::new(vec![]),
                 vec![],
+                vec![],
+                vec![],
             );
 
             let mut plan =
