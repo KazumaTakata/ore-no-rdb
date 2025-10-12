@@ -21,7 +21,7 @@ impl Database {
         )));
 
         let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
-            100,
+            1000,
             file_manager.clone(),
             log_manager.clone(),
         )));

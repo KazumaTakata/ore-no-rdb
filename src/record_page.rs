@@ -492,7 +492,7 @@ mod tests {
     #[test]
     fn test_buffer() {
         let mut file_manager = FileManager::new(Path::new("data"), 1000);
-        let buffer_manager = Rc::new(RefCell::new(BufferManager::new(3)));
+        let buffer_manager = Rc::new(RefCell::new(BufferManager::new(600)));
 
         let mut transaction = transaction::Transaction::new(1);
 

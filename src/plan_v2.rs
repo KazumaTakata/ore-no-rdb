@@ -5,6 +5,7 @@ use crate::{
     concurrency_manager::LockTable,
     error::{TableAlreadyExists, ValueNotFound},
     file_manager::FileManager,
+    group_by::{AggregateFunction, GroupByPlan, MaxFunction},
     hash_index::IndexSelectPlan,
     index_manager::IndexInfo,
     log_manager_v2::LogManagerV2,
@@ -293,19 +294,35 @@ pub fn create_query_plan(
 
     let select_plan = SelectPlanV2::new(plan, query_data.predicate.clone());
 
-    let project_plan =
-        ProjectPlanV2::new(Box::new(select_plan), query_data.field_name_list.clone());
+    // let project_plan =
+    //     ProjectPlanV2::new(Box::new(select_plan), query_data.field_name_list.clone());
 
     if query_data.order_by_list.len() > 0 {
         let sort_plan = SortPlan::new(
             transaction.clone(),
-            Box::new(project_plan),
+            Box::new(select_plan),
             query_data.order_by_list.clone(),
         );
         return Ok(Box::new(sort_plan));
     }
 
-    return Ok(Box::new(project_plan));
+    if query_data.group_by_list.len() > 0 {
+        let max_aggregate_functions = query_data
+            .aggregate_functions
+            .iter()
+            .map(|f| Box::new(MaxFunction::new(f.field.clone())) as Box<dyn AggregateFunction>)
+            .collect::<Vec<Box<dyn AggregateFunction>>>();
+
+        let group_by_plan = GroupByPlan::new(
+            transaction.clone(),
+            query_data.group_by_list.clone(),
+            Rc::new(RefCell::new(max_aggregate_functions)),
+            Box::new(select_plan),
+        );
+        return Ok(Box::new(group_by_plan));
+    }
+
+    return Ok(Box::new(select_plan));
 }
 
 pub fn execute_insert(

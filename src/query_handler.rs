@@ -52,7 +52,9 @@ pub fn handle_select_query(
 mod tests {
     use crate::{
         database::Database,
+        group_by::AggregateFunction,
         page,
+        parser::AggregateFunctionInfo,
         predicate::{Constant, ConstantValue, ExpressionValue},
         predicate_v3::{ExpressionV2, PredicateV2, TermV2},
     };
@@ -82,6 +84,8 @@ mod tests {
             table_name_list: vec!["table_catalog".to_string()],
             predicate: PredicateV2::new(vec![term]),
             order_by_list: vec![],
+            group_by_list: vec![],
+            aggregate_functions: vec![],
         };
 
         handle_select_query(select_query, &mut metadata_manager, transaction);
@@ -109,6 +113,8 @@ mod tests {
             table_name_list: vec!["field_catalog".to_string(), "table_catalog".to_string()],
             predicate: PredicateV2::new(vec![term]),
             order_by_list: vec![],
+            group_by_list: vec![],
+            aggregate_functions: vec![],
         };
 
         handle_select_query(select_query, &mut metadata_manager, transaction);
@@ -140,6 +146,8 @@ mod tests {
             table_name_list: vec!["field_catalog".to_string(), "table_catalog".to_string()],
             predicate: PredicateV2::new(vec![]),
             order_by_list: vec![],
+            group_by_list: vec![],
+            aggregate_functions: vec![],
         };
 
         handle_select_query(select_query, &mut metadata_manager, transaction);
@@ -167,6 +175,8 @@ mod tests {
             table_name_list: vec!["posts".to_string()],
             predicate: PredicateV2::new(vec![term]),
             order_by_list: vec![],
+            group_by_list: vec![],
+            aggregate_functions: vec![],
         };
 
         handle_select_query(
@@ -177,8 +187,26 @@ mod tests {
         handle_select_query(select_query.clone(), &mut metadata_manager, transaction);
     }
 
+    fn delete_temp_files() {
+        use glob::glob;
+        use std::fs;
+
+        let glob = glob("./data/temp_*.tbl");
+
+        for entry in glob.unwrap() {
+            match entry {
+                Ok(path) => {
+                    fs::remove_file(path).unwrap();
+                }
+                Err(e) => println!("{:?}", e),
+            }
+        }
+    }
+
     #[test]
     fn test_handle_select_query_5() {
+        delete_temp_files();
+
         let database = Database::new();
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
@@ -199,6 +227,8 @@ mod tests {
             table_name_list: vec!["posts".to_string()],
             predicate: PredicateV2::new(vec![]),
             order_by_list: vec![TableNameAndFieldName::new(None, "content".to_string())],
+            group_by_list: vec![],
+            aggregate_functions: vec![],
         };
 
         handle_select_query(
@@ -206,5 +236,50 @@ mod tests {
             &mut metadata_manager,
             transaction.clone(),
         );
+
+        delete_temp_files();
+    }
+
+    #[test]
+    fn test_handle_select_query_group_by() {
+        delete_temp_files();
+
+        let database = Database::new();
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
+
+        let table_name_and_field_name = TableNameAndFieldName::new(None, "content".to_string());
+
+        let term = TermV2::new(
+            ExpressionV2::new(ExpressionValue::TableNameAndFieldName(
+                table_name_and_field_name.clone(),
+            )),
+            ExpressionV2::new(ExpressionValue::Constant(Constant::new(
+                ConstantValue::String("Gold".to_string()),
+            ))),
+        );
+
+        let select_query = QueryData {
+            field_name_list: vec![
+                TableNameAndFieldName::new(None, "content".to_string()),
+                TableNameAndFieldName::new(None, "title".to_string()),
+            ],
+            table_name_list: vec!["posts".to_string()],
+            predicate: PredicateV2::new(vec![]),
+            order_by_list: vec![],
+            group_by_list: vec![TableNameAndFieldName::new(None, "content".to_string())],
+            aggregate_functions: vec![AggregateFunctionInfo {
+                function_name: "max".to_string(),
+                field: TableNameAndFieldName::new(None, "title".to_string()),
+            }],
+        };
+
+        handle_select_query(
+            select_query.clone(),
+            &mut metadata_manager,
+            transaction.clone(),
+        );
+
+        delete_temp_files();
     }
 }

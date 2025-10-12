@@ -4,6 +4,7 @@ use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 
 use crate::{
+    group_by::{self, AggregateFunction},
     predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
     predicate_v3::{ExpressionV2, PredicateV2, TermV2},
     record_page::{TableFieldInfo, TableFieldType, TableSchema},
@@ -175,11 +176,19 @@ impl fmt::Display for CreateTableData {
 }
 
 #[derive(Debug, Clone)]
+pub struct AggregateFunctionInfo {
+    pub function_name: String,
+    pub field: TableNameAndFieldName,
+}
+
+#[derive(Debug, Clone)]
 pub struct QueryData {
     pub table_name_list: Vec<String>,
     pub field_name_list: Vec<TableNameAndFieldName>,
     pub predicate: PredicateV2,
     pub order_by_list: Vec<TableNameAndFieldName>,
+    pub group_by_list: Vec<TableNameAndFieldName>,
+    pub aggregate_functions: Vec<AggregateFunctionInfo>,
 }
 
 impl QueryData {
@@ -188,12 +197,16 @@ impl QueryData {
         field_name_list: Vec<TableNameAndFieldName>,
         predicate: PredicateV2,
         order_by_list: Vec<TableNameAndFieldName>,
+        group_by_list: Vec<TableNameAndFieldName>,
+        aggregate_functions: Vec<AggregateFunctionInfo>,
     ) -> Self {
         QueryData {
             table_name_list,
             field_name_list,
             predicate,
             order_by_list,
+            group_by_list,
+            aggregate_functions,
         }
     }
 
@@ -219,6 +232,23 @@ impl QueryData {
                 "{} {} ",
                 order_by.table_name.clone().unwrap_or("".to_string()),
                 order_by.field_name
+            ));
+        }
+        result.push_str("\nGroup By: ");
+        for group_by in &self.group_by_list {
+            result.push_str(&format!(
+                "{} {} ",
+                group_by.table_name.clone().unwrap_or("".to_string()),
+                group_by.field_name
+            ));
+        }
+        result.push_str("\nAggregate Functions: ");
+        for agg in &self.aggregate_functions {
+            result.push_str(&format!(
+                "{}({} {}) ",
+                agg.function_name,
+                agg.field.table_name.clone().unwrap_or("".to_string()),
+                agg.field.field_name
             ));
         }
         result
@@ -347,6 +377,8 @@ fn parse_select_sql(record: Pair<Rule>) -> QueryData {
     let mut table_name_list: Vec<String> = Vec::new();
     let mut field_name_list: Vec<TableNameAndFieldName> = Vec::new();
     let mut order_by_list: Vec<TableNameAndFieldName> = Vec::new();
+    let mut group_by_list: Vec<TableNameAndFieldName> = Vec::new();
+    let mut aggregate_functions: Vec<AggregateFunctionInfo> = Vec::new();
 
     let mut predicate: Option<PredicateV2> = None;
 
@@ -367,32 +399,73 @@ fn parse_select_sql(record: Pair<Rule>) -> QueryData {
             Rule::select_list => inner_value
                 .into_inner()
                 .for_each(|inner_value| match inner_value.as_rule() {
-                    Rule::field => {
-                        inner_value.into_inner().for_each(|inner_value| {
-                            match inner_value.as_rule() {
-                                Rule::id_token => {
-                                    let field_name = inner_value.as_str().to_string();
-                                    field_name_list.push(TableNameAndFieldName::new(
-                                        None,
-                                        field_name.to_string(),
-                                    ));
-                                }
-                                Rule::qualified_field => {
-                                    let mut inner_iter = inner_value.into_inner();
-                                    let table_name = inner_iter.next().unwrap().as_str();
-                                    let field_name = inner_iter.next().unwrap().as_str();
+                    Rule::select_field => inner_value.into_inner().for_each(|inner_value| {
+                        match inner_value.as_rule() {
+                            Rule::aggregate_function => {
+                                let mut inner_iter = inner_value.into_inner();
+                                let function_name = inner_iter.next().unwrap().as_str().to_string();
+                                let field_pair = inner_iter.next().unwrap();
+                                let field = match field_pair.into_inner().next() {
+                                    Some(field_inner) => match field_inner.as_rule() {
+                                        Rule::qualified_field => {
+                                            let mut inner_iter = field_inner.into_inner();
+                                            let table_name = inner_iter.next().unwrap().as_str();
+                                            let field_name = inner_iter.next().unwrap().as_str();
 
-                                    field_name_list.push(TableNameAndFieldName::new(
-                                        Some(table_name.to_string()),
-                                        field_name.to_string(),
-                                    ));
-                                }
-                                _ => {}
+                                            TableNameAndFieldName::new(
+                                                Some(table_name.to_string()),
+                                                field_name.to_string(),
+                                            )
+                                        }
+                                        Rule::id_token => TableNameAndFieldName::new(
+                                            None,
+                                            field_inner.as_str().to_string(),
+                                        ),
+                                        _ => {
+                                            panic!("Unexpected rule in aggregate function field")
+                                        }
+                                    },
+                                    None => {
+                                        panic!("No inner value in aggregate function field")
+                                    }
+                                };
+
+                                aggregate_functions.push(AggregateFunctionInfo {
+                                    function_name,
+                                    field,
+                                });
                             }
-                        });
-                    }
+
+                            Rule::field => {
+                                inner_value
+                                    .into_inner()
+                                    .for_each(|inner_value| match inner_value.as_rule() {
+                                        Rule::id_token => {
+                                            let field_name = inner_value.as_str().to_string();
+                                            field_name_list.push(TableNameAndFieldName::new(
+                                                None,
+                                                field_name.to_string(),
+                                            ));
+                                        }
+                                        Rule::qualified_field => {
+                                            let mut inner_iter = inner_value.into_inner();
+                                            let table_name = inner_iter.next().unwrap().as_str();
+                                            let field_name = inner_iter.next().unwrap().as_str();
+
+                                            field_name_list.push(TableNameAndFieldName::new(
+                                                Some(table_name.to_string()),
+                                                field_name.to_string(),
+                                            ));
+                                        }
+                                        _ => {}
+                                    });
+                            }
+                            _ => {}
+                        }
+                    }),
                     _ => {}
                 }),
+
             Rule::predicate => {
                 predicate = parse_predicate(inner_value);
             }
@@ -427,6 +500,37 @@ fn parse_select_sql(record: Pair<Rule>) -> QueryData {
                         _ => {}
                     })
             }
+            Rule::group_by_list => {
+                inner_value
+                    .into_inner()
+                    .for_each(|inner_value| match inner_value.as_rule() {
+                        Rule::field => {
+                            inner_value.into_inner().for_each(|inner_value| {
+                                match inner_value.as_rule() {
+                                    Rule::id_token => {
+                                        let field_name = inner_value.as_str().to_string();
+                                        group_by_list.push(TableNameAndFieldName::new(
+                                            None,
+                                            field_name.to_string(),
+                                        ));
+                                    }
+                                    Rule::qualified_field => {
+                                        let mut inner_iter = inner_value.into_inner();
+                                        let table_name = inner_iter.next().unwrap().as_str();
+                                        let field_name = inner_iter.next().unwrap().as_str();
+
+                                        group_by_list.push(TableNameAndFieldName::new(
+                                            Some(table_name.to_string()),
+                                            field_name.to_string(),
+                                        ));
+                                    }
+                                    _ => {}
+                                }
+                            });
+                        }
+                        _ => {}
+                    })
+            }
             _ => {}
         });
     let query_data = QueryData::new(
@@ -434,6 +538,8 @@ fn parse_select_sql(record: Pair<Rule>) -> QueryData {
         field_name_list,
         predicate.unwrap_or(PredicateV2::new(vec![])),
         order_by_list,
+        group_by_list,
+        aggregate_functions,
     );
 
     return query_data;
@@ -838,6 +944,13 @@ mod tests {
     #[test]
     fn test_select_order_by() {
         let sql = "select A, B from test_table order by A".to_string();
+        let parsed_sql = parse_sql(sql);
+        parsed_sql[0].debug_print();
+    }
+
+    #[test]
+    fn test_select_group_by() {
+        let sql = "select A, max(B) from test_table group by A".to_string();
         let parsed_sql = parse_sql(sql);
         parsed_sql[0].debug_print();
     }
