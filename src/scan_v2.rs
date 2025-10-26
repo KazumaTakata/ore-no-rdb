@@ -199,6 +199,13 @@ impl ProductScanV2 {
             right_scan,
         }
     }
+
+    pub fn new_with_product_scan(product_scan: ProductScanV2, right_scan: Box<dyn ScanV2>) -> Self {
+        ProductScanV2 {
+            left_scan: product_scan.left_scan,
+            right_scan,
+        }
+    }
 }
 
 impl ScanV2 for ProductScanV2 {

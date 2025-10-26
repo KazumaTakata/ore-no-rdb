@@ -200,6 +200,10 @@ impl BufferManagerV2 {
     pub fn pin(&mut self, block_id: BlockId) -> Option<Rc<RefCell<BufferV2>>> {
         return self.try_to_pin(block_id);
     }
+
+    pub fn get_available_buffer_size(&self) -> i32 {
+        self.number_of_available
+    }
 }
 
 pub struct BufferListV2 {
