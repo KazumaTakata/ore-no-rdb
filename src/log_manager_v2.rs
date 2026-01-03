@@ -144,3 +144,66 @@ impl LogIteratorV2 {
         record
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use std::fs::remove_file;
+
+    use super::*;
+
+    #[test]
+    fn test_log_manager() {
+        let test_dir = std::path::Path::new("test_data");
+
+        let block_size = 400;
+        let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
+
+        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+            file_manager.clone(),
+            "log.txt".to_string(),
+        )));
+
+        create_records(1, 36, log_manager.clone());
+
+        print_log_records(log_manager.clone());
+
+        remove_file(test_dir.join("log.txt")).unwrap_or_default();
+    }
+
+    fn print_log_records(log_manager: Rc<RefCell<LogManagerV2>>) {
+        let mut log_iterator = log_manager.borrow_mut().iterator();
+
+        let mut correct_answer_integer = 35;
+
+        while log_iterator.has_next() {
+            let record = log_iterator.next();
+            let record_page = Page::from(record);
+            let string_data = record_page.get_string(0);
+            let string_data_max_length = Page::get_max_length(string_data.len() as u32);
+            let integer_data = record_page.get_integer(string_data_max_length);
+
+            assert_eq!(integer_data, 100 + correct_answer_integer);
+            assert_eq!(string_data, format!("record_{}", correct_answer_integer));
+            correct_answer_integer -= 1;
+        }
+    }
+
+    fn create_records(start_index: i32, end_index: i32, log_manager: Rc<RefCell<LogManagerV2>>) {
+        for i in start_index..end_index {
+            let record_data = create_log_record(&format!("record_{}", i), i + 100);
+            let log_sequence_number = log_manager.borrow_mut().append_record(&record_data);
+        }
+    }
+
+    fn create_log_record(string_data: &str, integer_data: i32) -> Vec<u8> {
+        let string_data_max_length = Page::get_max_length(string_data.len() as u32);
+        let record_data = vec![0; string_data_max_length + INTEGER_BYTE_SIZE];
+
+        let mut page = Page::from(record_data);
+        page.set_string(0, string_data);
+        page.set_integer(string_data_max_length, integer_data);
+
+        return page.get_data().clone();
+    }
+}
