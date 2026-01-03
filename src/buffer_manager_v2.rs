@@ -1,15 +1,6 @@
-use std::{
-    cell::{Ref, RefCell},
-    collections::HashMap,
-    fs::{self, File},
-    io::Write,
-    iter::Map,
-    os::unix::fs::FileExt,
-    path::Path,
-    rc::Rc,
-};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::file_manager::{self, FileManager};
+use crate::file_manager::FileManager;
 use crate::page::Page;
 use crate::{block::BlockId, log_manager_v2::LogManagerV2};
 
@@ -168,13 +159,9 @@ impl BufferManagerV2 {
 
     fn find_existing_buffer(&mut self, block_id: &BlockId) -> Option<Rc<RefCell<BufferV2>>> {
         let buffer = self.buffer_pool.iter().find(|buffer| {
-            buffer.borrow_mut().block_id().is_some()
-                && buffer
-                    .borrow_mut()
-                    .block_id()
-                    .as_ref()
-                    .unwrap()
-                    .equals(&block_id)
+            let buffer_ref = buffer.borrow();
+            buffer_ref.block_id().is_some()
+                && buffer_ref.block_id().as_ref().unwrap().equals(&block_id)
         });
 
         if let Some(buffer) = buffer {
@@ -263,5 +250,98 @@ impl BufferListV2 {
     pub fn get_buffer(&mut self, block_id: BlockId) -> Option<&Rc<RefCell<BufferV2>>> {
         let buffer = self.buffers.get(&block_id);
         return buffer;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::fs::remove_file;
+
+    use super::*;
+
+    #[test]
+    fn test_buffer_manager() {
+        let test_dir = std::path::Path::new("test_data");
+
+        let block_size = 400;
+        let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
+
+        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+            file_manager.clone(),
+            "log.txt".to_string(),
+        )));
+
+        let number_of_buffers = 3;
+
+        let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
+            number_of_buffers,
+            file_manager.clone(),
+            log_manager.clone(),
+        )));
+
+        let data_file_name = "test_buffer_manager.txt".to_string();
+
+        let block_1_id = BlockId::new(data_file_name.clone(), 0);
+
+        let buffer = buffer_manager.borrow_mut().pin(block_1_id).unwrap();
+
+        {
+            let mut borrowed_buffer = buffer.borrow_mut();
+
+            let page_1 = borrowed_buffer.content();
+
+            page_1.set_integer(80, 123);
+
+            page_1.set_string(140, "hello buffer manager");
+
+            borrowed_buffer.set_modified(1, 0);
+
+            buffer_manager.borrow_mut().unpin(&mut borrowed_buffer);
+        }
+
+        let block_2_id = BlockId::new("test_buffer_manager.txt".to_string(), 1);
+        let buffer_2 = buffer_manager.borrow_mut().pin(block_2_id).unwrap();
+
+        let block_3_id = BlockId::new("test_buffer_manager.txt".to_string(), 2);
+        let _buffer_3 = buffer_manager.borrow_mut().pin(block_3_id).unwrap();
+
+        let block_4_id = BlockId::new("test_buffer_manager.txt".to_string(), 3);
+        let _buffer_4 = buffer_manager.borrow_mut().pin(block_4_id).unwrap();
+
+        buffer_manager
+            .borrow_mut()
+            .unpin(&mut buffer_2.borrow_mut());
+
+        let block_5_id = BlockId::new("test_buffer_manager.txt".to_string(), 0);
+        let buffer_5 = buffer_manager.borrow_mut().pin(block_5_id).unwrap();
+
+        let mut borrowed_buffer_5 = buffer_5.borrow_mut();
+
+        let content = borrowed_buffer_5.content();
+        let value = content.get_integer(80);
+
+        let string_value = content.get_string(140);
+
+        assert!(value == 123);
+        assert!(string_value == "hello buffer manager");
+
+        // テストファイルに書き込んだデータが正しいか確認
+        // テスト用にfile_managerを使って読み込み直して確認
+        let mut file_manager_for_test = FileManager::new(test_dir, block_size);
+
+        // テスト用のBlockIdとPageを作成
+        let block_id = BlockId::new(data_file_name.clone(), 0);
+        let mut page = Page::new(file_manager_for_test.get_block_size());
+
+        file_manager_for_test.read(&block_id, &mut page);
+
+        let integer_value = page.get_integer(80);
+        assert!(integer_value == 123);
+
+        let string_value = page.get_string(140);
+        assert!(string_value == "hello buffer manager");
+
+        remove_file(test_dir.join("test_buffer_manager.txt")).unwrap();
     }
 }
