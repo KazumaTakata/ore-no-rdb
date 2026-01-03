@@ -10,3 +10,4 @@ pest_derive = "2.6"
 rustyline = "17.0.1"
 clap = { version = "4.0", features = ["derive"] }
 glob = "0.3.2"
+uuid = { version = "1.19.0", features = ["v4"] }

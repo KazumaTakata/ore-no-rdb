@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, os::macos::raw::stat, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},

@@ -21,6 +21,7 @@ mod log_manager;
 mod log_manager_v2;
 mod materialize;
 mod metadata_manager;
+mod multi_buffer;
 mod page;
 mod parser;
 mod plan_v2;

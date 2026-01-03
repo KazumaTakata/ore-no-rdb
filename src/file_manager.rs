@@ -93,17 +93,19 @@ impl FileManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
+    use std::{fs::remove_file, path::Path};
 
     // FileManagerのテスト
     #[test]
     fn test_file_manager_read_write() {
-        let test_dir = Path::new("data");
+        let test_dir = Path::new("test_data");
         let block_size = 400;
         let mut file_manager = FileManager::new(test_dir, block_size);
 
+        let test_file_name = format!("test_file_{}.txt", uuid::Uuid::new_v4());
+
         // テスト用のBlockIdとPageを作成
-        let block_id = BlockId::new("test_file.txt".to_string(), 0);
+        let block_id = BlockId::new(test_file_name.to_string(), 0);
         let mut page = Page::new(file_manager.get_block_size());
 
         // データを書き込む
@@ -130,6 +132,6 @@ mod tests {
         assert_eq!(page2.get_integer(offset_3), 23333);
 
         // // テスト後にディレクトリを削除
-        // std::fs::remove_dir_all(test_dir).unwrap_or_default();
+        remove_file(test_dir.join(&test_file_name)).unwrap_or_default();
     }
 }
