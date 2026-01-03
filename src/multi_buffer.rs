@@ -257,98 +257,98 @@ impl MultiBufferProductPlan {
     }
 }
 
-impl PlanV2 for MultiBufferProductPlan {
-    fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
-        let left_scan = self.left_plan.open()?;
-        let temp_table = self.copy_records(self.right_plan.as_mut());
+// impl PlanV2 for MultiBufferProductPlan {
+//     fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
+//         let left_scan = self.left_plan.open()?;
+//         let temp_table = self.copy_records(self.right_plan.as_mut());
 
-        return Ok(Box::new(MultiBufferProductScan::new(
-            self.transaction.clone(),
-            left_scan,
-            temp_table,
-        )));
-    }
-}
+//         return Ok(Box::new(MultiBufferProductScan::new(
+//             self.transaction.clone(),
+//             left_scan,
+//             temp_table,
+//         )));
+//     }
+// }
 
-struct MultiBufferProductScan {
-    transaction: Rc<RefCell<TransactionV2>>,
-    left_scan: Box<dyn ScanV2>,
-    right_scan: Option<Box<dyn ScanV2>>,
-    product_scan: Option<ProductScanV2>,
-    layout: Layout,
-    file_name: String,
-    chunk_size: usize,
-    next_block_index: usize,
-    file_size: usize,
-}
+// struct MultiBufferProductScan {
+//     transaction: Rc<RefCell<TransactionV2>>,
+//     left_scan: Box<dyn ScanV2>,
+//     right_scan: Option<Box<dyn ScanV2>>,
+//     product_scan: Option<ProductScanV2>,
+//     layout: Layout,
+//     file_name: String,
+//     chunk_size: usize,
+//     next_block_index: usize,
+//     file_size: usize,
+// }
 
-impl MultiBufferProductScan {
-    pub fn new(
-        transaction: Rc<RefCell<TransactionV2>>,
-        left_scan: Box<dyn ScanV2>,
-        temp_table: TempTable,
-    ) -> MultiBufferProductScan {
-        let layout = temp_table.get_layout().clone();
-        let file_name = temp_table.get_table_name().clone();
-        let file_size = transaction.borrow().get_size(file_name.clone());
+// impl MultiBufferProductScan {
+//     pub fn new(
+//         transaction: Rc<RefCell<TransactionV2>>,
+//         left_scan: Box<dyn ScanV2>,
+//         temp_table: TempTable,
+//     ) -> MultiBufferProductScan {
+//         let layout = temp_table.get_layout().clone();
+//         let file_name = temp_table.get_table_name().clone();
+//         let file_size = transaction.borrow().get_size(file_name.clone());
 
-        let file_size = transaction.borrow().get_size(file_name.clone());
+//         let file_size = transaction.borrow().get_size(file_name.clone());
 
-        let available_buffer_size = transaction.borrow().get_available_buffer_size() as usize;
+//         let available_buffer_size = transaction.borrow().get_available_buffer_size() as usize;
 
-        let chunk_size = get_buffer_size_for_product(available_buffer_size, file_size);
+//         let chunk_size = get_buffer_size_for_product(available_buffer_size, file_size);
 
-        MultiBufferProductScan {
-            transaction,
-            left_scan,
-            right_scan: temp_table.open(),
-            product_scan: None,
-            layout,
-            file_name,
-            chunk_size,
-            next_block_index: 0,
-            file_size,
-        }
-    }
+//         MultiBufferProductScan {
+//             transaction,
+//             left_scan,
+//             right_scan: temp_table.open(),
+//             product_scan: None,
+//             layout,
+//             file_name,
+//             chunk_size,
+//             next_block_index: 0,
+//             file_size,
+//         }
+//     }
 
-    fn use_next_chunk(&mut self, left_scan: Option<Box<dyn ScanV2>>) -> bool {
-        if let Some(right_scan) = self.right_scan.as_mut() {
-            right_scan.close();
-        }
+//     fn use_next_chunk(&mut self, left_scan: Option<Box<dyn ScanV2>>) -> bool {
+//         if let Some(right_scan) = self.right_scan.as_mut() {
+//             right_scan.close();
+//         }
 
-        if self.next_block_index >= self.file_size {
-            return false;
-        }
+//         if self.next_block_index >= self.file_size {
+//             return false;
+//         }
 
-        let mut end_block_index = self.next_block_index + self.chunk_size - 1;
+//         let mut end_block_index = self.next_block_index + self.chunk_size - 1;
 
-        if end_block_index >= self.file_size {
-            end_block_index = self.file_size - 1;
-        }
+//         if end_block_index >= self.file_size {
+//             end_block_index = self.file_size - 1;
+//         }
 
-        let right_scan = ChunkScan::new(
-            self.transaction.clone(),
-            self.file_name.clone(),
-            self.layout.clone(),
-            self.next_block_index,
-            end_block_index,
-        );
+//         let right_scan = ChunkScan::new(
+//             self.transaction.clone(),
+//             self.file_name.clone(),
+//             self.layout.clone(),
+//             self.next_block_index,
+//             end_block_index,
+//         );
 
-        self.left_scan.move_to_before_first().unwrap();
+//         self.left_scan.move_to_before_first().unwrap();
 
-        let current_product_scan = self.product_scan.take();
+//         let current_product_scan = self.product_scan.take();
 
-        self.product_scan = if let Some(left_scan) = left_scan {
-            Some(ProductScanV2::new(left_scan, Box::new(right_scan)))
-        } else {
-            Some(ProductScanV2::new_with_product_scan(
-                current_product_scan.unwrap(),
-                Box::new(right_scan),
-            ))
-        };
+//         self.product_scan = if let Some(left_scan) = left_scan {
+//             Some(ProductScanV2::new(left_scan, Box::new(right_scan)))
+//         } else {
+//             Some(ProductScanV2::new_with_product_scan(
+//                 current_product_scan.unwrap(),
+//                 Box::new(right_scan),
+//             ))
+//         };
 
-        self.next_block_index = end_block_index + 1;
+//         self.next_block_index = end_block_index + 1;
 
-        return true;
-    }
-}
+//         return true;
+//     }
+// }
