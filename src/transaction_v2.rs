@@ -9,7 +9,6 @@ use std::{
     rc::Rc,
 };
 
-use crate::file_manager::FileManager;
 use crate::log_manager::LogManager;
 use crate::{block::BlockId, file_manager};
 use crate::{buffer_manager::BufferList, recovery_manager};
@@ -18,9 +17,7 @@ use crate::{
     buffer_manager_v2::{BufferListV2, BufferManagerV2},
     concurrency_manager::LockTable,
 };
-use crate::{
-    concurrency_manager::ConcurrencyManager, concurrency_manager_v2::ConcurrencyManagerV2,
-};
+use crate::{concurrency_manager::ConcurrencyManagerV2, file_manager::FileManager};
 
 pub struct TransactionV2 {
     tx_num: i32,

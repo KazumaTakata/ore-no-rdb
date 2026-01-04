@@ -8,7 +8,6 @@ mod block;
 mod buffer_manager;
 mod buffer_manager_v2;
 mod concurrency_manager;
-mod concurrency_manager_v2;
 mod constant;
 mod database;
 mod error;
@@ -239,12 +238,6 @@ fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        buffer_manager::{BufferList, BufferManager},
-        concurrency_manager::{ConcurrencyManager, LockTable},
-        log_manager::LogManager,
-        transaction::Transaction,
-    };
 
     use super::*;
     use std::path::Path;

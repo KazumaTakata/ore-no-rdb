@@ -11,7 +11,6 @@ use std::{
 
 use crate::buffer_manager::BufferList;
 use crate::buffer_manager::BufferManager;
-use crate::concurrency_manager::ConcurrencyManager;
 use crate::concurrency_manager::LockTable;
 use crate::file_manager::FileManager;
 use crate::log_manager::LogManager;

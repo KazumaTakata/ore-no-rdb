@@ -1,13 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    block::{self, BlockId},
-    buffer_manager::{self, Buffer, BufferList, BufferManager},
-    buffer_manager_v2::BufferManagerV2,
-    file_manager::{self, FileManager},
-    log_manager_v2::{self, LogManagerV2},
+    block::BlockId,
+    buffer_manager_v2::{BufferManagerV2, BufferV2},
+    log_manager_v2::LogManagerV2,
     page::Page,
-    transaction::{self, Transaction},
     transaction_v2::TransactionV2,
 };
 
@@ -438,7 +435,7 @@ impl RecoveryManager {
         self.log_manager.borrow_mut().flush_with_lsn(lsn);
     }
 
-    fn set_integer(&self, offset: usize, buffer: &mut Buffer) -> i32 {
+    fn set_integer(&self, offset: usize, buffer: &mut BufferV2) -> i32 {
         let old_value = buffer.content().get_integer(offset);
         let block = buffer.block_id().as_ref().unwrap().clone();
         let lsn = SetIntegerRecord::write_to_log(
@@ -451,7 +448,7 @@ impl RecoveryManager {
         return lsn;
     }
 
-    fn set_string(&self, offset: usize, buffer: &mut Buffer) -> i32 {
+    fn set_string(&self, offset: usize, buffer: &mut BufferV2) -> i32 {
         let old_value = buffer.content().get_string(offset);
         let block = buffer.block_id().as_ref().unwrap().clone();
 
