@@ -424,7 +424,6 @@ mod tests {
         concurrency_manager::LockTable,
         database::Database,
         file_manager::{self, FileManager},
-        log_manager,
         log_manager_v2::LogManagerV2,
         metadata_manager::{self, MetadataManager},
         parser::parse_sql,

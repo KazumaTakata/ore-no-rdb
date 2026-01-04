@@ -170,7 +170,6 @@ mod tests {
         concurrency_manager::LockTable,
         database::Database,
         file_manager::{self, FileManager},
-        log_manager,
         log_manager_v2::LogManagerV2,
         parser::parse_sql,
         record_page::TableSchema,

@@ -102,7 +102,7 @@ impl TransactionV2 {
 mod tests {
     use std::path::Path;
 
-    use crate::{log_manager, log_manager_v2::LogManagerV2};
+    use crate::log_manager_v2::LogManagerV2;
 
     use super::*;
 
