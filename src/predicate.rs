@@ -2,11 +2,7 @@ use std::cmp::max;
 
 use pest::pratt_parser::Op;
 
-use crate::{
-    buffer_manager::BufferList,
-    record_page::TableSchema,
-    transaction::{self, Transaction},
-};
+use crate::record_page::TableSchema;
 
 #[derive(Debug, Clone)]
 pub enum ConstantValue {

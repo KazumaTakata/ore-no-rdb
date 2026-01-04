@@ -873,12 +873,10 @@ mod tests {
         buffer_manager_v2::BufferManagerV2,
         concurrency_manager::LockTable,
         file_manager::{self, FileManager},
-        log_manager,
         log_manager_v2::LogManagerV2,
         predicate::{Constant, ConstantValue, ExpressionValue},
         predicate_v3::{ExpressionV2, TermV2},
         record_page::TableSchema,
-        transaction,
     };
 
     use super::*;

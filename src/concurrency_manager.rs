@@ -1,13 +1,5 @@
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    fs::{self, File},
-    io::Write,
-    iter::Map,
-    os::unix::fs::FileExt,
-    path::Path,
-    rc::Rc,
-};
+use std::collections::HashMap;
+use std::{cell::RefCell, rc::Rc};
 
 use crate::block::BlockId;
 
@@ -66,27 +58,29 @@ impl LockTable {
     }
 }
 
-pub struct ConcurrencyManager {
+pub struct ConcurrencyManagerV2 {
     locks: HashMap<BlockId, String>,
+    lock_table: Rc<RefCell<LockTable>>,
 }
-impl ConcurrencyManager {
-    pub fn new() -> ConcurrencyManager {
+
+impl ConcurrencyManagerV2 {
+    pub fn new(lock_table: Rc<RefCell<LockTable>>) -> ConcurrencyManagerV2 {
         let locks: HashMap<BlockId, String> = HashMap::new();
-        ConcurrencyManager { locks }
+        ConcurrencyManagerV2 { locks, lock_table }
     }
 
-    fn s_lock(&mut self, block_id: BlockId, lock_table: &mut LockTable) {
+    fn s_lock(&mut self, block_id: BlockId) {
         let lock_value = self.locks.get(&block_id);
         if lock_value.is_none() {
-            lock_table.s_lock(block_id.clone());
+            self.lock_table.borrow_mut().s_lock(block_id.clone());
             self.locks.insert(block_id, "S".to_string());
         }
     }
 
-    fn x_lock(&mut self, block_id: BlockId, lock_table: &mut LockTable) {
+    fn x_lock(&mut self, block_id: BlockId) {
         if !self.has_xlock(&block_id) {
-            self.s_lock(block_id.clone(), lock_table);
-            lock_table.x_lock(block_id.clone());
+            self.s_lock(block_id.clone());
+            self.lock_table.borrow_mut().x_lock(block_id.clone());
             self.locks.insert(block_id, "X".to_string());
         }
     }
@@ -103,9 +97,9 @@ impl ConcurrencyManager {
         return false;
     }
 
-    pub fn release(&mut self, lock_table: &mut LockTable) {
+    pub fn release(&mut self) {
         for (key, value) in self.locks.iter() {
-            lock_table.unlock(key);
+            self.lock_table.borrow_mut().unlock(key);
         }
         self.locks.clear();
     }
