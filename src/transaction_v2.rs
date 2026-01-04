@@ -1,13 +1,15 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::block::BlockId;
+use crate::log_manager_v2::LogManagerV2;
+use crate::recovery_manager::{self, RecoveryManager};
 use crate::{
     buffer_manager_v2::{BufferListV2, BufferManagerV2},
     concurrency_manager::LockTable,
 };
 use crate::{concurrency_manager::ConcurrencyManagerV2, file_manager::FileManager};
 
-pub struct TransactionV2 {
+pub struct InnerTransactionV2 {
     tx_num: i32,
     buffer_manager: Rc<RefCell<BufferManagerV2>>,
     lock_table: Rc<RefCell<LockTable>>,
@@ -16,17 +18,22 @@ pub struct TransactionV2 {
     file_manager: Rc<RefCell<FileManager>>,
 }
 
-impl TransactionV2 {
-    pub fn new(
+pub struct TransactionV2 {
+    inner: InnerTransactionV2,
+    recovery_manager: RecoveryManager,
+}
+
+impl InnerTransactionV2 {
+    fn new(
         tx_num: i32,
         file_manager: Rc<RefCell<FileManager>>,
         buffer_manager: Rc<RefCell<BufferManagerV2>>,
         lock_table: Rc<RefCell<LockTable>>,
-    ) -> TransactionV2 {
+    ) -> InnerTransactionV2 {
         let concurrency_manager = ConcurrencyManagerV2::new(lock_table.clone());
         let buffer_list = BufferListV2::new(buffer_manager.clone());
 
-        TransactionV2 {
+        InnerTransactionV2 {
             tx_num,
             buffer_manager,
             file_manager,
@@ -36,7 +43,7 @@ impl TransactionV2 {
         }
     }
 
-    pub fn get_block_size(&self) -> usize {
+    fn get_block_size(&self) -> usize {
         self.file_manager.borrow().get_block_size()
     }
 
@@ -48,14 +55,21 @@ impl TransactionV2 {
         self.buffer_list.unpin(block_id);
     }
 
-    pub fn commit(&mut self) {
+    fn commit(&mut self, recovery_manager: &mut RecoveryManager) {
+        recovery_manager.commit();
+        self.concurrency_manager.release();
         self.buffer_list.unpin_all();
-        self.buffer_manager.borrow_mut().flush_all(self.tx_num);
     }
 
-    fn rollback(&mut self, lock_table: &mut LockTable) {}
+    fn rollback(&mut self, recovery_manager: &mut RecoveryManager) {
+        recovery_manager.rollback(self);
+        self.concurrency_manager.release();
+        self.buffer_list.unpin_all();
+    }
 
     pub fn set_integer(&mut self, block_id: BlockId, offset: usize, value: i32) {
+        self.concurrency_manager.x_lock(block_id.clone());
+
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
         let mut buffer = buffer.borrow_mut();
         let page = buffer.content();
@@ -63,7 +77,9 @@ impl TransactionV2 {
         buffer.set_modified(self.tx_num, -1);
     }
 
-    pub fn set_string(&mut self, block_id: BlockId, offset: usize, value: &str) {
+    fn set_string(&mut self, block_id: BlockId, offset: usize, value: &str) {
+        self.concurrency_manager.x_lock(block_id.clone());
+
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
         let mut buffer = buffer.borrow_mut();
         let page = buffer.content();
@@ -71,30 +87,98 @@ impl TransactionV2 {
         buffer.set_modified(self.tx_num, -1);
     }
 
-    pub fn get_integer(&mut self, block_id: BlockId, offset: usize) -> i32 {
+    fn get_integer(&mut self, block_id: BlockId, offset: usize) -> i32 {
+        self.concurrency_manager.s_lock(block_id.clone());
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
         let mut buffer = buffer.borrow_mut();
         let page = buffer.content();
         page.get_integer(offset)
     }
 
-    pub fn get_size(&self, file_name: String) -> usize {
+    fn get_size(&self, file_name: String) -> usize {
         return self.file_manager.borrow_mut().length(&file_name);
     }
 
-    pub fn get_string(&mut self, block_id: BlockId, offset: usize) -> String {
+    fn get_string(&mut self, block_id: BlockId, offset: usize) -> String {
+        self.concurrency_manager.s_lock(block_id.clone());
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
         let mut buffer = buffer.borrow_mut();
         let page = buffer.content();
         page.get_string(offset)
     }
 
-    pub fn append(&mut self, file_name: &str) -> BlockId {
+    fn append(&mut self, file_name: &str) -> BlockId {
         self.file_manager.borrow_mut().append(file_name)
     }
 
-    pub fn get_available_buffer_size(&self) -> i32 {
+    fn get_available_buffer_size(&self) -> i32 {
         self.buffer_manager.borrow().get_available_buffer_size()
+    }
+}
+
+impl TransactionV2 {
+    pub fn new(
+        tx_num: i32,
+        file_manager: Rc<RefCell<FileManager>>,
+        buffer_manager: Rc<RefCell<BufferManagerV2>>,
+        lock_table: Rc<RefCell<LockTable>>,
+        log_manager: Rc<RefCell<LogManagerV2>>,
+    ) -> TransactionV2 {
+        let recovery_manager =
+            RecoveryManager::new(tx_num, buffer_manager.clone(), log_manager.clone());
+
+        TransactionV2 {
+            inner: InnerTransactionV2::new(tx_num, file_manager, buffer_manager, lock_table),
+            recovery_manager,
+        }
+    }
+
+    pub fn get_block_size(&self) -> usize {
+        self.inner.get_block_size()
+    }
+
+    pub fn pin(&mut self, block_id: BlockId) {
+        self.inner.pin(block_id);
+    }
+
+    pub fn unpin(&mut self, block_id: BlockId) {
+        self.inner.unpin(block_id);
+    }
+
+    pub fn commit(&mut self) {
+        self.inner.commit(&mut self.recovery_manager);
+    }
+
+    pub fn rollback(&mut self) {
+        self.inner.rollback(&mut self.recovery_manager);
+    }
+
+    pub fn set_integer(&mut self, block_id: BlockId, offset: usize, value: i32) {
+        self.inner.set_integer(block_id, offset, value);
+    }
+
+    pub fn set_string(&mut self, block_id: BlockId, offset: usize, value: &str) {
+        self.inner.set_string(block_id, offset, value);
+    }
+
+    pub fn get_integer(&mut self, block_id: BlockId, offset: usize) -> i32 {
+        self.inner.get_integer(block_id, offset)
+    }
+
+    pub fn get_size(&self, file_name: String) -> usize {
+        self.inner.get_size(file_name)
+    }
+
+    pub fn get_string(&mut self, block_id: BlockId, offset: usize) -> String {
+        self.inner.get_string(block_id, offset)
+    }
+
+    pub fn append(&mut self, file_name: &str) -> BlockId {
+        self.inner.append(file_name)
+    }
+
+    pub fn get_available_buffer_size(&self) -> i32 {
+        self.inner.get_available_buffer_size()
     }
 }
 
