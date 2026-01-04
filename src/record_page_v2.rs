@@ -219,7 +219,6 @@ mod tests {
         log_manager,
         log_manager_v2::LogManagerV2,
         record_page::TableSchema,
-        transaction,
     };
 
     use super::*;

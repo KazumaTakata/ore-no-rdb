@@ -1,14 +1,11 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    buffer_manager,
     error::{TableAlreadyExists, ValueNotFound},
-    file_manager,
     predicate::TableNameAndFieldName,
     record_page::{self, TableFieldType, TableSchema},
     scan_v2::ScanV2,
     table_scan_v2::TableScan,
-    transaction,
     transaction_v2::TransactionV2,
 };
 
@@ -267,7 +264,6 @@ mod tests {
         log_manager,
         log_manager_v2::LogManagerV2,
         record_page::TableSchema,
-        transaction,
     };
 
     use super::*;

@@ -878,7 +878,6 @@ mod tests {
         predicate::{Constant, ConstantValue, ExpressionValue},
         predicate_v3::{ExpressionV2, TermV2},
         record_page::TableSchema,
-        transaction,
     };
 
     use super::*;

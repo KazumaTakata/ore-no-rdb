@@ -5,7 +5,6 @@ use std::rc::Rc;
 use std::vec;
 
 mod block;
-mod buffer_manager;
 mod buffer_manager_v2;
 mod concurrency_manager;
 mod constant;
@@ -35,7 +34,6 @@ mod sort_plan;
 mod stat_manager_v2;
 mod table_manager_v2;
 mod table_scan_v2;
-mod transaction;
 mod transaction_v2;
 
 use block::BlockId;

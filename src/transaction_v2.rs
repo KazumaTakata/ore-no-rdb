@@ -1,18 +1,6 @@
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    fs::{self, File},
-    io::Write,
-    iter::Map,
-    os::unix::fs::FileExt,
-    path::Path,
-    rc::Rc,
-};
+use std::{cell::RefCell, rc::Rc};
 
-use crate::log_manager::LogManager;
-use crate::{block::BlockId, file_manager};
-use crate::{buffer_manager::BufferList, recovery_manager};
-use crate::{buffer_manager::BufferManager, concurrency_manager};
+use crate::block::BlockId;
 use crate::{
     buffer_manager_v2::{BufferListV2, BufferManagerV2},
     concurrency_manager::LockTable,
@@ -112,6 +100,8 @@ impl TransactionV2 {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use crate::{log_manager, log_manager_v2::LogManagerV2};
 
     use super::*;

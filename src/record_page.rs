@@ -1,9 +1,5 @@
 use std::collections::HashMap;
 
-use crate::buffer_manager::BufferList;
-use crate::transaction::Transaction;
-use crate::{BlockId, FileManager};
-
 #[derive(Clone, Debug)]
 pub struct TableFieldInfo {
     field_type: TableFieldType,

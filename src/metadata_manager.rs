@@ -7,7 +7,7 @@ use crate::{
     record_page::{Layout, TableSchema},
     stat_manager_v2::{StatInfoV2, StatManagerV2},
     table_manager_v2::TableManagerV2,
-    transaction, transaction_v2,
+    transaction_v2,
 };
 
 pub struct MetadataManager {
