@@ -35,7 +35,7 @@ impl LogRecordType {
 pub trait LogRecord {
     fn operator_code(&self) -> LogRecordType;
     fn transaction_id(&self) -> i32;
-    fn undo(&self, transaction: &mut InnerTransactionV2);
+    fn undo(&self, transaction: &mut InnerTransactionV2, recovery_manager: &mut RecoveryManager);
 }
 
 fn create_log_record(bytes: Vec<u8>) -> Box<dyn LogRecord> {
@@ -135,9 +135,15 @@ impl LogRecord for SetStringRecord {
         self.transaction_id
     }
 
-    fn undo(&self, transaction: &mut InnerTransactionV2) {
+    fn undo(&self, transaction: &mut InnerTransactionV2, recovery_manager: &mut RecoveryManager) {
         transaction.pin(self.block_id.clone());
-        transaction.set_string(self.block_id.clone(), self.offset, &self.value);
+        transaction.set_string(
+            self.block_id.clone(),
+            self.offset,
+            &self.value,
+            false,
+            recovery_manager,
+        );
         transaction.unpin(self.block_id.clone());
     }
 }
@@ -212,9 +218,15 @@ impl LogRecord for SetIntegerRecord {
         self.transaction_id
     }
 
-    fn undo(&self, transaction: &mut InnerTransactionV2) {
+    fn undo(&self, transaction: &mut InnerTransactionV2, recovery_manager: &mut RecoveryManager) {
         transaction.pin(self.block_id.clone());
-        transaction.set_integer(self.block_id.clone(), self.offset, self.value);
+        transaction.set_integer(
+            self.block_id.clone(),
+            self.offset,
+            self.value,
+            false,
+            recovery_manager,
+        );
         transaction.unpin(self.block_id.clone());
     }
 }
@@ -243,7 +255,8 @@ impl LogRecord for CheckpointRecord {
         return -1;
     }
 
-    fn undo(&self, _transaction: &mut InnerTransactionV2) {}
+    fn undo(&self, _transaction: &mut InnerTransactionV2, _recovery_manager: &mut RecoveryManager) {
+    }
 }
 
 struct StartRecord {
@@ -275,7 +288,7 @@ impl LogRecord for StartRecord {
         self.transaction_id
     }
 
-    fn undo(&self, _transaction: &mut InnerTransactionV2) {
+    fn undo(&self, _transaction: &mut InnerTransactionV2, _recovery_manager: &mut RecoveryManager) {
         // No action needed for START record
     }
 }
@@ -309,7 +322,7 @@ impl LogRecord for CommitRecord {
         self.transaction_id
     }
 
-    fn undo(&self, _transaction: &mut InnerTransactionV2) {
+    fn undo(&self, _transaction: &mut InnerTransactionV2, _recovery_manager: &mut RecoveryManager) {
         // No action needed for COMMIT record
     }
 }
@@ -341,7 +354,7 @@ impl LogRecord for RollbackRecord {
         self.transaction_id
     }
 
-    fn undo(&self, transaction: &mut InnerTransactionV2) {
+    fn undo(&self, transaction: &mut InnerTransactionV2, _recovery_manager: &mut RecoveryManager) {
         // No action needed for ROLLBACK record
     }
 }
@@ -376,7 +389,7 @@ impl RecoveryManager {
         self.log_manager.borrow_mut().flush_with_lsn(lsn);
     }
 
-    pub fn rollback(&self, transaction: &mut InnerTransactionV2) {
+    pub fn rollback(&mut self, transaction: &mut InnerTransactionV2) {
         self.do_rollback(transaction);
         self.buffer_manager
             .borrow_mut()
@@ -388,7 +401,7 @@ impl RecoveryManager {
         self.log_manager.borrow_mut().flush_with_lsn(lsn);
     }
 
-    fn do_rollback(&self, transaction: &mut InnerTransactionV2) {
+    fn do_rollback(&mut self, transaction: &mut InnerTransactionV2) {
         let mut iterator = self.log_manager.borrow_mut().iterator();
         while iterator.has_next() {
             let bytes = iterator.next();
@@ -397,12 +410,12 @@ impl RecoveryManager {
                 if log_record.operator_code() == LogRecordType::START {
                     return;
                 }
-                log_record.undo(transaction);
+                log_record.undo(transaction, self);
             }
         }
     }
 
-    fn do_recover(&self, transaction: &mut InnerTransactionV2) {
+    fn do_recover(&mut self, transaction: &mut InnerTransactionV2) {
         let mut finished_transactions = vec![];
 
         let mut iterator = self.log_manager.borrow_mut().iterator();
@@ -418,12 +431,12 @@ impl RecoveryManager {
             {
                 finished_transactions.push(log_record.transaction_id());
             } else if !finished_transactions.contains(&log_record.transaction_id()) {
-                log_record.undo(transaction);
+                log_record.undo(transaction, self);
             }
         }
     }
 
-    fn recover(&self, transaction: &mut InnerTransactionV2) {
+    fn recover(&mut self, transaction: &mut InnerTransactionV2) {
         self.do_recover(transaction);
         self.buffer_manager
             .borrow_mut()
@@ -432,7 +445,7 @@ impl RecoveryManager {
         self.log_manager.borrow_mut().flush_with_lsn(lsn);
     }
 
-    fn set_integer(&self, offset: usize, buffer: &mut BufferV2) -> i32 {
+    pub fn set_integer(&self, offset: usize, buffer: &mut BufferV2) -> i32 {
         let old_value = buffer.content().get_integer(offset);
         let block = buffer.block_id().as_ref().unwrap().clone();
         let lsn = SetIntegerRecord::write_to_log(
@@ -445,7 +458,7 @@ impl RecoveryManager {
         return lsn;
     }
 
-    fn set_string(&self, offset: usize, buffer: &mut BufferV2) -> i32 {
+    pub fn set_string(&self, offset: usize, buffer: &mut BufferV2) -> i32 {
         let old_value = buffer.content().get_string(offset);
         let block = buffer.block_id().as_ref().unwrap().clone();
 

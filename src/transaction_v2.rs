@@ -67,21 +67,45 @@ impl InnerTransactionV2 {
         self.buffer_list.unpin_all();
     }
 
-    pub fn set_integer(&mut self, block_id: BlockId, offset: usize, value: i32) {
+    pub fn set_integer(
+        &mut self,
+        block_id: BlockId,
+        offset: usize,
+        value: i32,
+        set_to_log: bool,
+        recovery_manager: &mut RecoveryManager,
+    ) {
         self.concurrency_manager.x_lock(block_id.clone());
 
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
         let mut buffer = buffer.borrow_mut();
+
+        if set_to_log {
+            recovery_manager.set_integer(offset, &mut buffer);
+        }
+
         let page = buffer.content();
         page.set_integer(offset, value);
         buffer.set_modified(self.tx_num, -1);
     }
 
-    pub fn set_string(&mut self, block_id: BlockId, offset: usize, value: &str) {
+    pub fn set_string(
+        &mut self,
+        block_id: BlockId,
+        offset: usize,
+        value: &str,
+        set_to_log: bool,
+        recovery_manager: &mut RecoveryManager,
+    ) {
         self.concurrency_manager.x_lock(block_id.clone());
 
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
         let mut buffer = buffer.borrow_mut();
+
+        if set_to_log {
+            recovery_manager.set_string(offset, &mut buffer);
+        }
+
         let page = buffer.content();
         page.set_string(offset, value);
         buffer.set_modified(self.tx_num, -1);
@@ -153,12 +177,24 @@ impl TransactionV2 {
         self.inner.rollback(&mut self.recovery_manager);
     }
 
-    pub fn set_integer(&mut self, block_id: BlockId, offset: usize, value: i32) {
-        self.inner.set_integer(block_id, offset, value);
+    pub fn set_integer(&mut self, block_id: BlockId, offset: usize, value: i32, set_to_log: bool) {
+        self.inner.set_integer(
+            block_id,
+            offset,
+            value,
+            set_to_log,
+            &mut self.recovery_manager,
+        );
     }
 
-    pub fn set_string(&mut self, block_id: BlockId, offset: usize, value: &str) {
-        self.inner.set_string(block_id, offset, value);
+    pub fn set_string(&mut self, block_id: BlockId, offset: usize, value: &str, set_to_log: bool) {
+        self.inner.set_string(
+            block_id,
+            offset,
+            value,
+            set_to_log,
+            &mut self.recovery_manager,
+        );
     }
 
     pub fn get_integer(&mut self, block_id: BlockId, offset: usize) -> i32 {
@@ -193,7 +229,7 @@ mod tests {
     // FileManagerのテスト
     #[test]
     fn test_transaction_v2() {
-        let test_dir = Path::new("data");
+        let test_dir = Path::new("test_data");
         let block_size = 400;
         let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
         let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
@@ -221,15 +257,67 @@ mod tests {
         );
 
         let block_id_1 = BlockId::new("test_file_1.txt".to_string(), 1);
-        let block_id_2 = BlockId::new("test_file_1.txt".to_string(), 2);
 
         transaction.pin(block_id_1.clone());
-        transaction.pin(block_id_2.clone());
 
-        transaction.set_string(block_id_2.clone(), 0, "hello world");
+        let integer_value = 111;
 
-        let value = transaction.get_string(block_id_2.clone(), 0);
-        print!("Value at block_id_1: {}\n", value);
+        transaction.set_integer(block_id_1.clone(), 80, integer_value, true);
+
+        let string_value = "hello world";
+
+        transaction.set_string(block_id_1.clone(), 40, string_value, true);
+
         transaction.commit();
+
+        let mut transaction2 = TransactionV2::new(
+            2,
+            file_manager.clone(),
+            buffer_manager.clone(),
+            lock_table.clone(),
+            log_manager.clone(),
+        );
+
+        transaction2.pin(block_id_1.clone());
+
+        let integer_value_2 = transaction2.get_integer(block_id_1.clone(), 80);
+        assert_eq!(integer_value, integer_value_2);
+        let string_value_2 = transaction2.get_string(block_id_1.clone(), 40);
+        assert_eq!(string_value.to_string(), string_value_2);
+
+        transaction2.set_integer(block_id_1.clone(), 80, integer_value_2 + 100, true);
+        transaction2.set_string(block_id_1.clone(), 40, &(string_value_2 + "!!!"), true);
+
+        transaction2.commit();
+
+        let mut transaction3 = TransactionV2::new(
+            3,
+            file_manager.clone(),
+            buffer_manager.clone(),
+            lock_table.clone(),
+            log_manager.clone(),
+        );
+
+        transaction3.pin(block_id_1.clone());
+        let integer_value_3 = transaction3.get_integer(block_id_1.clone(), 80);
+        assert_eq!(integer_value + 100, integer_value_3);
+        let string_value_3 = transaction3.get_string(block_id_1.clone(), 40);
+        assert_eq!(string_value.to_string() + "!!!", string_value_3);
+
+        transaction3.set_integer(block_id_1.clone(), 80, 111111, true);
+
+        transaction3.rollback();
+
+        let mut transaction4 = TransactionV2::new(
+            4,
+            file_manager.clone(),
+            buffer_manager.clone(),
+            lock_table.clone(),
+            log_manager.clone(),
+        );
+
+        transaction4.pin(block_id_1.clone());
+        let integer_value_4 = transaction4.get_integer(block_id_1.clone(), 80);
+        assert_eq!(integer_value + 100, integer_value_4);
     }
 }

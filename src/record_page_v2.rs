@@ -68,6 +68,7 @@ impl RecordPage {
             self.block_id.clone(),
             (record_offset + offset) as usize,
             value,
+            true,
         );
     }
 
@@ -77,6 +78,7 @@ impl RecordPage {
             self.block_id.clone(),
             record_offset as usize,
             RecordType::EMPTY as i32,
+            true,
         );
     }
 
@@ -97,6 +99,7 @@ impl RecordPage {
             self.block_id.clone(),
             (record_offset + offset) as usize,
             value.as_str(),
+            true,
         );
     }
 
@@ -146,6 +149,7 @@ impl RecordPage {
             self.block_id.clone(),
             record_offset as usize,
             record_type as i32,
+            true,
         );
     }
 
@@ -189,6 +193,7 @@ impl RecordPage {
                             self.block_id.clone(),
                             offset as usize,
                             0,
+                            true,
                         );
                     }
                     TableFieldType::VARCHAR => {
@@ -196,6 +201,7 @@ impl RecordPage {
                             self.block_id.clone(),
                             offset as usize,
                             "",
+                            true,
                         );
                     }
                 }
