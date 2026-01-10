@@ -77,7 +77,7 @@ impl InnerTransactionV2 {
         buffer.set_modified(self.tx_num, -1);
     }
 
-    fn set_string(&mut self, block_id: BlockId, offset: usize, value: &str) {
+    pub fn set_string(&mut self, block_id: BlockId, offset: usize, value: &str) {
         self.concurrency_manager.x_lock(block_id.clone());
 
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
@@ -207,11 +207,17 @@ mod tests {
         )));
         let lock_table = Rc::new(RefCell::new(LockTable::new()));
 
+        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+            file_manager.clone(),
+            "log.txt".to_string(),
+        )));
+
         let mut transaction = TransactionV2::new(
             1,
             file_manager.clone(),
             buffer_manager.clone(),
             lock_table.clone(),
+            log_manager.clone(),
         );
 
         let block_id_1 = BlockId::new("test_file_1.txt".to_string(), 1);

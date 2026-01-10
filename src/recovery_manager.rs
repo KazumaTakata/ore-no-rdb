@@ -135,7 +135,7 @@ impl LogRecord for SetStringRecord {
         self.transaction_id
     }
 
-    fn undo(&self, transaction: &mut TransactionV2) {
+    fn undo(&self, transaction: &mut InnerTransactionV2) {
         transaction.pin(self.block_id.clone());
         transaction.set_string(self.block_id.clone(), self.offset, &self.value);
         transaction.unpin(self.block_id.clone());
@@ -243,7 +243,7 @@ impl LogRecord for CheckpointRecord {
         return -1;
     }
 
-    fn undo(&self, _transaction: &mut TransactionV2) {}
+    fn undo(&self, _transaction: &mut InnerTransactionV2) {}
 }
 
 struct StartRecord {
@@ -275,7 +275,7 @@ impl LogRecord for StartRecord {
         self.transaction_id
     }
 
-    fn undo(&self, _transaction: &mut TransactionV2) {
+    fn undo(&self, _transaction: &mut InnerTransactionV2) {
         // No action needed for START record
     }
 }
@@ -309,7 +309,7 @@ impl LogRecord for CommitRecord {
         self.transaction_id
     }
 
-    fn undo(&self, _transaction: &mut TransactionV2) {
+    fn undo(&self, _transaction: &mut InnerTransactionV2) {
         // No action needed for COMMIT record
     }
 }
@@ -341,7 +341,7 @@ impl LogRecord for RollbackRecord {
         self.transaction_id
     }
 
-    fn undo(&self, transaction: &mut TransactionV2) {
+    fn undo(&self, transaction: &mut InnerTransactionV2) {
         // No action needed for ROLLBACK record
     }
 }
@@ -402,7 +402,7 @@ impl RecoveryManager {
         }
     }
 
-    fn do_recover(&self, transaction: &mut TransactionV2) {
+    fn do_recover(&self, transaction: &mut InnerTransactionV2) {
         let mut finished_transactions = vec![];
 
         let mut iterator = self.log_manager.borrow_mut().iterator();
@@ -423,7 +423,7 @@ impl RecoveryManager {
         }
     }
 
-    fn recover(&self, transaction: &mut TransactionV2) {
+    fn recover(&self, transaction: &mut InnerTransactionV2) {
         self.do_recover(transaction);
         self.buffer_manager
             .borrow_mut()

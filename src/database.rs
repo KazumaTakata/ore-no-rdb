@@ -42,6 +42,7 @@ impl Database {
             self.file_manager.clone(),
             self.buffer_manager.clone(),
             self.lock_table.clone(),
+            self.log_manager.clone(),
         )))
     }
 }
