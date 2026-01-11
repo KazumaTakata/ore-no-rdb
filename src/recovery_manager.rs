@@ -36,6 +36,13 @@ pub trait LogRecord {
     fn operator_code(&self) -> LogRecordType;
     fn transaction_id(&self) -> i32;
     fn undo(&self, transaction: &mut InnerTransactionV2, recovery_manager: &mut RecoveryManager);
+    fn stringify(&self) -> String {
+        format!(
+            "LogRecord(type: {:?}, tx_id: {})",
+            self.operator_code(),
+            self.transaction_id()
+        )
+    }
 }
 
 fn create_log_record(bytes: Vec<u8>) -> Box<dyn LogRecord> {
@@ -78,6 +85,9 @@ impl SetStringRecord {
         let transaction_id = page.get_integer(transaction_id_offset);
         let file_name_offset = transaction_id_offset + Page::get_integer_byte_size();
         let filename = page.get_string(file_name_offset);
+
+        print!("filename in set string record: {}", filename);
+
         let block_number_offset = file_name_offset + Page::get_max_length(filename.len() as u32);
 
         let block_number = page.get_integer(block_number_offset);
@@ -105,13 +115,15 @@ impl SetStringRecord {
         offset: usize,
         value: &str,
     ) -> i32 {
-        let transaction_id_offset = Page::get_integer_byte_size();
+        let transaction_id_offset: usize = Page::get_integer_byte_size();
         let filename_offset = transaction_id_offset + Page::get_integer_byte_size();
         let block_number_offset =
             filename_offset + Page::get_max_length(block_id.get_file_name().len() as u32);
         let offset_value_offset = block_number_offset + Page::get_integer_byte_size();
         let value_offset = offset_value_offset + Page::get_integer_byte_size();
         let record_length = value_offset + Page::get_max_length(value.len() as u32);
+
+        println!("record_length in set_string_record: {}", record_length);
 
         let mut page = Page::new(record_length);
         page.set_integer(0, LogRecordType::SETSTRING as i32);
@@ -197,7 +209,7 @@ impl SetIntegerRecord {
         let record_length = value_offset + Page::get_integer_byte_size();
 
         let mut page = Page::new(record_length);
-        page.set_integer(0, LogRecordType::SETSTRING as i32);
+        page.set_integer(0, LogRecordType::SETINT as i32);
         page.set_integer(transaction_id_offset, transaction_id);
         page.set_string(filename_offset, block_id.get_file_name());
         page.set_integer(block_number_offset, block_id.get_block_number() as i32);
@@ -406,6 +418,7 @@ impl RecoveryManager {
         while iterator.has_next() {
             let bytes = iterator.next();
             let log_record = create_log_record(bytes);
+            println!("Undoing log record: {}", log_record.stringify());
             if log_record.transaction_id() == self.transaction_number {
                 if log_record.operator_code() == LogRecordType::START {
                     return;

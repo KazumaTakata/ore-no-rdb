@@ -68,6 +68,9 @@ impl BufferV2 {
     pub fn flush(&mut self) {
         if self.tx_num.is_some() && self.block_id.is_some() {
             let block_id = self.block_id.as_ref().unwrap();
+            self.log_manager
+                .borrow_mut()
+                .flush_with_lsn(self.lsn.unwrap_or(-1));
             self.file_manager
                 .borrow_mut()
                 .write(&block_id, &mut self.page);

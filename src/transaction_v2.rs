@@ -80,13 +80,15 @@ impl InnerTransactionV2 {
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
         let mut buffer = buffer.borrow_mut();
 
+        let mut lsn = -1;
+
         if set_to_log {
-            recovery_manager.set_integer(offset, &mut buffer);
+            lsn = recovery_manager.set_integer(offset, &mut buffer);
         }
 
         let page = buffer.content();
         page.set_integer(offset, value);
-        buffer.set_modified(self.tx_num, -1);
+        buffer.set_modified(self.tx_num, lsn);
     }
 
     pub fn set_string(
@@ -220,7 +222,7 @@ impl TransactionV2 {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::{fs::remove_file, path::Path};
 
     use crate::log_manager_v2::LogManagerV2;
 
@@ -230,11 +232,15 @@ mod tests {
     #[test]
     fn test_transaction_v2() {
         let test_dir = Path::new("test_data");
+
+        let test_file_name = format!("test_file_{}.txt", uuid::Uuid::new_v4());
+        let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
+
         let block_size = 400;
         let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
         let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
             file_manager.clone(),
-            "log.txt".to_string(),
+            log_file_name.clone(),
         )));
         let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
             10,
@@ -242,11 +248,6 @@ mod tests {
             log_manager.clone(),
         )));
         let lock_table = Rc::new(RefCell::new(LockTable::new()));
-
-        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
-            file_manager.clone(),
-            "log.txt".to_string(),
-        )));
 
         let mut transaction = TransactionV2::new(
             1,
@@ -256,7 +257,7 @@ mod tests {
             log_manager.clone(),
         );
 
-        let block_id_1 = BlockId::new("test_file_1.txt".to_string(), 1);
+        let block_id_1 = BlockId::new(test_file_name.clone(), 1);
 
         transaction.pin(block_id_1.clone());
 
@@ -319,5 +320,9 @@ mod tests {
         transaction4.pin(block_id_1.clone());
         let integer_value_4 = transaction4.get_integer(block_id_1.clone(), 80);
         assert_eq!(integer_value + 100, integer_value_4);
+
+        // file cleanup
+        remove_file(test_dir.join(test_file_name)).unwrap();
+        remove_file(test_dir.join(log_file_name)).unwrap();
     }
 }
