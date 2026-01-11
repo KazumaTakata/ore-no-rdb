@@ -69,7 +69,7 @@ impl ConcurrencyManagerV2 {
         ConcurrencyManagerV2 { locks, lock_table }
     }
 
-    fn s_lock(&mut self, block_id: BlockId) {
+    pub fn s_lock(&mut self, block_id: BlockId) {
         let lock_value = self.locks.get(&block_id);
         if lock_value.is_none() {
             self.lock_table.borrow_mut().s_lock(block_id.clone());
@@ -77,7 +77,7 @@ impl ConcurrencyManagerV2 {
         }
     }
 
-    fn x_lock(&mut self, block_id: BlockId) {
+    pub fn x_lock(&mut self, block_id: BlockId) {
         if !self.has_xlock(&block_id) {
             self.s_lock(block_id.clone());
             self.lock_table.borrow_mut().x_lock(block_id.clone());

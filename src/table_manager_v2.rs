@@ -283,11 +283,17 @@ mod tests {
 
         let lock_table = Rc::new(RefCell::new(LockTable::new()));
 
-        let mut transaction = Rc::new(RefCell::new(TransactionV2::new(
+        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+            file_manager.clone(),
+            "log.txt".to_string(),
+        )));
+
+        let transaction = Rc::new(RefCell::new(TransactionV2::new(
             1,
             file_manager.clone(),
             buffer_manager.clone(),
             lock_table.clone(),
+            log_manager.clone(),
         )));
 
         let table_manager = TableManagerV2::new();

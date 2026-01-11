@@ -1,13 +1,15 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::block::BlockId;
+use crate::log_manager_v2::LogManagerV2;
+use crate::recovery_manager::{self, RecoveryManager};
 use crate::{
     buffer_manager_v2::{BufferListV2, BufferManagerV2},
     concurrency_manager::LockTable,
 };
 use crate::{concurrency_manager::ConcurrencyManagerV2, file_manager::FileManager};
 
-pub struct TransactionV2 {
+pub struct InnerTransactionV2 {
     tx_num: i32,
     buffer_manager: Rc<RefCell<BufferManagerV2>>,
     lock_table: Rc<RefCell<LockTable>>,
@@ -16,17 +18,22 @@ pub struct TransactionV2 {
     file_manager: Rc<RefCell<FileManager>>,
 }
 
-impl TransactionV2 {
-    pub fn new(
+pub struct TransactionV2 {
+    inner: InnerTransactionV2,
+    recovery_manager: RecoveryManager,
+}
+
+impl InnerTransactionV2 {
+    fn new(
         tx_num: i32,
         file_manager: Rc<RefCell<FileManager>>,
         buffer_manager: Rc<RefCell<BufferManagerV2>>,
         lock_table: Rc<RefCell<LockTable>>,
-    ) -> TransactionV2 {
+    ) -> InnerTransactionV2 {
         let concurrency_manager = ConcurrencyManagerV2::new(lock_table.clone());
         let buffer_list = BufferListV2::new(buffer_manager.clone());
 
-        TransactionV2 {
+        InnerTransactionV2 {
             tx_num,
             buffer_manager,
             file_manager,
@@ -36,7 +43,7 @@ impl TransactionV2 {
         }
     }
 
-    pub fn get_block_size(&self) -> usize {
+    fn get_block_size(&self) -> usize {
         self.file_manager.borrow().get_block_size()
     }
 
@@ -48,59 +55,174 @@ impl TransactionV2 {
         self.buffer_list.unpin(block_id);
     }
 
-    pub fn commit(&mut self) {
+    fn commit(&mut self, recovery_manager: &mut RecoveryManager) {
+        recovery_manager.commit();
+        self.concurrency_manager.release();
         self.buffer_list.unpin_all();
-        self.buffer_manager.borrow_mut().flush_all(self.tx_num);
     }
 
-    fn rollback(&mut self, lock_table: &mut LockTable) {}
+    fn rollback(&mut self, recovery_manager: &mut RecoveryManager) {
+        recovery_manager.rollback(self);
+        self.concurrency_manager.release();
+        self.buffer_list.unpin_all();
+    }
 
-    pub fn set_integer(&mut self, block_id: BlockId, offset: usize, value: i32) {
+    pub fn set_integer(
+        &mut self,
+        block_id: BlockId,
+        offset: usize,
+        value: i32,
+        set_to_log: bool,
+        recovery_manager: &mut RecoveryManager,
+    ) {
+        self.concurrency_manager.x_lock(block_id.clone());
+
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
         let mut buffer = buffer.borrow_mut();
+
+        let mut lsn = -1;
+
+        if set_to_log {
+            lsn = recovery_manager.set_integer(offset, &mut buffer);
+        }
+
         let page = buffer.content();
         page.set_integer(offset, value);
-        buffer.set_modified(self.tx_num, -1);
+        buffer.set_modified(self.tx_num, lsn);
     }
 
-    pub fn set_string(&mut self, block_id: BlockId, offset: usize, value: &str) {
+    pub fn set_string(
+        &mut self,
+        block_id: BlockId,
+        offset: usize,
+        value: &str,
+        set_to_log: bool,
+        recovery_manager: &mut RecoveryManager,
+    ) {
+        self.concurrency_manager.x_lock(block_id.clone());
+
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
         let mut buffer = buffer.borrow_mut();
+
+        if set_to_log {
+            recovery_manager.set_string(offset, &mut buffer);
+        }
+
         let page = buffer.content();
         page.set_string(offset, value);
         buffer.set_modified(self.tx_num, -1);
     }
 
-    pub fn get_integer(&mut self, block_id: BlockId, offset: usize) -> i32 {
+    fn get_integer(&mut self, block_id: BlockId, offset: usize) -> i32 {
+        self.concurrency_manager.s_lock(block_id.clone());
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
         let mut buffer = buffer.borrow_mut();
         let page = buffer.content();
         page.get_integer(offset)
     }
 
-    pub fn get_size(&self, file_name: String) -> usize {
+    fn get_size(&self, file_name: String) -> usize {
         return self.file_manager.borrow_mut().length(&file_name);
     }
 
-    pub fn get_string(&mut self, block_id: BlockId, offset: usize) -> String {
+    fn get_string(&mut self, block_id: BlockId, offset: usize) -> String {
+        self.concurrency_manager.s_lock(block_id.clone());
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
         let mut buffer = buffer.borrow_mut();
         let page = buffer.content();
         page.get_string(offset)
     }
 
-    pub fn append(&mut self, file_name: &str) -> BlockId {
+    fn append(&mut self, file_name: &str) -> BlockId {
         self.file_manager.borrow_mut().append(file_name)
     }
 
-    pub fn get_available_buffer_size(&self) -> i32 {
+    fn get_available_buffer_size(&self) -> i32 {
         self.buffer_manager.borrow().get_available_buffer_size()
+    }
+}
+
+impl TransactionV2 {
+    pub fn new(
+        tx_num: i32,
+        file_manager: Rc<RefCell<FileManager>>,
+        buffer_manager: Rc<RefCell<BufferManagerV2>>,
+        lock_table: Rc<RefCell<LockTable>>,
+        log_manager: Rc<RefCell<LogManagerV2>>,
+    ) -> TransactionV2 {
+        let recovery_manager =
+            RecoveryManager::new(tx_num, buffer_manager.clone(), log_manager.clone());
+
+        TransactionV2 {
+            inner: InnerTransactionV2::new(tx_num, file_manager, buffer_manager, lock_table),
+            recovery_manager,
+        }
+    }
+
+    pub fn get_block_size(&self) -> usize {
+        self.inner.get_block_size()
+    }
+
+    pub fn pin(&mut self, block_id: BlockId) {
+        self.inner.pin(block_id);
+    }
+
+    pub fn unpin(&mut self, block_id: BlockId) {
+        self.inner.unpin(block_id);
+    }
+
+    pub fn commit(&mut self) {
+        self.inner.commit(&mut self.recovery_manager);
+    }
+
+    pub fn rollback(&mut self) {
+        self.inner.rollback(&mut self.recovery_manager);
+    }
+
+    pub fn set_integer(&mut self, block_id: BlockId, offset: usize, value: i32, set_to_log: bool) {
+        self.inner.set_integer(
+            block_id,
+            offset,
+            value,
+            set_to_log,
+            &mut self.recovery_manager,
+        );
+    }
+
+    pub fn set_string(&mut self, block_id: BlockId, offset: usize, value: &str, set_to_log: bool) {
+        self.inner.set_string(
+            block_id,
+            offset,
+            value,
+            set_to_log,
+            &mut self.recovery_manager,
+        );
+    }
+
+    pub fn get_integer(&mut self, block_id: BlockId, offset: usize) -> i32 {
+        self.inner.get_integer(block_id, offset)
+    }
+
+    pub fn get_size(&self, file_name: String) -> usize {
+        self.inner.get_size(file_name)
+    }
+
+    pub fn get_string(&mut self, block_id: BlockId, offset: usize) -> String {
+        self.inner.get_string(block_id, offset)
+    }
+
+    pub fn append(&mut self, file_name: &str) -> BlockId {
+        self.inner.append(file_name)
+    }
+
+    pub fn get_available_buffer_size(&self) -> i32 {
+        self.inner.get_available_buffer_size()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::{fs::remove_file, path::Path};
 
     use crate::log_manager_v2::LogManagerV2;
 
@@ -109,12 +231,16 @@ mod tests {
     // FileManagerのテスト
     #[test]
     fn test_transaction_v2() {
-        let test_dir = Path::new("data");
+        let test_dir = Path::new("test_data");
+
+        let test_file_name = format!("test_file_{}.txt", uuid::Uuid::new_v4());
+        let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
+
         let block_size = 400;
         let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
         let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
             file_manager.clone(),
-            "log.txt".to_string(),
+            log_file_name.clone(),
         )));
         let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
             10,
@@ -128,18 +254,75 @@ mod tests {
             file_manager.clone(),
             buffer_manager.clone(),
             lock_table.clone(),
+            log_manager.clone(),
         );
 
-        let block_id_1 = BlockId::new("test_file_1.txt".to_string(), 1);
-        let block_id_2 = BlockId::new("test_file_1.txt".to_string(), 2);
+        let block_id_1 = BlockId::new(test_file_name.clone(), 1);
 
         transaction.pin(block_id_1.clone());
-        transaction.pin(block_id_2.clone());
 
-        transaction.set_string(block_id_2.clone(), 0, "hello world");
+        let integer_value = 111;
 
-        let value = transaction.get_string(block_id_2.clone(), 0);
-        print!("Value at block_id_1: {}\n", value);
+        transaction.set_integer(block_id_1.clone(), 80, integer_value, true);
+
+        let string_value = "hello world";
+
+        transaction.set_string(block_id_1.clone(), 40, string_value, true);
+
         transaction.commit();
+
+        let mut transaction2 = TransactionV2::new(
+            2,
+            file_manager.clone(),
+            buffer_manager.clone(),
+            lock_table.clone(),
+            log_manager.clone(),
+        );
+
+        transaction2.pin(block_id_1.clone());
+
+        let integer_value_2 = transaction2.get_integer(block_id_1.clone(), 80);
+        assert_eq!(integer_value, integer_value_2);
+        let string_value_2 = transaction2.get_string(block_id_1.clone(), 40);
+        assert_eq!(string_value.to_string(), string_value_2);
+
+        transaction2.set_integer(block_id_1.clone(), 80, integer_value_2 + 100, true);
+        transaction2.set_string(block_id_1.clone(), 40, &(string_value_2 + "!!!"), true);
+
+        transaction2.commit();
+
+        let mut transaction3 = TransactionV2::new(
+            3,
+            file_manager.clone(),
+            buffer_manager.clone(),
+            lock_table.clone(),
+            log_manager.clone(),
+        );
+
+        transaction3.pin(block_id_1.clone());
+        let integer_value_3 = transaction3.get_integer(block_id_1.clone(), 80);
+        assert_eq!(integer_value + 100, integer_value_3);
+        let string_value_3 = transaction3.get_string(block_id_1.clone(), 40);
+        assert_eq!(string_value.to_string() + "!!!", string_value_3);
+
+        transaction3.set_integer(block_id_1.clone(), 80, 111111, true);
+
+        transaction3.rollback();
+
+        let mut transaction4 = TransactionV2::new(
+            4,
+            file_manager.clone(),
+            buffer_manager.clone(),
+            lock_table.clone(),
+            log_manager.clone(),
+        );
+
+        transaction4.pin(block_id_1.clone());
+        let integer_value_4 = transaction4.get_integer(block_id_1.clone(), 80);
+        assert_eq!(integer_value + 100, integer_value_4);
+
+        // file cleanup
+        remove_file(test_dir.join(test_file_name)).unwrap();
+        remove_file(test_dir.join(log_file_name)).unwrap();
     }
 }

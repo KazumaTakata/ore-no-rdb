@@ -5,7 +5,7 @@ use crate::{
     buffer_manager_v2::{BufferManagerV2, BufferV2},
     log_manager_v2::LogManagerV2,
     page::Page,
-    transaction_v2::TransactionV2,
+    transaction_v2::{InnerTransactionV2, TransactionV2},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,7 +35,14 @@ impl LogRecordType {
 pub trait LogRecord {
     fn operator_code(&self) -> LogRecordType;
     fn transaction_id(&self) -> i32;
-    fn undo(&self, transaction: &mut TransactionV2);
+    fn undo(&self, transaction: &mut InnerTransactionV2, recovery_manager: &mut RecoveryManager);
+    fn stringify(&self) -> String {
+        format!(
+            "LogRecord(type: {:?}, tx_id: {})",
+            self.operator_code(),
+            self.transaction_id()
+        )
+    }
 }
 
 fn create_log_record(bytes: Vec<u8>) -> Box<dyn LogRecord> {
@@ -78,6 +85,9 @@ impl SetStringRecord {
         let transaction_id = page.get_integer(transaction_id_offset);
         let file_name_offset = transaction_id_offset + Page::get_integer_byte_size();
         let filename = page.get_string(file_name_offset);
+
+        print!("filename in set string record: {}", filename);
+
         let block_number_offset = file_name_offset + Page::get_max_length(filename.len() as u32);
 
         let block_number = page.get_integer(block_number_offset);
@@ -105,13 +115,15 @@ impl SetStringRecord {
         offset: usize,
         value: &str,
     ) -> i32 {
-        let transaction_id_offset = Page::get_integer_byte_size();
+        let transaction_id_offset: usize = Page::get_integer_byte_size();
         let filename_offset = transaction_id_offset + Page::get_integer_byte_size();
         let block_number_offset =
             filename_offset + Page::get_max_length(block_id.get_file_name().len() as u32);
         let offset_value_offset = block_number_offset + Page::get_integer_byte_size();
         let value_offset = offset_value_offset + Page::get_integer_byte_size();
         let record_length = value_offset + Page::get_max_length(value.len() as u32);
+
+        println!("record_length in set_string_record: {}", record_length);
 
         let mut page = Page::new(record_length);
         page.set_integer(0, LogRecordType::SETSTRING as i32);
@@ -135,9 +147,15 @@ impl LogRecord for SetStringRecord {
         self.transaction_id
     }
 
-    fn undo(&self, transaction: &mut TransactionV2) {
+    fn undo(&self, transaction: &mut InnerTransactionV2, recovery_manager: &mut RecoveryManager) {
         transaction.pin(self.block_id.clone());
-        transaction.set_string(self.block_id.clone(), self.offset, &self.value);
+        transaction.set_string(
+            self.block_id.clone(),
+            self.offset,
+            &self.value,
+            false,
+            recovery_manager,
+        );
         transaction.unpin(self.block_id.clone());
     }
 }
@@ -191,7 +209,7 @@ impl SetIntegerRecord {
         let record_length = value_offset + Page::get_integer_byte_size();
 
         let mut page = Page::new(record_length);
-        page.set_integer(0, LogRecordType::SETSTRING as i32);
+        page.set_integer(0, LogRecordType::SETINT as i32);
         page.set_integer(transaction_id_offset, transaction_id);
         page.set_string(filename_offset, block_id.get_file_name());
         page.set_integer(block_number_offset, block_id.get_block_number() as i32);
@@ -212,9 +230,15 @@ impl LogRecord for SetIntegerRecord {
         self.transaction_id
     }
 
-    fn undo(&self, transaction: &mut TransactionV2) {
+    fn undo(&self, transaction: &mut InnerTransactionV2, recovery_manager: &mut RecoveryManager) {
         transaction.pin(self.block_id.clone());
-        transaction.set_integer(self.block_id.clone(), self.offset, self.value);
+        transaction.set_integer(
+            self.block_id.clone(),
+            self.offset,
+            self.value,
+            false,
+            recovery_manager,
+        );
         transaction.unpin(self.block_id.clone());
     }
 }
@@ -243,7 +267,8 @@ impl LogRecord for CheckpointRecord {
         return -1;
     }
 
-    fn undo(&self, _transaction: &mut TransactionV2) {}
+    fn undo(&self, _transaction: &mut InnerTransactionV2, _recovery_manager: &mut RecoveryManager) {
+    }
 }
 
 struct StartRecord {
@@ -275,7 +300,7 @@ impl LogRecord for StartRecord {
         self.transaction_id
     }
 
-    fn undo(&self, _transaction: &mut TransactionV2) {
+    fn undo(&self, _transaction: &mut InnerTransactionV2, _recovery_manager: &mut RecoveryManager) {
         // No action needed for START record
     }
 }
@@ -309,7 +334,7 @@ impl LogRecord for CommitRecord {
         self.transaction_id
     }
 
-    fn undo(&self, _transaction: &mut TransactionV2) {
+    fn undo(&self, _transaction: &mut InnerTransactionV2, _recovery_manager: &mut RecoveryManager) {
         // No action needed for COMMIT record
     }
 }
@@ -341,21 +366,19 @@ impl LogRecord for RollbackRecord {
         self.transaction_id
     }
 
-    fn undo(&self, transaction: &mut TransactionV2) {
+    fn undo(&self, transaction: &mut InnerTransactionV2, _recovery_manager: &mut RecoveryManager) {
         // No action needed for ROLLBACK record
     }
 }
 
-struct RecoveryManager {
-    transaction: Rc<RefCell<TransactionV2>>,
+pub struct RecoveryManager {
     transaction_number: i32,
     buffer_manager: Rc<RefCell<BufferManagerV2>>,
     log_manager: Rc<RefCell<LogManagerV2>>,
 }
 
 impl RecoveryManager {
-    fn new(
-        transaction: Rc<RefCell<TransactionV2>>,
+    pub fn new(
         transaction_number: i32,
         buffer_manager: Rc<RefCell<BufferManagerV2>>,
         log_manager: Rc<RefCell<LogManagerV2>>,
@@ -363,14 +386,13 @@ impl RecoveryManager {
         let _ = StartRecord::write_to_log(&mut log_manager.borrow_mut(), transaction_number);
 
         RecoveryManager {
-            transaction,
             transaction_number,
             buffer_manager,
             log_manager,
         }
     }
 
-    fn commit(&self) {
+    pub fn commit(&self) {
         self.buffer_manager
             .borrow_mut()
             .flush_all(self.transaction_number);
@@ -379,8 +401,8 @@ impl RecoveryManager {
         self.log_manager.borrow_mut().flush_with_lsn(lsn);
     }
 
-    fn rollback(&self) {
-        self.do_rollback();
+    pub fn rollback(&mut self, transaction: &mut InnerTransactionV2) {
+        self.do_rollback(transaction);
         self.buffer_manager
             .borrow_mut()
             .flush_all(self.transaction_number);
@@ -391,21 +413,22 @@ impl RecoveryManager {
         self.log_manager.borrow_mut().flush_with_lsn(lsn);
     }
 
-    fn do_rollback(&self) {
+    fn do_rollback(&mut self, transaction: &mut InnerTransactionV2) {
         let mut iterator = self.log_manager.borrow_mut().iterator();
         while iterator.has_next() {
             let bytes = iterator.next();
             let log_record = create_log_record(bytes);
+            println!("Undoing log record: {}", log_record.stringify());
             if log_record.transaction_id() == self.transaction_number {
                 if log_record.operator_code() == LogRecordType::START {
                     return;
                 }
-                log_record.undo(&mut self.transaction.borrow_mut());
+                log_record.undo(transaction, self);
             }
         }
     }
 
-    fn do_recover(&self) {
+    fn do_recover(&mut self, transaction: &mut InnerTransactionV2) {
         let mut finished_transactions = vec![];
 
         let mut iterator = self.log_manager.borrow_mut().iterator();
@@ -421,13 +444,13 @@ impl RecoveryManager {
             {
                 finished_transactions.push(log_record.transaction_id());
             } else if !finished_transactions.contains(&log_record.transaction_id()) {
-                log_record.undo(&mut self.transaction.borrow_mut());
+                log_record.undo(transaction, self);
             }
         }
     }
 
-    fn recover(&self) {
-        self.do_recover();
+    fn recover(&mut self, transaction: &mut InnerTransactionV2) {
+        self.do_recover(transaction);
         self.buffer_manager
             .borrow_mut()
             .flush_all(self.transaction_number);
@@ -435,7 +458,7 @@ impl RecoveryManager {
         self.log_manager.borrow_mut().flush_with_lsn(lsn);
     }
 
-    fn set_integer(&self, offset: usize, buffer: &mut BufferV2) -> i32 {
+    pub fn set_integer(&self, offset: usize, buffer: &mut BufferV2) -> i32 {
         let old_value = buffer.content().get_integer(offset);
         let block = buffer.block_id().as_ref().unwrap().clone();
         let lsn = SetIntegerRecord::write_to_log(
@@ -448,7 +471,7 @@ impl RecoveryManager {
         return lsn;
     }
 
-    fn set_string(&self, offset: usize, buffer: &mut BufferV2) -> i32 {
+    pub fn set_string(&self, offset: usize, buffer: &mut BufferV2) -> i32 {
         let old_value = buffer.content().get_string(offset);
         let block = buffer.block_id().as_ref().unwrap().clone();
 
