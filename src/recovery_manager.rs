@@ -123,8 +123,6 @@ impl SetStringRecord {
         let value_offset = offset_value_offset + Page::get_integer_byte_size();
         let record_length = value_offset + Page::get_max_length(value.len() as u32);
 
-        println!("record_length in set_string_record: {}", record_length);
-
         let mut page = Page::new(record_length);
         page.set_integer(0, LogRecordType::SETSTRING as i32);
         page.set_integer(transaction_id_offset, transaction_id);
