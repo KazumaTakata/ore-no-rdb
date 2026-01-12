@@ -214,7 +214,7 @@ impl RecordPage {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, path::Path, rc::Rc};
+    use std::{cell::RefCell, fs::remove_file, path::Path, rc::Rc};
 
     use rand::Rng;
 
@@ -223,6 +223,7 @@ mod tests {
         concurrency_manager::LockTable,
         file_manager::{self, FileManager},
         log_manager_v2::LogManagerV2,
+        page::Page,
         record_page::TableSchema,
     };
 
@@ -230,10 +231,15 @@ mod tests {
 
     #[test]
     fn test_record_page_v2() {
-        let mut file_manager = Rc::new(RefCell::new(FileManager::new(Path::new("data"), 400)));
+        let test_dir = Path::new("test_data");
+
+        let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
+        let block_size = 400;
+
+        let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
         let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
             file_manager.clone(),
-            "log.txt".to_string(),
+            log_file_name.clone(),
         )));
 
         let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
@@ -244,11 +250,6 @@ mod tests {
 
         let lock_table = Rc::new(RefCell::new(LockTable::new()));
 
-        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
-            file_manager.clone(),
-            "log.txt".to_string(),
-        )));
-
         let transaction = Rc::new(RefCell::new(TransactionV2::new(
             1,
             file_manager.clone(),
@@ -258,16 +259,44 @@ mod tests {
         )));
 
         let mut schema = TableSchema::new();
-        schema.add_integer_field("Field1".to_string());
-        schema.add_string_field("Field2".to_string(), 9);
+
+        let integer_field_name = "Field1".to_string();
+        let string_field_name = "Field2".to_string();
+
+        schema.add_integer_field(integer_field_name.clone());
+
+        let string_field_length = 9;
+
+        schema.add_string_field(string_field_name.clone(), string_field_length);
         let layout = Layout::new(schema);
 
-        layout.schema.fields().iter().for_each(|field| {
-            let offset = layout.get_offset(field);
-            println!("Field: {}, Offset: {}", field, offset.unwrap());
-        });
+        layout
+            .schema
+            .fields()
+            .iter()
+            .enumerate()
+            .for_each(|(index, field)| {
+                let offset = layout.get_offset(field);
+                println!("Field: {}, Offset: {}", field, offset.unwrap());
+                if index == 0 {
+                    assert_eq!(offset.unwrap(), 4);
+                    assert_eq!(field, &integer_field_name);
+                }
 
-        let block = transaction.borrow_mut().append("test_block.txt");
+                if index == 1 {
+                    assert_eq!(offset.unwrap(), 8);
+                    assert_eq!(field, &string_field_name);
+                }
+            });
+
+        assert_eq!(
+            layout.get_slot_size(),
+            Page::get_max_length(string_field_length as u32) as i32 + 8
+        );
+
+        let test_file_name = format!("test_file_{}.txt", uuid::Uuid::new_v4());
+
+        let block = transaction.borrow_mut().append(&test_file_name);
 
         transaction.borrow_mut().pin(block.clone());
 
@@ -277,11 +306,11 @@ mod tests {
         let mut maybe_slot = record_page.insert_after_slot_id(-1);
 
         while let Some(slot) = maybe_slot {
-            let random_value = rand::rng().random_range(0..100);
+            let random_value = rand::rng().random_range(1..100);
 
-            record_page.set_integer("Field1".to_string(), slot, random_value);
+            record_page.set_integer(integer_field_name.clone(), slot, random_value);
             record_page.set_string(
-                "Field2".to_string(),
+                string_field_name.clone(),
                 slot,
                 format!("Hello {}", random_value),
             );
@@ -289,28 +318,47 @@ mod tests {
             maybe_slot = record_page.insert_after_slot_id(slot);
         }
 
-        let mut slot_id = Some(0);
+        let mut maybe_slot = record_page.insert_after_slot_id(-1);
 
-        while let Some(slot) = slot_id {
-            let field1_value = record_page.get_integer("Field1".to_string(), slot);
-            let field2_value = record_page.get_string("Field2".to_string(), slot);
+        while let Some(slot) = maybe_slot {
+            let field1_value = record_page.get_integer(integer_field_name.clone(), slot);
+            let field2_value = record_page.get_string(string_field_name.clone(), slot);
 
-            if let Some(value) = field1_value {
-                println!("Slot: {}, Field1: {}", slot, value);
-            } else {
-                println!("Slot: {}, Field1: None", slot);
+            assert!(field1_value.unwrap() >= 1 && field1_value.unwrap() < 100);
+
+            assert!(field2_value
+                .unwrap()
+                .starts_with(&format!("Hello {}", field1_value.unwrap())));
+
+            maybe_slot = record_page.find_next_after_slot_id(slot);
+        }
+
+        let mut maybe_slot = record_page.insert_after_slot_id(-1);
+
+        while let Some(slot) = maybe_slot {
+            let field1_value = record_page.get_integer(integer_field_name.clone(), slot);
+
+            if field1_value.unwrap() < 25 {
+                record_page.delete(slot);
             }
 
-            if let Some(value) = field2_value {
-                println!("Slot: {}, Field2: {}", slot, value);
-            } else {
-                println!("Slot: {}, Field2: None", slot);
-            }
+            maybe_slot = record_page.insert_after_slot_id(slot);
+        }
 
-            slot_id = record_page.find_next_after_slot_id(slot);
+        let mut maybe_slot = record_page.insert_after_slot_id(-1);
+
+        while let Some(slot) = maybe_slot {
+            let field1_value = record_page.get_integer(integer_field_name.clone(), slot);
+
+            assert!(field1_value.unwrap() >= 25);
+
+            maybe_slot = record_page.insert_after_slot_id(slot);
         }
 
         transaction.borrow_mut().unpin(block.clone());
         transaction.borrow_mut().commit();
+
+        remove_file(test_dir.join(test_file_name)).unwrap();
+        remove_file(test_dir.join(log_file_name)).unwrap();
     }
 }

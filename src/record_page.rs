@@ -146,7 +146,8 @@ pub struct Layout {
 impl Layout {
     pub fn new(schema: TableSchema) -> Layout {
         let mut offsets = HashMap::new();
-        // i32のサイズは4バイト
+
+        // RecordTypeの分
         let mut slot_size = 4;
 
         for field in &schema.fields {

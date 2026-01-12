@@ -27,3 +27,6 @@ jobs:
 
       - name: Run transaction_v2 tests
         run: RUSTFLAGS="-A warnings" cargo test transaction_v2::tests
+
+      - name: Run record_page_v2 tests
+        run: RUSTFLAGS="-A warnings" cargo test record_page_v2::tests
