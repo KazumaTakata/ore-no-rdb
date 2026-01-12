@@ -20,7 +20,7 @@ impl MetadataManager {
     pub fn new(
         transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
     ) -> Result<Self, ValueNotFound> {
-        let table_manager = Rc::new(RefCell::new(TableManagerV2::new()));
+        let table_manager = Rc::new(RefCell::new(TableManagerV2::new(transaction.clone(), true)));
         let stat_manager = Rc::new(RefCell::new(StatManagerV2::new(table_manager.clone())));
 
         let _index_manager = index_manager::IndexManager::new(

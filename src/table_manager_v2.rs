@@ -15,12 +15,18 @@ pub struct TableManagerV2 {
 }
 
 impl TableManagerV2 {
-    pub fn new() -> TableManagerV2 {
+    const TABLE_CATALOG_TABLE_NAME: &'static str = "table_catalog";
+    const FIELD_CATALOG_TABLE_NAME: &'static str = "field_catalog";
+
+    const TABLE_CATALOG_TABLE_NAME_FIELD: &'static str = "table_name";
+    const TABLE_CATALOG_SLOT_SIZE_FIELD: &'static str = "slot_size";
+
+    pub fn new(transaction: Rc<RefCell<TransactionV2>>, is_new: bool) -> TableManagerV2 {
         let mut table_catalog_schema = TableSchema::new();
         table_catalog_schema.add_string_field("table_name".to_string(), 20);
         table_catalog_schema.add_integer_field("slot_size".to_string());
 
-        let table_catalog_layout = record_page::Layout::new(table_catalog_schema);
+        let table_catalog_layout = record_page::Layout::new(table_catalog_schema.clone());
 
         let mut field_catalog_schema = TableSchema::new();
         field_catalog_schema.add_string_field("table_name".to_string(), 20);
@@ -28,12 +34,28 @@ impl TableManagerV2 {
         field_catalog_schema.add_integer_field("field_type".to_string());
         field_catalog_schema.add_integer_field("field_length".to_string());
         field_catalog_schema.add_integer_field("field_offset".to_string());
-        let table_field_schema = record_page::Layout::new(field_catalog_schema);
+        let table_field_schema = record_page::Layout::new(field_catalog_schema.clone());
 
-        TableManagerV2 {
+        let table_manager = TableManagerV2 {
             table_catalog_layout,
             field_catalog_layout: table_field_schema,
+        };
+
+        if is_new {
+            table_manager.create_table(
+                Self::TABLE_CATALOG_TABLE_NAME.to_string(),
+                &table_catalog_schema,
+                transaction.clone(),
+            );
+
+            table_manager.create_table(
+                Self::FIELD_CATALOG_TABLE_NAME.to_string(),
+                &field_catalog_schema,
+                transaction.clone(),
+            );
         }
+
+        table_manager
     }
 
     pub fn check_if_field_exists(
@@ -43,7 +65,7 @@ impl TableManagerV2 {
         transaction: Rc<RefCell<TransactionV2>>,
     ) -> bool {
         let mut field_scan = TableScan::new(
-            "field_catalog".to_string(),
+            Self::FIELD_CATALOG_TABLE_NAME.to_string(),
             transaction.clone(),
             self.field_catalog_layout.clone(),
         );
@@ -81,7 +103,7 @@ impl TableManagerV2 {
         transaction: Rc<RefCell<TransactionV2>>,
     ) -> bool {
         let mut table_scan = TableScan::new(
-            "table_catalog".to_string(),
+            Self::TABLE_CATALOG_TABLE_NAME.to_string(),
             transaction.clone(),
             self.table_catalog_layout.clone(),
         );
@@ -113,7 +135,7 @@ impl TableManagerV2 {
         let layout = record_page::Layout::new(schema.clone());
 
         let mut table_scan = TableScan::new(
-            "table_catalog".to_string(),
+            Self::TABLE_CATALOG_TABLE_NAME.to_string(),
             transaction.clone(),
             self.table_catalog_layout.clone(),
         );
@@ -124,15 +146,18 @@ impl TableManagerV2 {
         }
 
         table_scan.insert();
-        table_scan.set_string("table_name".to_string(), table_name.clone());
+        table_scan.set_string(
+            Self::TABLE_CATALOG_TABLE_NAME_FIELD.to_string(),
+            table_name.clone(),
+        );
         let slot_size = layout.get_slot_size() as i32;
-        table_scan.set_integer("slot_size".to_string(), slot_size);
+        table_scan.set_integer(Self::TABLE_CATALOG_SLOT_SIZE_FIELD.to_string(), slot_size);
         table_scan.close();
 
         transaction.borrow_mut().commit();
 
         let mut field_scan = TableScan::new(
-            "field_catalog".to_string(),
+            Self::FIELD_CATALOG_TABLE_NAME.to_string(),
             transaction.clone(),
             self.field_catalog_layout.clone(),
         );
@@ -164,7 +189,7 @@ impl TableManagerV2 {
         transaction: Rc<RefCell<TransactionV2>>,
     ) -> Result<record_page::Layout, ValueNotFound> {
         let mut table_scan = TableScan::new(
-            "table_catalog".to_string(),
+            Self::TABLE_CATALOG_TABLE_NAME.to_string(),
             transaction.clone(),
             self.table_catalog_layout.clone(),
         );
@@ -182,8 +207,10 @@ impl TableManagerV2 {
             match name {
                 Some(name) => {
                     if name == table_name {
-                        let size = table_scan
-                            .get_integer(TableNameAndFieldName::new(None, "slot_size".to_string()));
+                        let size = table_scan.get_integer(TableNameAndFieldName::new(
+                            None,
+                            Self::TABLE_CATALOG_SLOT_SIZE_FIELD.to_string(),
+                        ));
                         match size {
                             Some(size) => {
                                 slot_size = Some(size);
@@ -253,9 +280,7 @@ impl TableManagerV2 {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, path::Path, rc::Rc};
-
-    use rand::Rng;
+    use std::{cell::RefCell, fs::remove_file, path::Path, rc::Rc};
 
     use crate::{
         buffer_manager_v2::BufferManagerV2,
@@ -269,10 +294,15 @@ mod tests {
 
     #[test]
     fn test_table_mgr() {
-        let mut file_manager = Rc::new(RefCell::new(FileManager::new(Path::new("data"), 400)));
+        let test_dir = Path::new("test_data");
+        let block_size = 400;
+
+        let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
+
+        let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
         let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
             file_manager.clone(),
-            "log.txt".to_string(),
+            log_file_name.clone(),
         )));
 
         let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
@@ -283,11 +313,6 @@ mod tests {
 
         let lock_table = Rc::new(RefCell::new(LockTable::new()));
 
-        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
-            file_manager.clone(),
-            "log.txt".to_string(),
-        )));
-
         let transaction = Rc::new(RefCell::new(TransactionV2::new(
             1,
             file_manager.clone(),
@@ -296,39 +321,50 @@ mod tests {
             log_manager.clone(),
         )));
 
-        let table_manager = TableManagerV2::new();
-        table_manager.create_table(
-            "table_catalog".to_string(),
-            &table_manager.table_catalog_layout.schema.clone(),
-            transaction.clone(),
-        );
-        table_manager.create_table(
-            "field_catalog".to_string(),
-            &table_manager.field_catalog_layout.schema.clone(),
-            transaction.clone(),
-        );
-
-        let layout = table_manager.get_layout("field_catalog".to_string(), transaction.clone());
+        let table_manager = TableManagerV2::new(transaction.clone(), true);
 
         let mut schema = TableSchema::new();
         schema.add_integer_field("A".to_string());
         schema.add_string_field("B".to_string(), 9);
+        schema.add_integer_field("C".to_string());
 
-        table_manager.create_table("test_table".to_string(), &schema, transaction.clone());
-        let layout = table_manager.get_layout("test_table".to_string(), transaction.clone());
+        let test_table_name = format!("test_table_{}", uuid::Uuid::new_v4());
+
+        table_manager.create_table(test_table_name.clone(), &schema, transaction.clone());
+        let layout = table_manager.get_layout(test_table_name, transaction.clone());
 
         let layout = layout.unwrap();
 
         println!("Layout for test_table:");
         println!("Slot Size: {}", layout.get_slot_size());
 
-        for field in layout.schema.fields.iter() {
+        for (i, field) in layout.schema.fields.iter().enumerate() {
             println!("Field: {}", field);
             let offset = layout.get_offset(field).unwrap();
             println!("Offset: {}", offset);
             let field_type = schema.get_field_type(field.to_string()).unwrap();
             println!("Field Type: {:?}", field_type);
             let field_length = schema.get_field_length(field.to_string()).unwrap();
+            println!("Field Length: {}", field_length);
+
+            if i == 0 {
+                assert_eq!(field, "A");
+                assert_eq!(offset, 4);
+                assert_eq!(field_type, TableFieldType::INTEGER);
+                assert_eq!(field_length, 0);
+            } else if i == 1 {
+                assert_eq!(field, "B");
+                assert_eq!(offset, 8);
+                assert_eq!(field_type, TableFieldType::VARCHAR);
+                assert_eq!(field_length, 9);
+            } else if i == 2 {
+                assert_eq!(field, "C");
+                assert_eq!(offset, 48);
+                assert_eq!(field_type, TableFieldType::INTEGER);
+                assert_eq!(field_length, 0);
+            }
         }
+
+        remove_file(test_dir.join(log_file_name)).unwrap();
     }
 }
