@@ -33,3 +33,6 @@ jobs:
 
       - name: Run table_scan_v2 tests
         run: RUSTFLAGS="-A warnings" cargo test table_scan_v2::tests
+
+      - name: Run table_manager_v2 tests
+        run: RUSTFLAGS="-A warnings" cargo test table_manager_v2::tests
