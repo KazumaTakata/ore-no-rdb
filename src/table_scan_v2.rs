@@ -92,10 +92,10 @@ impl TableScan {
     }
 
     pub fn move_to_new_block(&mut self) {
+        self.close();
         let block_id = self.transaction.borrow_mut().append(&self.file_name);
-        let mut record_page =
-            RecordPage::new(self.transaction.clone(), self.layout.clone(), block_id);
-        record_page.format();
+        self.record_page = RecordPage::new(self.transaction.clone(), self.layout.clone(), block_id);
+        self.record_page.format();
         self.current_slot = -1;
     }
 
@@ -285,7 +285,7 @@ impl ScanV2 for TableScan {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, path::Path, rc::Rc};
+    use std::{cell::RefCell, fs::remove_file, path::Path, rc::Rc};
 
     use rand::Rng;
 
@@ -301,10 +301,14 @@ mod tests {
 
     #[test]
     fn test_table_scan_v2() -> Result<(), Box<dyn std::error::Error>> {
-        let mut file_manager = Rc::new(RefCell::new(FileManager::new(Path::new("data"), 400)));
+        let test_dir = Path::new("test_data");
+        let block_size = 400;
+        let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
+
+        let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
         let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
             file_manager.clone(),
-            "log.txt".to_string(),
+            log_file_name.clone(),
         )));
 
         let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
@@ -315,11 +319,6 @@ mod tests {
 
         let lock_table = Rc::new(RefCell::new(LockTable::new()));
 
-        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
-            file_manager.clone(),
-            "log.txt".to_string(),
-        )));
-
         let transaction = Rc::new(RefCell::new(TransactionV2::new(
             1,
             file_manager.clone(),
@@ -329,8 +328,12 @@ mod tests {
         )));
 
         let mut schema = TableSchema::new();
-        schema.add_integer_field("Field1".to_string());
-        schema.add_string_field("Field2".to_string(), 9);
+
+        let integer_field_name = "Field1".to_string();
+        let string_field_name = "Field2".to_string();
+
+        schema.add_integer_field(integer_field_name.clone());
+        schema.add_string_field(string_field_name.clone(), 9);
         let layout = Layout::new(schema);
 
         layout.schema.fields().iter().for_each(|field| {
@@ -338,44 +341,44 @@ mod tests {
             println!("Field: {}, Offset: {}", field, offset.unwrap());
         });
 
-        let mut table_scan = TableScan::new(
-            "test_table".to_string(),
-            transaction.clone(),
-            layout.clone(),
-        );
+        let test_file_name = format!("test_table_{}", uuid::Uuid::new_v4());
 
-        table_scan.move_to_before_first();
+        let mut table_scan =
+            TableScan::new(test_file_name.clone(), transaction.clone(), layout.clone());
 
-        for _ in 0..10 {
+        _ = table_scan.move_to_before_first();
+
+        for _ in 0..1000 {
             table_scan.insert();
             let random_value = rand::rng().random_range(0..100);
-            table_scan.set_integer("Field1".to_string(), random_value);
-            table_scan.set_string("Field2".to_string(), format!("Hello {}", random_value));
+            table_scan.set_integer(integer_field_name.clone(), random_value);
+            table_scan.set_string(string_field_name.clone(), format!("Hello {}", random_value));
         }
 
-        table_scan.move_to_before_first();
+        _ = table_scan.move_to_before_first();
+
+        let mut count = 0;
 
         while table_scan.next()? {
-            let field1_value =
-                table_scan.get_integer(TableNameAndFieldName::new(None, "Field1".to_string()));
+            let field1_value = table_scan
+                .get_integer(TableNameAndFieldName::new(None, integer_field_name.clone()));
             let field2_value =
-                table_scan.get_string(TableNameAndFieldName::new(None, "Field2".to_string()));
+                table_scan.get_string(TableNameAndFieldName::new(None, string_field_name.clone()));
 
-            if let Some(value) = field1_value {
-                println!("Field1: {}", value);
-            } else {
-                println!("Field1: None");
-            }
-
-            if let Some(value) = field2_value {
-                println!("Field2: {}", value);
-            } else {
-                println!("Field2: None");
-            }
+            assert!(field1_value.unwrap() >= 0 && field1_value.unwrap() < 100);
+            assert!(field2_value
+                .unwrap()
+                .starts_with(&format!("Hello {}", field1_value.unwrap())));
+            count += 1;
         }
+
+        assert_eq!(count, 1000);
 
         table_scan.close();
         transaction.borrow_mut().commit();
+
+        _ = remove_file(test_dir.join(log_file_name));
+        _ = remove_file(test_dir.join(format!("{}.tbl", test_file_name)));
 
         return Ok(());
     }
