@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, ops::Index, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     error::ValueNotFound,
@@ -204,5 +204,141 @@ impl IndexInfo {
         }
 
         return Layout::new(schema);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, path::Path, rc::Rc};
+
+    use crate::{
+        buffer_manager_v2::BufferManagerV2,
+        concurrency_manager::LockTable,
+        file_manager::{self, FileManager},
+        index_manager::IndexManager,
+        log_manager_v2::LogManagerV2,
+        record_page::TableSchema,
+        scan_v2::ScanV2,
+        stat_manager_v2::StatManagerV2,
+        table_manager_v2::TableManagerV2,
+        table_scan_v2::{self, TableScan},
+        transaction_v2::TransactionV2,
+        view_manager::ViewManager,
+    };
+
+    #[test]
+    fn test_index_mgr() {
+        let test_dir_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let test_dir = Path::new(&test_dir_name);
+        let block_size = 400;
+
+        let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
+
+        let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
+        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+            file_manager.clone(),
+            log_file_name.clone(),
+        )));
+
+        let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
+            100,
+            file_manager.clone(),
+            log_manager.clone(),
+        )));
+
+        let lock_table = Rc::new(RefCell::new(LockTable::new()));
+
+        let transaction = Rc::new(RefCell::new(TransactionV2::new(
+            1,
+            file_manager.clone(),
+            buffer_manager.clone(),
+            lock_table.clone(),
+            log_manager.clone(),
+        )));
+
+        let table_manager = Rc::new(RefCell::new(TableManagerV2::new(transaction.clone(), true)));
+
+        let mut student_shema = TableSchema::new();
+        student_shema.add_integer_field("sid".to_string());
+        student_shema.add_string_field("name".to_string(), 20);
+
+        _ = table_manager.borrow_mut().create_table(
+            "student".to_string(),
+            &student_shema,
+            transaction.clone(),
+        );
+
+        let student_layout = table_manager
+            .borrow()
+            .get_layout("student".to_string(), transaction.clone())
+            .unwrap();
+
+        let mut table_scan =
+            TableScan::new("student".to_string(), transaction.clone(), student_layout);
+
+        table_scan.insert();
+        table_scan.set_string("sid".to_string(), "1".to_string());
+        table_scan.set_string("name".to_string(), "Alice".to_string());
+
+        table_scan.insert();
+        table_scan.set_string("sid".to_string(), "2".to_string());
+        table_scan.set_string("name".to_string(), "Alice2".to_string());
+
+        table_scan.insert();
+        table_scan.set_string("sid".to_string(), "3".to_string());
+        table_scan.set_string("name".to_string(), "Alice4".to_string());
+
+        table_scan.close();
+        transaction.borrow_mut().commit();
+
+        let stat_manager = Rc::new(RefCell::new(StatManagerV2::new(table_manager.clone())));
+        _ = stat_manager
+            .borrow_mut()
+            .refresh_table_stats(transaction.clone());
+
+        let mut index_manager = IndexManager::new(
+            table_manager.clone(),
+            stat_manager.clone(),
+            transaction.clone(),
+        )
+        .unwrap();
+
+        index_manager.create_index(
+            "sidIdx".to_string(),
+            "student".to_string(),
+            "sid".to_string(),
+            transaction.clone(),
+        );
+
+        index_manager.create_index(
+            "nameIdx".to_string(),
+            "student".to_string(),
+            "name".to_string(),
+            transaction.clone(),
+        );
+
+        let indexes = index_manager
+            .get_index_info("student".to_string(), transaction.clone())
+            .unwrap();
+
+        for field_name in indexes.keys() {
+            let index_info = indexes.get(field_name).unwrap();
+
+            assert!(field_name == "sid" || field_name == "name");
+
+            if field_name == "sid" {
+                assert!(index_info.index_name == "sidIdx");
+            } else if field_name == "name" {
+                assert!(index_info.index_name == "nameIdx");
+            }
+
+            println!(
+                "Index on field: {}, blocks accessed: {}, records output: {}, distinct values: {}",
+                field_name,
+                index_info.blocks_accessed(),
+                index_info.records_output(),
+                index_info.distinct_values(field_name)
+            );
+        }
     }
 }
