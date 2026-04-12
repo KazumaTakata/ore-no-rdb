@@ -34,6 +34,7 @@ mod stat_manager_v2;
 mod table_manager_v2;
 mod table_scan_v2;
 mod transaction_v2;
+mod view_manager;
 
 use block::BlockId;
 use clap::Parser;

@@ -114,16 +114,27 @@ impl TableScan {
 
 impl ScanV2 for TableScan {
     fn set_integer(&mut self, field_name: String, value: i32) {
+        if self.current_slot == -1 {
+            panic!("No current record to set value");
+        }
+
         self.record_page
             .set_integer(field_name, self.current_slot, value)
     }
 
     fn set_string(&mut self, field_name: String, value: String) {
+        if self.current_slot == -1 {
+            panic!("No current record to set value");
+        }
         self.record_page
             .set_string(field_name, self.current_slot, value)
     }
 
     fn set_value(&mut self, field_name: String, value: crate::predicate::ConstantValue) {
+        if self.current_slot == -1 {
+            panic!("No current record to set value");
+        }
+
         match value {
             crate::predicate::ConstantValue::Number(num) => {
                 self.set_integer(field_name, num);

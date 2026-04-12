@@ -17,7 +17,6 @@ use crate::{
     scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
     sort_plan::SortPlan,
     stat_manager_v2::{StatInfoV2, StatManagerV2},
-    table_manager_v2::TableManagerV2,
     table_scan_v2::TableScan,
     transaction_v2::TransactionV2,
 };
