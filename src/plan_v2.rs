@@ -16,7 +16,7 @@ use crate::{
     record_page::{Layout, TableSchema},
     scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
     sort_plan::SortPlan,
-    stat_manager_v2::{StatInfoV2, StatManagerV2},
+    stat_manager_v2::StatInfoV2,
     table_scan_v2::TableScan,
     transaction_v2::TransactionV2,
 };

@@ -8,12 +8,14 @@ use crate::{
     stat_manager_v2::{StatInfoV2, StatManagerV2},
     table_manager_v2::TableManagerV2,
     transaction_v2,
+    view_manager::{self, ViewManager},
 };
 
 pub struct MetadataManager {
     table_manager: Rc<RefCell<TableManagerV2>>,
     stat_manager: Rc<RefCell<StatManagerV2>>,
     index_manager: Rc<RefCell<IndexManager>>,
+    view_manager: Rc<RefCell<ViewManager>>,
 }
 
 impl MetadataManager {
@@ -30,6 +32,12 @@ impl MetadataManager {
         )?;
 
         let index_manager = Rc::new(RefCell::new(_index_manager));
+
+        let view_manager = Rc::new(RefCell::new(view_manager::ViewManager::new(
+            true,
+            table_manager.clone(),
+            transaction.clone(),
+        )));
 
         let copied_table_manager = table_manager.clone();
 
@@ -53,6 +61,7 @@ impl MetadataManager {
             table_manager: table_manager,
             stat_manager: stat_manager,
             index_manager: index_manager,
+            view_manager: view_manager,
         })
     }
 
@@ -92,6 +101,27 @@ impl MetadataManager {
                 );
             }
         }
+    }
+
+    pub fn create_view(
+        &mut self,
+        view_name: String,
+        view_definition: String,
+        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+    ) {
+        self.view_manager
+            .borrow_mut()
+            .create_view(view_name, view_definition, transaction);
+    }
+
+    pub fn get_view_definition(
+        &self,
+        view_name: String,
+        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+    ) -> Option<String> {
+        self.view_manager
+            .borrow()
+            .get_view_definition(view_name, transaction)
     }
 
     pub fn get_layout(
