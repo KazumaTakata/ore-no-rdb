@@ -290,3 +290,126 @@ impl ScanV2 for ProductScanV2 {
         panic!("set_value not implemented for ProductScan");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, path::Path, rc::Rc};
+
+    use crate::{
+        buffer_manager_v2::BufferManagerV2,
+        concurrency_manager::LockTable,
+        file_manager::{self, FileManager},
+        log_manager_v2::LogManagerV2,
+        predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
+        predicate_v3::{ExpressionV2, PredicateV2, TermV2},
+        record_page::{Layout, TableSchema},
+        scan_v2::{ScanV2, SelectScanV2},
+        table_manager_v2::TableManagerV2,
+        table_scan_v2::TableScan,
+        transaction_v2::TransactionV2,
+        view_manager::ViewManager,
+    };
+
+    #[test]
+    fn test_view_mgr() {
+        let test_dir_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let test_dir = Path::new(&test_dir_name);
+        let block_size = 400;
+
+        let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
+
+        let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
+        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+            file_manager.clone(),
+            log_file_name.clone(),
+        )));
+
+        let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
+            100,
+            file_manager.clone(),
+            log_manager.clone(),
+        )));
+
+        let lock_table = Rc::new(RefCell::new(LockTable::new()));
+
+        let transaction = Rc::new(RefCell::new(TransactionV2::new(
+            1,
+            file_manager.clone(),
+            buffer_manager.clone(),
+            lock_table.clone(),
+            log_manager.clone(),
+        )));
+
+        let table_manager = Rc::new(RefCell::new(TableManagerV2::new(transaction.clone(), true)));
+
+        let mut view_manager = ViewManager::new(true, table_manager.clone(), transaction.clone());
+
+        let mut student_table_schema = TableSchema::new();
+        student_table_schema.add_string_field("name".to_string(), 10);
+        student_table_schema.add_integer_field("age".to_string());
+
+        let student_table_layout = Layout::new(student_table_schema.clone());
+
+        table_manager.borrow_mut().create_table(
+            "student".to_string(),
+            &student_table_schema,
+            transaction.clone(),
+        );
+
+        let mut student_table_scan = TableScan::new(
+            "student".to_string(),
+            transaction.clone(),
+            student_table_layout,
+        );
+
+        student_table_scan.insert();
+        student_table_scan.set_string("name".to_string(), "Alice".to_string());
+        student_table_scan.set_integer("age".to_string(), 20);
+
+        student_table_scan.insert();
+        student_table_scan.set_string("name".to_string(), "Bob".to_string());
+        student_table_scan.set_integer("age".to_string(), 22);
+
+        student_table_scan.insert();
+        student_table_scan.set_string("name".to_string(), "John".to_string());
+        student_table_scan.set_integer("age".to_string(), 20);
+
+        student_table_scan.move_to_before_first();
+
+        let lhs_expression = ExpressionV2::new(ExpressionValue::TableNameAndFieldName(
+            TableNameAndFieldName::new(None, "age".to_string()),
+        ));
+        let rhs_expression = ExpressionV2::new(ExpressionValue::Constant(Constant::new(
+            ConstantValue::Number(20),
+        )));
+        let terms = vec![TermV2::new(lhs_expression, rhs_expression)];
+        let predicate = PredicateV2::new(terms);
+
+        let mut student_table_select_scan =
+            SelectScanV2::new(Box::new(student_table_scan), predicate);
+
+        assert_eq!(student_table_select_scan.next().unwrap(), true);
+        let name = student_table_select_scan
+            .get_string(TableNameAndFieldName::new(None, "name".to_string()))
+            .unwrap();
+        let age = student_table_select_scan
+            .get_integer(TableNameAndFieldName::new(None, "age".to_string()))
+            .unwrap();
+
+        assert_eq!(name, "Alice".to_string());
+        assert_eq!(age, 20);
+
+        assert_eq!(student_table_select_scan.next().unwrap(), true);
+        let name = student_table_select_scan
+            .get_string(TableNameAndFieldName::new(None, "name".to_string()))
+            .unwrap();
+        let age = student_table_select_scan
+            .get_integer(TableNameAndFieldName::new(None, "age".to_string()))
+            .unwrap();
+
+        assert_eq!(name, "John".to_string());
+        assert_eq!(age, 20);
+
+        println!("name: {}, age: {}", name, age);
+    }
+}
