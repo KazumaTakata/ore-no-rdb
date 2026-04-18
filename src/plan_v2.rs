@@ -728,4 +728,6 @@ mod tests {
 
         return Ok(());
     }
+
+    fn test_view_query() {}
 }

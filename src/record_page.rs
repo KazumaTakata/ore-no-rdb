@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TableFieldInfo {
     field_type: TableFieldType,
     field_length: i32,
@@ -21,7 +21,7 @@ pub enum TableFieldType {
     VARCHAR,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TableSchema {
     pub fields: Vec<String>,
     pub field_infos: HashMap<String, TableFieldInfo>,

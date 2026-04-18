@@ -5,7 +5,7 @@ use crate::{
     scan_v2::ScanV2,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExpressionV2 {
     pub value: ExpressionValue,
 }
@@ -55,7 +55,7 @@ impl ExpressionV2 {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TermV2 {
     lhs: ExpressionV2,
     rhs: ExpressionV2,
@@ -126,7 +126,7 @@ impl TermV2 {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PredicateV2 {
     terms: Vec<TermV2>,
 }
@@ -185,6 +185,3 @@ impl PredicateV2 {
         return 1;
     }
 }
-
-
-
