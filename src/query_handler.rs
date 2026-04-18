@@ -50,6 +50,8 @@ pub fn handle_select_query(
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use crate::{
         database::Database,
         group_by::AggregateFunction,
@@ -63,7 +65,10 @@ mod tests {
 
     #[test]
     fn test_handle_select_query() {
-        let database = Database::new();
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
+
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
 
@@ -92,7 +97,9 @@ mod tests {
     }
     #[test]
     fn test_handle_select_query_2() {
-        let database = Database::new();
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
 
@@ -122,7 +129,9 @@ mod tests {
 
     #[test]
     fn test_handle_select_query_3() {
-        let database = Database::new();
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
 
@@ -155,7 +164,9 @@ mod tests {
 
     #[test]
     fn test_handle_select_query_4() {
-        let database = Database::new();
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
 
@@ -206,8 +217,10 @@ mod tests {
     #[test]
     fn test_handle_select_query_5() {
         delete_temp_files();
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
 
-        let database = Database::new();
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
 
@@ -244,7 +257,9 @@ mod tests {
     fn test_handle_select_query_group_by() {
         delete_temp_files();
 
-        let database = Database::new();
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone()).unwrap();
 

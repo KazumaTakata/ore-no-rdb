@@ -286,6 +286,7 @@ pub fn create_query_plan(
 
     let mut plan: Box<dyn PlanV2> = plans.pop().unwrap();
 
+    //TODO: productの順番を最適化する
     for next_plan in plans.into_iter() {
         let product_plan = ProductPlanV2::new(plan, next_plan);
         plan = Box::new(product_plan);
@@ -414,55 +415,15 @@ pub fn execute_create_table(
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, f32::consts::E, path::Path, rc::Rc};
-
-    use rand::Rng;
-
-    use crate::{
-        buffer_manager_v2::BufferManagerV2,
-        concurrency_manager::LockTable,
-        database::Database,
-        file_manager::{self, FileManager},
-        log_manager_v2::LogManagerV2,
-        metadata_manager::{self, MetadataManager},
-        parser::parse_sql,
-        predicate::{Constant, ConstantValue, ExpressionValue},
-        predicate_v3::{ExpressionV2, TermV2},
-        record_page::TableSchema,
-    };
 
     use super::*;
+    use crate::{database::Database, metadata_manager::MetadataManager, parser::parse_sql};
 
     #[test]
-    fn test_insert_plan() -> Result<(), ValueNotFound> {
-        let database = Database::new();
-        let transaction = database.new_transaction(1);
-        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
-
-        let parsed_sql_list =
-            parse_sql("insert into posts_2 (title, content) values ('title1', 'body')".to_string());
-
-        let parsed_sql = &parsed_sql_list[0];
-
-        let insert_data = match parsed_sql {
-            crate::parser::ParsedSQL::Insert(q) => q,
-            _ => panic!("Expected a Insert variant from parse_sql"),
-        };
-
-        execute_insert(
-            transaction.clone(),
-            &mut metadata_manager,
-            insert_data.clone(),
-        );
-
-        transaction.borrow_mut().commit();
-
-        return Ok(());
-    }
-
-    #[test]
-    fn insert_data() -> Result<(), ValueNotFound> {
-        let database = Database::new();
+    fn test_insert_data() -> Result<(), ValueNotFound> {
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
@@ -485,12 +446,6 @@ mod tests {
         if result.is_err() {
             println!("Table already exists");
         }
-
-        // mutable_table_manager.create_table(
-        //     "table_catalog".to_string(),
-        //     &mutable_table_manager.table_catalog_layout.schema.clone(),
-        //     transaction.clone(),
-        // );
 
         let insert_sql =
             "insert into test_table_11 (A_1, B_1) values (42, 'Hello World!')".to_string();
@@ -523,106 +478,252 @@ mod tests {
             &mut metadata_manager,
             insert_data_2.clone(),
         );
+        transaction.borrow_mut().commit();
 
-        return Ok(());
-    }
+        // ここでテーブルにデータが挿入されたことを確認するために、selectクエリを実行してみる
 
-    #[test]
-    fn test_join_query() -> Result<(), ValueNotFound> {
-        let database = Database::new();
+        let database = Database::new(directory_path);
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let parsed_sql =
-            &parse_sql("select content from posts where content = 'Best';".to_string())[0];
+        let create_table_sql = "select A_1, B_1 from test_table_11".to_string();
 
-        let query_data = match parsed_sql {
+        let parsed_sql_list = parse_sql(create_table_sql.clone());
+
+        let select_query = match &parsed_sql_list[0] {
             crate::parser::ParsedSQL::Query(q) => q,
-            _ => panic!("Expected a Query variant from parse_sql"),
+            _ => panic!("Expected a Query  variant from parse_sql"),
         };
-
-        let mut plan = create_query_plan(&query_data, transaction.clone(), &mut metadata_manager)?;
+        let mut plan =
+            create_query_plan(&select_query, transaction.clone(), &mut metadata_manager)?;
 
         let mut scan = plan.open()?;
         scan.move_to_before_first();
+
+        let mut count = 0;
+
         while scan.next()? {
-            let field1_value = scan.get_value(TableNameAndFieldName::new(None, "A".to_string()));
-            let field2_value = scan.get_value(TableNameAndFieldName::new(None, "B_1".to_string()));
+            count += 1;
+            let field1_value = scan
+                .get_value(TableNameAndFieldName::new(None, "A_1".to_string()))
+                .unwrap();
+            let field2_value = scan
+                .get_value(TableNameAndFieldName::new(None, "B_1".to_string()))
+                .unwrap();
 
-            if let Some(value) = field1_value {
-                println!("Field A: {:?}", value);
-            } else {
-                println!("Field A: None");
-            }
-
-            if let Some(value) = field2_value {
-                println!("Field B_1: {:?}", value);
-            } else {
-                println!("Field B_1: None");
-            }
+            assert_eq!(field1_value, ConstantValue::Number(42));
+            assert_eq!(
+                field2_value,
+                ConstantValue::String("Hello World!".to_string())
+            );
         }
+
+        assert_eq!(count, 2);
 
         return Ok(());
     }
 
-    fn test_plan() -> Result<(), ValueNotFound> {
-        let database = Database::new();
+    fn prepare_test_data_1(directory_path_name: &Path) -> Result<(), ValueNotFound> {
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        // mutable_table_manager.create_table(
-        //     "table_catalog".to_string(),
-        //     &mutable_table_manager.table_catalog_layout.schema.clone(),
-        //     transaction.clone(),
-        // );
+        let create_table_sql =
+            "create table test_table_1 (A_1 integer, B_1 varchar(10))".to_string();
 
-        // mutable_table_manager.create_table(
-        //     "field_catalog".to_string(),
-        //     &mutable_table_manager.field_catalog_layout.schema.clone(),
-        //     transaction.clone(),
-        // );
+        let parsed_sql_list = parse_sql(create_table_sql.clone());
 
-        // mutable_table_manager.create_table("test_table".to_string(), &schema, transaction.clone());
+        let create_table_data = match &parsed_sql_list[0] {
+            crate::parser::ParsedSQL::CreateTable(q) => q,
+            _ => panic!("Expected a CreateTable variant from parse_sql"),
+        };
 
-        let parsed_sql_list = parse_sql(
-            "insert into test_table (A, B) values (44, 'Hello World yay!111')".to_string(),
+        let result = execute_create_table(
+            transaction.clone(),
+            &mut metadata_manager,
+            create_table_data.clone(),
         );
+
+        if result.is_err() {
+            println!("Table already exists");
+        }
+
+        let insert_sql =
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World1')".to_string();
+
+        insert_data_for_test(
+            insert_sql.clone(),
+            transaction.clone(),
+            &mut metadata_manager,
+        );
+
+        let insert_sql =
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2')".to_string();
+
+        insert_data_for_test(
+            insert_sql.clone(),
+            transaction.clone(),
+            &mut metadata_manager,
+        );
+
+        transaction.borrow_mut().commit();
+        Ok(())
+    }
+
+    fn insert_data_for_test(
+        insert_sql: String,
+        transaction: Rc<RefCell<TransactionV2>>,
+        metadata_manager: &mut MetadataManager,
+    ) {
+        let parsed_sql_list = parse_sql(insert_sql.clone());
 
         let insert_data = match &parsed_sql_list[0] {
             crate::parser::ParsedSQL::Insert(q) => q,
             _ => panic!("Expected a Insert variant from parse_sql"),
         };
 
-        // execute_insert(transaction.clone(), &mut metadata_manager, insert_data);
+        execute_insert(transaction.clone(), metadata_manager, insert_data.clone());
 
-        // transaction.borrow_mut().commit();
+        transaction.borrow_mut().commit();
+    }
 
-        let parsed_sql_list = parse_sql("select A, B from test_table where A = 42".to_string());
+    fn prepare_test_data_2(directory_path_name: &Path) -> Result<(), ValueNotFound> {
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let query_data = match &parsed_sql_list[0] {
+        let create_table_sql =
+            "create table test_table_2 (A_2 integer, B_2 varchar(10))".to_string();
+
+        let parsed_sql_list = parse_sql(create_table_sql.clone());
+
+        let create_table_data = match &parsed_sql_list[0] {
+            crate::parser::ParsedSQL::CreateTable(q) => q,
+            _ => panic!("Expected a CreateTable variant from parse_sql"),
+        };
+
+        let result = execute_create_table(
+            transaction.clone(),
+            &mut metadata_manager,
+            create_table_data.clone(),
+        );
+
+        if result.is_err() {
+            println!("Table already exists");
+        }
+
+        let insert_sql =
+            "insert into test_table_2 (A_2, B_2) values (3, 'Hello World3')".to_string();
+        insert_data_for_test(
+            insert_sql.clone(),
+            transaction.clone(),
+            &mut metadata_manager,
+        );
+
+        let insert_sql =
+            "insert into test_table_2 (A_2, B_2) values (4, 'Hello World4')".to_string();
+        insert_data_for_test(
+            insert_sql.clone(),
+            transaction.clone(),
+            &mut metadata_manager,
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_join_query() -> Result<(), ValueNotFound> {
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let directory_path = Path::new(&directory_path_name);
+
+        prepare_test_data_1(directory_path);
+        prepare_test_data_2(directory_path);
+
+        let database = Database::new(directory_path);
+
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
+
+        let parsed_sql =
+            &parse_sql("select A_1, B_1, A_2, B_2 from test_table_1, test_table_2".to_string())[0];
+
+        let query_data = match parsed_sql {
             crate::parser::ParsedSQL::Query(q) => q,
             _ => panic!("Expected a Query variant from parse_sql"),
         };
+        struct TestValue {
+            a1: ConstantValue,
+            b1: ConstantValue,
+            a2: ConstantValue,
+            b2: ConstantValue,
+        }
+
+        let test_value_1 = TestValue {
+            a1: ConstantValue::Number(1),
+            b1: ConstantValue::String("Hello World1".to_string()),
+            a2: ConstantValue::Number(3),
+            b2: ConstantValue::String("Hello World3".to_string()),
+        };
+        let test_value_2 = TestValue {
+            a1: ConstantValue::Number(2),
+            b1: ConstantValue::String("Hello World2".to_string()),
+            a2: ConstantValue::Number(3),
+            b2: ConstantValue::String("Hello World3".to_string()),
+        };
+        let test_value_3 = TestValue {
+            a1: ConstantValue::Number(1),
+            b1: ConstantValue::String("Hello World1".to_string()),
+            a2: ConstantValue::Number(4),
+            b2: ConstantValue::String("Hello World4".to_string()),
+        };
+        let test_value_4 = TestValue {
+            a1: ConstantValue::Number(2),
+            b1: ConstantValue::String("Hello World2".to_string()),
+            a2: ConstantValue::Number(4),
+            b2: ConstantValue::String("Hello World4".to_string()),
+        };
+
+        let mut test_value_list: Vec<TestValue> =
+            vec![test_value_1, test_value_2, test_value_3, test_value_4];
 
         let mut plan = create_query_plan(&query_data, transaction.clone(), &mut metadata_manager)?;
 
         let mut scan = plan.open()?;
         scan.move_to_before_first();
+
+        let mut count = 0;
+
         while scan.next()? {
-            let field1_value = scan.get_integer(TableNameAndFieldName::new(None, "A".to_string()));
-            let field2_value = scan.get_string(TableNameAndFieldName::new(None, "B".to_string()));
+            let field1_value = scan
+                .get_value(TableNameAndFieldName::new(None, "A_1".to_string()))
+                .unwrap();
+            let field2_value = scan
+                .get_value(TableNameAndFieldName::new(None, "B_1".to_string()))
+                .unwrap();
+            let field3_value = scan
+                .get_value(TableNameAndFieldName::new(None, "A_2".to_string()))
+                .unwrap();
+            let field4_value = scan
+                .get_value(TableNameAndFieldName::new(None, "B_2".to_string()))
+                .unwrap();
 
-            if let Some(value) = field1_value {
-                println!("Field A: {}", value);
-            } else {
-                println!("Field A: None");
-            }
+            println!(
+                "{}",
+                format!(
+                "field1_value: {:?}, field2_value: {:?}, field3_value: {:?}, field4_value: {:?}",
+                field1_value, field2_value, field3_value, field4_value
+            )
+            );
 
-            if let Some(value) = field2_value {
-                println!("Field B: {}", value);
-            } else {
-                println!("Field B: None");
-            }
+            let test_value = &test_value_list[count];
+            count += 1;
+
+            assert_eq!(field1_value, test_value.a1);
+            assert_eq!(field2_value, test_value.b1);
+            assert_eq!(field3_value, test_value.a2);
+            assert_eq!(field4_value, test_value.b2);
         }
 
         return Ok(());

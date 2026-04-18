@@ -24,7 +24,6 @@ impl ViewManager {
                 &view_manager_schema,
                 transaction,
             );
-            println!("Created view catalog");
         }
         ViewManager { table_manager }
     }

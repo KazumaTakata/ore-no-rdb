@@ -180,7 +180,10 @@ mod tests {
 
     #[test]
     fn test_index_update_planner() -> Result<(), ValueNotFound> {
-        let database = Database::new();
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
+
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 

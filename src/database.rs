@@ -13,8 +13,8 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new() -> Self {
-        let file_manager = Rc::new(RefCell::new(FileManager::new(Path::new("data"), 400)));
+    pub fn new(directory_path: &Path) -> Self {
+        let file_manager = Rc::new(RefCell::new(FileManager::new(directory_path, 400)));
         let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
             file_manager.clone(),
             "log.txt".to_string(),
