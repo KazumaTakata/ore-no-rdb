@@ -39,3 +39,6 @@ jobs:
 
       - name: Run stat_manager_v2 tests
         run: RUSTFLAGS="-A warnings" cargo test stat_manager_v2::tests
+
+      - name: Run plan_v2 tests
+        run: RUSTFLAGS="-A warnings" cargo test plan_v2::tests

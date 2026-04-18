@@ -1,6 +1,7 @@
 use rustyline::error::ReadlineError;
 use rustyline::{DefaultEditor, Result};
 use std::cell::RefCell;
+use std::path::Path;
 use std::rc::Rc;
 use std::vec;
 
@@ -169,7 +170,10 @@ fn handle_parsed_sql(
 }
 
 fn main() -> Result<()> {
-    let database = Database::new();
+    let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+    let directory_path = Path::new(&directory_path_name);
+    let database = Database::new(directory_path);
+
     let transaction = database.new_transaction(1);
     let mut metadata_manager = Rc::new(RefCell::new(
         MetadataManager::new(transaction.clone()).unwrap(),
