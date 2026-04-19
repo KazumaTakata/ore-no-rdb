@@ -14,6 +14,7 @@ mod error;
 mod file_manager;
 mod group_by;
 mod hash_index;
+mod index_join_scan;
 mod index_manager;
 mod index_update_planner;
 mod log_manager_v2;

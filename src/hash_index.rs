@@ -50,7 +50,7 @@ impl HashIndex {
         }
     }
 
-    fn before_first(&mut self, search_key: Constant) {
+    pub fn before_first(&mut self, search_key: Constant) {
         self.close();
         self.search_key = Some(search_key);
 
@@ -71,7 +71,7 @@ impl HashIndex {
         self.table_scan = Some(Box::new(table_scan));
     }
 
-    fn next(&mut self) -> Result<bool, ValueNotFound> {
+    pub fn next(&mut self) -> Result<bool, ValueNotFound> {
         if let Some(scan) = &mut self.table_scan {
             while scan.next()? {
                 let data_value =
@@ -95,7 +95,7 @@ impl HashIndex {
         }
     }
 
-    fn get_data_record_id(&mut self) -> Result<Option<RecordID>, ValueNotFound> {
+    pub fn get_data_record_id(&mut self) -> Result<Option<RecordID>, ValueNotFound> {
         if let Some(scan) = &mut self.table_scan {
             let value = scan.get_integer(TableNameAndFieldName::new(None, "block".to_string()));
             let id = scan.get_integer(TableNameAndFieldName::new(None, "id".to_string()));
