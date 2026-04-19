@@ -10,7 +10,7 @@ use crate::{
     index_manager::IndexInfo,
     log_manager_v2::LogManagerV2,
     metadata_manager::{self, MetadataManager},
-    parser::{CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
+    parser::{parse_sql, CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
     predicate::{Constant, ConstantValue, TableNameAndFieldName},
     predicate_v3::PredicateV2,
     record_page::{Layout, TableSchema},
@@ -263,6 +263,23 @@ pub fn create_query_plan(
     let mut plans: Vec<Box<dyn PlanV2>> = Vec::new();
 
     for table_name in query_data.table_name_list.iter() {
+        let view_definition =
+            metadata_manager.get_view_definition(table_name.clone(), transaction.clone());
+
+        if let Some(view_def) = view_definition {
+            let parsed_sql_list = parse_sql(view_def.clone());
+            let parsed_sql = &parsed_sql_list[0];
+
+            match parsed_sql {
+                crate::parser::ParsedSQL::Query(q) => {
+                    let view_plan = create_query_plan(q, transaction.clone(), metadata_manager)?;
+                    plans.push(view_plan);
+                    continue;
+                }
+                _ => panic!("Expected a Query variant from parse_sql for view definition"),
+            }
+        }
+
         let table_plan =
             TablePlanV2::new(table_name.clone(), transaction.clone(), metadata_manager)?;
         let plan: Box<dyn PlanV2> = Box::new(table_plan);
@@ -729,5 +746,142 @@ mod tests {
         return Ok(());
     }
 
-    fn test_view_query() {}
+    fn prepare_test_data_3(directory_path_name: &Path) -> Result<(), ValueNotFound> {
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
+
+        let create_table_sql =
+            "create table test_table_1 (A_1 integer, B_1 varchar(10))".to_string();
+
+        let parsed_sql_list = parse_sql(create_table_sql.clone());
+
+        let create_table_data = match &parsed_sql_list[0] {
+            crate::parser::ParsedSQL::CreateTable(q) => q,
+            _ => panic!("Expected a CreateTable variant from parse_sql"),
+        };
+
+        let result = execute_create_table(
+            transaction.clone(),
+            &mut metadata_manager,
+            create_table_data.clone(),
+        );
+
+        if result.is_err() {
+            println!("Table already exists");
+        }
+
+        let insert_sql =
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World1')".to_string();
+
+        insert_data_for_test(
+            insert_sql.clone(),
+            transaction.clone(),
+            &mut metadata_manager,
+        );
+
+        let insert_sql =
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2')".to_string();
+
+        insert_data_for_test(
+            insert_sql.clone(),
+            transaction.clone(),
+            &mut metadata_manager,
+        );
+
+        let insert_sql =
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World3')".to_string();
+
+        insert_data_for_test(
+            insert_sql.clone(),
+            transaction.clone(),
+            &mut metadata_manager,
+        );
+
+        let insert_sql =
+            "insert into test_table_1 (A_1, B_1) values (4, 'Hello World4')".to_string();
+
+        insert_data_for_test(
+            insert_sql.clone(),
+            transaction.clone(),
+            &mut metadata_manager,
+        );
+
+        let insert_sql =
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World1111')".to_string();
+
+        insert_data_for_test(
+            insert_sql.clone(),
+            transaction.clone(),
+            &mut metadata_manager,
+        );
+
+        transaction.borrow_mut().commit();
+
+        metadata_manager.create_view(
+            "test_view".to_string(),
+            "select A_1, B_1 from test_table_1".to_string(),
+            transaction.clone(),
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_view_query() -> Result<(), ValueNotFound> {
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let directory_path = Path::new(&directory_path_name);
+
+        prepare_test_data_3(directory_path)?;
+
+        let database = Database::new(directory_path);
+
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
+
+        let parsed_sql = &parse_sql("select A_1, B_1 from test_view where A_1 = 1".to_string())[0];
+
+        let query_data = match parsed_sql {
+            crate::parser::ParsedSQL::Query(q) => q,
+            _ => panic!("Expected a Query variant from parse_sql"),
+        };
+
+        let mut plan = create_query_plan(&query_data, transaction.clone(), &mut metadata_manager)?;
+        let mut scan = plan.open()?;
+        scan.move_to_before_first();
+        let mut count = 0;
+
+        scan.next()?;
+        let field1_value = scan
+            .get_value(TableNameAndFieldName::new(None, "A_1".to_string()))
+            .unwrap();
+        let field2_value = scan
+            .get_value(TableNameAndFieldName::new(None, "B_1".to_string()))
+            .unwrap();
+
+        assert_eq!(field1_value, ConstantValue::Number(1));
+        assert_eq!(
+            field2_value,
+            ConstantValue::String("Hello World1".to_string())
+        );
+
+        scan.next()?;
+        let field1_value = scan
+            .get_value(TableNameAndFieldName::new(None, "A_1".to_string()))
+            .unwrap();
+        let field2_value = scan
+            .get_value(TableNameAndFieldName::new(None, "B_1".to_string()))
+            .unwrap();
+
+        assert_eq!(field1_value, ConstantValue::Number(1));
+        assert_eq!(
+            field2_value,
+            ConstantValue::String("Hello World1111".to_string())
+        );
+
+        assert_eq!(scan.next().unwrap(), false);
+
+        Ok(())
+    }
 }
