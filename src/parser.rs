@@ -18,14 +18,14 @@ use crate::{
 #[grammar = "pest/sql.pest"]
 pub struct SQLParser;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InsertData {
     pub table_name: String,
     pub field_name_list: Vec<String>,
     pub value_list: Vec<Constant>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeleteData {
     pub table_name: String,
     pub predicate: PredicateV2,
@@ -40,7 +40,7 @@ impl DeleteData {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdateData {
     pub table_name: String,
     pub field_name: String,
@@ -93,11 +93,13 @@ impl InsertData {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParsedSQL {
     Query(QueryData),
     Insert(InsertData),
     CreateTable(CreateTableData),
     CreateIndex(CreateIndexData),
+    CreateView(ViewData),
     Delete(DeleteData),
     Update(UpdateData),
     ShowTables,
@@ -113,6 +115,14 @@ impl ParsedSQL {
             ParsedSQL::Insert(insert_data) => {
                 println!("Parsed Insert Data: \n{}", insert_data.to_string());
             }
+            ParsedSQL::CreateView(create_view_data) => {
+                println!(
+                    "Parsed Create View Data: \nView Name: {}\nView Definition:\n{}",
+                    create_view_data.view_name,
+                    create_view_data.view_definition.to_string()
+                );
+            }
+
             ParsedSQL::CreateTable(create_table_data) => {
                 println!(
                     "Parsed Create Table Data: \n{}",
@@ -141,7 +151,6 @@ impl ParsedSQL {
             ParsedSQL::DescribeTable { table_name } => {
                 println!("Parsed Describe Table Command for table: {}", table_name);
             }
-
             ParsedSQL::CreateIndex(create_index_data) => {
                 println!(
                     "Parsed Create Index Data: \nIndex Name: {}\nTable Name: {}\nField Name: {}",
@@ -154,13 +163,13 @@ impl ParsedSQL {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateTableData {
     pub table_name: String,
     pub schema: TableSchema,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateIndexData {
     pub index_name: String,
     pub table_name: String,
@@ -175,13 +184,36 @@ impl fmt::Display for CreateTableData {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregateFunctionInfo {
     pub function_name: String,
     pub field: TableNameAndFieldName,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ViewData {
+    pub view_name: String,
+    pub view_definition: QueryData,
+}
+
+impl ViewData {
+    pub fn new(view_name: String, view_definition: QueryData) -> Self {
+        ViewData {
+            view_name,
+            view_definition,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        let mut result = String::new();
+        result.push_str(&format!("View Name: {}\n", self.view_name));
+        result.push_str("View Definition:\n");
+        result.push_str(&self.view_definition.to_string());
+        result
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueryData {
     pub table_name_list: Vec<String>,
     pub field_name_list: Vec<TableNameAndFieldName>,
@@ -683,6 +715,28 @@ fn parse_update_sql(record: Pair<Rule>) -> UpdateData {
     return update_data;
 }
 
+fn parse_create_view_sql(record: Pair<Rule>) -> ViewData {
+    // Currently not implemented
+    let mut view_name: Option<String> = None;
+    let mut select_query: Option<QueryData> = None;
+
+    record
+        .into_inner()
+        .for_each(|inner_value| match inner_value.as_rule() {
+            Rule::id_token => {
+                view_name = Some(inner_value.as_str().to_string());
+            }
+            Rule::select_sql => {
+                select_query = Some(parse_select_sql(inner_value));
+            }
+            _ => {}
+        });
+
+    let view_data = ViewData::new(view_name.unwrap(), select_query.clone().unwrap());
+
+    return view_data;
+}
+
 fn parse_create_index_sql(record: Pair<Rule>) -> CreateIndexData {
     // Currently not implemented
     let mut index_name: Option<String> = None;
@@ -822,6 +876,11 @@ pub fn parse_sql(sql: String) -> Vec<ParsedSQL> {
                                         result.push(ParsedSQL::CreateIndex(create_index_data));
                                     }
 
+                                    Rule::create_view_sql => {
+                                        let create_view_data = parse_create_view_sql(inner_value);
+                                        result.push(ParsedSQL::CreateView(create_view_data));
+                                    }
+
                                     Rule::show_tables_sql => {
                                         result.push(ParsedSQL::ShowTables);
                                     }
@@ -951,5 +1010,26 @@ mod tests {
         let sql = "select A, max(B) from test_table group by A".to_string();
         let parsed_sql = parse_sql(sql);
         parsed_sql[0].debug_print();
+    }
+
+    #[test]
+    fn test_create_view_sql() {
+        let sql = "create view my_view as select A from test_table".to_string();
+        let parsed_sql = parse_sql(sql);
+
+        assert_eq!(
+            parsed_sql[0],
+            ParsedSQL::CreateView(ViewData::new(
+                "my_view".to_string(),
+                QueryData {
+                    table_name_list: vec!["test_table".to_string()],
+                    field_name_list: vec![TableNameAndFieldName::new(None, "A".to_string())],
+                    predicate: PredicateV2::new(vec![]),
+                    order_by_list: vec![],
+                    group_by_list: vec![],
+                    aggregate_functions: vec![],
+                }
+            ))
+        );
     }
 }

@@ -11,7 +11,7 @@ pub enum ConstantValue {
     Null,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Constant {
     pub value: ConstantValue,
 }
@@ -86,13 +86,13 @@ impl Constant {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpressionValue {
     TableNameAndFieldName(TableNameAndFieldName),
     Constant(Constant),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableNameAndFieldName {
     pub table_name: Option<String>,
     pub field_name: String,
