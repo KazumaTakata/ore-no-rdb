@@ -42,3 +42,6 @@ jobs:
 
       - name: Run plan_v2 tests
         run: RUSTFLAGS="-A warnings" cargo test plan_v2::tests
+
+      - name: Run index_join_scan tests
+        run: RUSTFLAGS="-A warnings" cargo test index_join_scan::tests
