@@ -877,13 +877,13 @@ mod tests {
             a2: ConstantValue::Number(3),
             b2: ConstantValue::String("Hello World3".to_string()),
         };
-        let test_value_2 = TestValue {
+        let test_value_3 = TestValue {
             a1: ConstantValue::Number(2),
             b1: ConstantValue::String("Hello World2".to_string()),
             a2: ConstantValue::Number(3),
             b2: ConstantValue::String("Hello World3".to_string()),
         };
-        let test_value_3 = TestValue {
+        let test_value_2 = TestValue {
             a1: ConstantValue::Number(1),
             b1: ConstantValue::String("Hello World1".to_string()),
             a2: ConstantValue::Number(4),
