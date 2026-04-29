@@ -29,7 +29,7 @@ impl GroupByPlan {
         let mut table_schema = TableSchema::new();
 
         for func in aggregate_functions.borrow_mut().iter() {
-            table_schema.add_field(func.get_field().field_name, TableFieldType::INTEGER, 0);
+            table_schema.add_field(func.get_field(), TableFieldType::INTEGER, 0);
         }
 
         for field in group_fields.iter() {
@@ -84,7 +84,7 @@ impl PlanV2 for GroupByPlan {
 pub trait AggregateFunction {
     fn process_first(&mut self, scan: &mut dyn ScanV2);
     fn process_next(&mut self, scan: &mut dyn ScanV2);
-    fn get_field(&self) -> TableNameAndFieldName;
+    fn get_field(&self) -> String;
     fn get_value(&self) -> Constant;
 }
 
@@ -198,8 +198,8 @@ impl ScanV2 for GroupByScan {
         }
 
         for func in self.aggregate_functions.borrow_mut().iter() {
-            if func.get_field().field_name == field_name.field_name
-                && func.get_field().field_name == field_name.field_name
+            if func.get_field() == field_name.field_name
+                && func.get_field() == field_name.field_name
             {
                 return Some(func.get_value().value.clone());
             }
@@ -224,9 +224,7 @@ impl ScanV2 for GroupByScan {
 
     fn has_field(&self, field_name: TableNameAndFieldName) -> bool {
         for func in self.aggregate_functions.borrow().iter() {
-            if func.get_field().field_name == field_name.field_name
-                && func.get_field().table_name == field_name.table_name
-            {
+            if func.get_field() == field_name.field_name {
                 return true;
             }
         }
@@ -308,11 +306,185 @@ impl AggregateFunction for MaxFunction {
         }
     }
 
-    fn get_field(&self) -> TableNameAndFieldName {
-        self.field_name.clone()
+    fn get_field(&self) -> String {
+        let field_name = format!("max_{}", self.field_name.clone().field_name);
+        return field_name;
     }
 
     fn get_value(&self) -> Constant {
         self.max_value.clone().unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::{fs::remove_file, path::Path};
+
+    use crate::{
+        database::Database,
+        metadata_manager::MetadataManager,
+        parser::parse_sql,
+        plan_v2::{execute_create_table, execute_insert, TablePlanV2},
+        predicate::ConstantValue,
+    };
+
+    use super::*;
+
+    fn prepare_test_data(directory_path_name: String) -> Result<(), ValueNotFound> {
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
+
+        let create_table_sql =
+            "create table test_table_1 (A_1 integer, B_1 varchar(10))".to_string();
+
+        let parsed_sql_list = parse_sql(create_table_sql.clone());
+
+        let create_table_data = match &parsed_sql_list[0] {
+            crate::parser::ParsedSQL::CreateTable(q) => q,
+            _ => panic!("Expected a CreateTable variant from parse_sql"),
+        };
+
+        let result = execute_create_table(
+            transaction.clone(),
+            &mut metadata_manager,
+            create_table_data.clone(),
+        );
+
+        if result.is_err() {
+            println!("Table already exists");
+        }
+
+        let create_table_sql =
+            "create table test_table_2 (A_2 integer, B_2 varchar(10))".to_string();
+
+        let parsed_sql_list = parse_sql(create_table_sql.clone());
+
+        let create_table_data = match &parsed_sql_list[0] {
+            crate::parser::ParsedSQL::CreateTable(q) => q,
+            _ => panic!("Expected a CreateTable variant from parse_sql"),
+        };
+
+        let result = execute_create_table(
+            transaction.clone(),
+            &mut metadata_manager,
+            create_table_data.clone(),
+        );
+
+        if result.is_err() {
+            println!("Table already exists");
+        }
+
+        let insert_sql_list = [
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (4, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (4, 'Hello World4!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World3!')".to_string(),
+        ];
+
+        for insert_sql in insert_sql_list.iter() {
+            let parsed_sql_list = parse_sql(insert_sql.clone());
+
+            let insert_data = match &parsed_sql_list[0] {
+                crate::parser::ParsedSQL::Insert(q) => q,
+                _ => panic!("Expected a Insert variant from parse_sql"),
+            };
+
+            execute_insert(
+                transaction.clone(),
+                &mut metadata_manager,
+                insert_data.clone(),
+            );
+        }
+
+        transaction.borrow_mut().commit();
+
+        return Ok(());
+    }
+
+    #[test]
+    fn test_group_by() -> Result<(), ValueNotFound> {
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        prepare_test_data(directory_path_name.clone());
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
+
+        let table_plan = TablePlanV2::new(
+            "test_table_1".to_string(),
+            transaction.clone(),
+            &mut metadata_manager,
+        )
+        .unwrap();
+
+        let mut group_by_plan = GroupByPlan::new(
+            transaction.clone(),
+            vec![TableNameAndFieldName::new(None, "B_1".to_string())],
+            Rc::new(RefCell::new(vec![Box::new(MaxFunction::new(
+                TableNameAndFieldName::new(None, "A_1".to_string()),
+            ))])),
+            Box::new(table_plan),
+        );
+
+        let mut group_by_scan = group_by_plan.open()?;
+
+        struct TestValue {
+            a1: ConstantValue,
+            b1: ConstantValue,
+        }
+
+        let test_value_list = vec![
+            TestValue {
+                a1: ConstantValue::Number(4),
+                b1: ConstantValue::String("Hello World!".to_string()),
+            },
+            TestValue {
+                a1: ConstantValue::Number(3),
+                b1: ConstantValue::String("Hello World2!".to_string()),
+            },
+            TestValue {
+                a1: ConstantValue::Number(3),
+                b1: ConstantValue::String("Hello World3!".to_string()),
+            },
+            TestValue {
+                a1: ConstantValue::Number(4),
+                b1: ConstantValue::String("Hello World4!".to_string()),
+            },
+        ];
+
+        group_by_scan.move_to_before_first()?;
+
+        let mut count = 0;
+
+        while group_by_scan.next()? {
+            let field1_value = group_by_scan
+                .get_value(TableNameAndFieldName::new(None, "B_1".to_string()))
+                .unwrap();
+            let field2_value = group_by_scan
+                .get_value(TableNameAndFieldName::new(None, "max_A_1".to_string()))
+                .unwrap();
+
+            println!(
+                "field1_value: {:?}, field2_value: {:?}",
+                field1_value, field2_value
+            );
+
+            assert_eq!(field1_value, test_value_list[count].b1);
+            assert_eq!(field2_value, test_value_list[count].a1);
+
+            count += 1;
+        }
+
+        return Ok(());
     }
 }

@@ -48,3 +48,9 @@ jobs:
 
       - name: Run materialize tests
         run: RUSTFLAGS="-A warnings" cargo test materialize::tests
+
+      - name: Run sort_plan tests
+        run: RUSTFLAGS="-A warnings" cargo test sort_plan::tests
+
+      - name: Run group_by tests
+        run: RUSTFLAGS="-A warnings" cargo test group_by::tests
