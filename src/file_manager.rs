@@ -51,14 +51,14 @@ impl FileManager {
         result.clone()
     }
 
-    pub fn length(&mut self, file_name: &str) -> usize {
+    pub fn length(&self, file_name: &str) -> usize {
         let file = self.get_file(file_name);
         let file = file.lock().unwrap();
         let file_length = file.metadata().unwrap().len() as usize;
         file_length / self.block_size
     }
 
-    pub fn read(&mut self, block_id: &BlockId, page: &mut Page) {
+    pub fn read(&self, block_id: &BlockId, page: &mut Page) {
         let block_size = self.block_size;
         let file = self.get_file(block_id.get_file_name());
         let file = file.lock().unwrap();
@@ -67,13 +67,7 @@ impl FileManager {
             .unwrap();
     }
 
-    pub fn write(&mut self, block_id: &BlockId, page: &mut Page) {
-        // もし、ファイルが存在しない場合は作成
-        let file_path = self.directory_path.join(&block_id.get_file_name());
-        if !Path::new(&file_path).exists() {
-            File::create(&file_path).unwrap();
-        }
-
+    pub fn write(&self, block_id: &BlockId, page: &mut Page) {
         let block_size = self.block_size;
         let file = self.get_file(block_id.get_file_name());
         let file = file.lock().unwrap();
@@ -81,7 +75,7 @@ impl FileManager {
         file.write_at(page.get_data().as_slice(), offset as u64)
             .unwrap();
     }
-    pub fn append(&mut self, file_name: &str) -> BlockId {
+    pub fn append(&self, file_name: &str) -> BlockId {
         let block_size = self.block_size;
         let file = self.get_file(file_name);
         let file = file.lock().unwrap();
