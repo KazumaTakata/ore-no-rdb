@@ -91,7 +91,7 @@ impl FileManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{fs::remove_file, path::Path};
+    use std::{fs::remove_file, path::Path, sync::Barrier, thread, time::Duration};
 
     // FileManagerのテスト
     #[test]
@@ -132,5 +132,37 @@ mod tests {
 
         // // テスト後にディレクトリを削除
         remove_file(test_dir.join(&test_file_name)).unwrap_or_default();
+    }
+
+    #[test]
+    fn file_lock_blocks_concurrent_access() {
+        let test_dir_name = format!("test_dir_{}", uuid::Uuid::new_v4());
+        let test_dir = Path::new(&test_dir_name);
+        let fm = Arc::new(FileManager::new(test_dir, 400));
+        let file_arc = fm.get_file("locktest");
+
+        let barrier = Arc::new(Barrier::new(2));
+        let file_clone = Arc::clone(&file_arc);
+        let barrier_clone = Arc::clone(&barrier);
+
+        let holder = thread::spawn(move || {
+            let _guard = file_clone.lock().unwrap();
+            barrier_clone.wait(); // ロック取得を通知
+            thread::sleep(Duration::from_millis(200));
+            // _guardはここでドロップされロック解放
+        });
+
+        barrier.wait(); // ロックが取られるまで待つ
+                        // この時点でロックは別スレッドが保持中
+        assert!(
+            file_arc.try_lock().is_err(),
+            "lock should be held by another thread"
+        );
+
+        holder.join().unwrap();
+        assert!(
+            file_arc.try_lock().is_ok(),
+            "lock should be released after holder finishes"
+        );
     }
 }
