@@ -45,3 +45,6 @@ jobs:
 
       - name: Run index_join_scan tests
         run: RUSTFLAGS="-A warnings" cargo test index_join_scan::tests
+
+      - name: Run materialize tests
+        run: RUSTFLAGS="-A warnings" cargo test materialize::tests

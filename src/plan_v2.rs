@@ -1,6 +1,7 @@
 use std::{cell::RefCell, cmp::min, collections::HashMap, fs::Metadata, path::Path, rc::Rc};
 
 use crate::{
+    block,
     buffer_manager_v2::BufferManagerV2,
     concurrency_manager::LockTable,
     error::{TableAlreadyExists, ValueNotFound},
@@ -210,6 +211,17 @@ impl ProductPlanV2 {
             schema,
         }
     }
+
+    fn block_accessed(left_plan: &Box<dyn PlanV2>, right_plan: &Box<dyn PlanV2>) -> u32 {
+        println!(
+            "Calculating block accessed for ProductPlanV2: left_plan blocks_accessed = {}, left_plan records_output = {}, right_plan blocks_accessed = {}",
+            left_plan.blocks_accessed(),
+            left_plan.records_output(),
+            right_plan.blocks_accessed()
+        );
+
+        left_plan.blocks_accessed() + left_plan.records_output() * right_plan.blocks_accessed()
+    }
 }
 
 impl PlanV2 for ProductPlanV2 {
@@ -253,6 +265,26 @@ fn create_index_select(
         }
     }
     return table_plan;
+}
+
+pub fn get_optimized_product_plan(plans: &mut Vec<Box<dyn PlanV2>>) -> Box<dyn PlanV2> {
+    let mut plan: Box<dyn PlanV2> = plans.pop().unwrap();
+
+    //TODO: productの順番を最適化する
+    for next_plan in plans.drain(..) {
+        let block_access_1 = ProductPlanV2::block_accessed(&plan, &next_plan);
+        let block_access_2 = ProductPlanV2::block_accessed(&next_plan, &plan);
+
+        if block_access_1 < block_access_2 {
+            let product_plan = ProductPlanV2::new(plan, next_plan);
+            plan = Box::new(product_plan);
+        } else {
+            let product_plan_2 = ProductPlanV2::new(next_plan, plan);
+            plan = Box::new(product_plan_2);
+        }
+    }
+
+    return plan;
 }
 
 pub fn create_query_plan(
@@ -301,15 +333,23 @@ pub fn create_query_plan(
         };
     }
 
-    let mut plan: Box<dyn PlanV2> = plans.pop().unwrap();
+    // //TODO: productの順番を最適化する
+    // for next_plan in plans.into_iter() {
+    //     let block_access_1 = ProductPlanV2::block_accessed(&plan, &next_plan);
+    //     let block_access_2 = ProductPlanV2::block_accessed(&next_plan, &plan);
 
-    //TODO: productの順番を最適化する
-    for next_plan in plans.into_iter() {
-        let product_plan = ProductPlanV2::new(plan, next_plan);
-        plan = Box::new(product_plan);
-    }
+    //     if block_access_1 < block_access_2 {
+    //         let product_plan = ProductPlanV2::new(plan, next_plan);
+    //         plan = Box::new(product_plan);
+    //     } else {
+    //         let product_plan_2 = ProductPlanV2::new(next_plan, plan);
+    //         plan = Box::new(product_plan_2);
+    //     }
+    // }
 
-    let select_plan = SelectPlanV2::new(plan, query_data.predicate.clone());
+    let optimized_plan = get_optimized_product_plan(&mut plans);
+
+    let select_plan = SelectPlanV2::new(optimized_plan, query_data.predicate.clone());
 
     // let project_plan =
     //     ProjectPlanV2::new(Box::new(select_plan), query_data.field_name_list.clone());
@@ -437,6 +477,160 @@ mod tests {
     use crate::{database::Database, metadata_manager::MetadataManager, parser::parse_sql};
 
     #[test]
+
+    fn test_optimized_product_plan() -> Result<(), ValueNotFound> {
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
+
+        let create_table_sql =
+            "create table test_table_1 (A_1 integer, B_1 varchar(10))".to_string();
+
+        let parsed_sql_list = parse_sql(create_table_sql.clone());
+
+        let create_table_data = match &parsed_sql_list[0] {
+            crate::parser::ParsedSQL::CreateTable(q) => q,
+            _ => panic!("Expected a CreateTable variant from parse_sql"),
+        };
+
+        let result = execute_create_table(
+            transaction.clone(),
+            &mut metadata_manager,
+            create_table_data.clone(),
+        );
+
+        if result.is_err() {
+            println!("Table already exists");
+        }
+
+        let create_table_sql =
+            "create table test_table_2 (A_2 integer, B_2 varchar(10))".to_string();
+
+        let parsed_sql_list = parse_sql(create_table_sql.clone());
+
+        let create_table_data = match &parsed_sql_list[0] {
+            crate::parser::ParsedSQL::CreateTable(q) => q,
+            _ => panic!("Expected a CreateTable variant from parse_sql"),
+        };
+
+        let result = execute_create_table(
+            transaction.clone(),
+            &mut metadata_manager,
+            create_table_data.clone(),
+        );
+
+        if result.is_err() {
+            println!("Table already exists");
+        }
+
+        let insert_sql_list = [
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World3!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (4, 'Hello World4!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World3!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (4, 'Hello World4!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World3!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (4, 'Hello World4!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World3!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (4, 'Hello World4!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World3!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (4, 'Hello World4!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World3!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (4, 'Hello World4!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World3!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (4, 'Hello World4!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World3!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (4, 'Hello World4!')".to_string(),
+            "insert into test_table_2 (A_2, B_2) values (1, 'Hello World4!')".to_string(),
+        ];
+
+        for insert_sql in insert_sql_list.iter() {
+            let parsed_sql_list = parse_sql(insert_sql.clone());
+
+            let insert_data = match &parsed_sql_list[0] {
+                crate::parser::ParsedSQL::Insert(q) => q,
+                _ => panic!("Expected a Insert variant from parse_sql"),
+            };
+
+            execute_insert(
+                transaction.clone(),
+                &mut metadata_manager,
+                insert_data.clone(),
+            );
+        }
+
+        transaction.borrow_mut().commit();
+
+        let database = Database::new(directory_path);
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
+
+        let table_plan_1 = TablePlanV2::new(
+            "test_table_1".to_string(),
+            transaction.clone(),
+            &mut metadata_manager,
+        )?;
+
+        let table_plan_2 = TablePlanV2::new(
+            "test_table_2".to_string(),
+            transaction.clone(),
+            &mut metadata_manager,
+        )?;
+
+        let mut plans = vec![
+            Box::new(table_plan_1) as Box<dyn PlanV2>,
+            Box::new(table_plan_2) as Box<dyn PlanV2>,
+        ];
+
+        let mut optimized_plan = get_optimized_product_plan(&mut plans);
+
+        let mut scan = optimized_plan.open()?;
+
+        assert_eq!(optimized_plan.blocks_accessed(), 6);
+
+        // scan.move_to_before_first();
+
+        // while scan.next()? {
+        //     let field1_value = scan
+        //         .get_value(TableNameAndFieldName::new(None, "A_1".to_string()))
+        //         .unwrap();
+        //     let field2_value = scan
+        //         .get_value(TableNameAndFieldName::new(None, "B_1".to_string()))
+        //         .unwrap();
+
+        //     let field3_value = scan
+        //         .get_value(TableNameAndFieldName::new(None, "A_2".to_string()))
+        //         .unwrap();
+        //     let field4_value = scan
+        //         .get_value(TableNameAndFieldName::new(None, "B_2".to_string()))
+        //         .unwrap();
+
+        //     println!(
+        //         "field1_value: {:?}, field2_value: {:?}, field3_value: {:?}, field4_value: {:?}",
+        //         field1_value, field2_value, field3_value, field4_value
+        //     );
+        // }
+
+        return Ok(());
+    }
+
     fn test_insert_data() -> Result<(), ValueNotFound> {
         let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
         let directory_path = Path::new(&directory_path_name);
@@ -683,13 +877,13 @@ mod tests {
             a2: ConstantValue::Number(3),
             b2: ConstantValue::String("Hello World3".to_string()),
         };
-        let test_value_2 = TestValue {
+        let test_value_3 = TestValue {
             a1: ConstantValue::Number(2),
             b1: ConstantValue::String("Hello World2".to_string()),
             a2: ConstantValue::Number(3),
             b2: ConstantValue::String("Hello World3".to_string()),
         };
-        let test_value_3 = TestValue {
+        let test_value_2 = TestValue {
             a1: ConstantValue::Number(1),
             b1: ConstantValue::String("Hello World1".to_string()),
             a2: ConstantValue::Number(4),
