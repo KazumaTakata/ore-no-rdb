@@ -3,6 +3,7 @@ use std::{
     fs::{self, File},
     os::unix::fs::FileExt,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 use crate::BlockId;
@@ -10,19 +11,19 @@ use crate::Page;
 
 pub struct FileManager {
     pub block_size: usize,
-    open_files: HashMap<String, File>,
+    open_files: Mutex<HashMap<String, Arc<Mutex<File>>>>,
     directory_path: PathBuf,
 }
 
 impl FileManager {
     pub fn new(directory_path: &Path, block_size: usize) -> FileManager {
         fs::create_dir_all(directory_path).unwrap();
-        let open_files: HashMap<String, File> = HashMap::new();
+        let open_files: HashMap<String, Arc<Mutex<File>>> = HashMap::new();
 
         FileManager {
             directory_path: directory_path.to_path_buf(),
             block_size,
-            open_files,
+            open_files: Mutex::new(open_files),
         }
     }
 
@@ -30,57 +31,54 @@ impl FileManager {
         self.block_size
     }
 
-    pub fn get_file(&mut self, file_name: &str) -> &File {
+    pub fn get_file(&self, file_name: &str) -> Arc<Mutex<File>> {
         let file_path = self.directory_path.join(file_name);
 
-        // ファイルが存在しない場合は作成
-        if !Path::new(&file_path).exists() {
-            File::create(&file_path).unwrap();
-        }
+        let mut openfile_lock = self.open_files.lock().unwrap();
 
-        let result = self
-            .open_files
+        let result = openfile_lock
             .entry(file_name.to_string())
             .or_insert_with(|| {
-                File::options()
-                    .read(true)
-                    .write(true)
-                    .open(file_path)
-                    .unwrap()
+                Arc::new(Mutex::new(
+                    File::options()
+                        .read(true)
+                        .write(true)
+                        .create(true)
+                        .open(&file_path)
+                        .unwrap(),
+                ))
             });
-        result
+        result.clone()
     }
 
-    pub fn length(&mut self, file_name: &str) -> usize {
+    pub fn length(&self, file_name: &str) -> usize {
         let file = self.get_file(file_name);
+        let file = file.lock().unwrap();
         let file_length = file.metadata().unwrap().len() as usize;
         file_length / self.block_size
     }
 
-    pub fn read(&mut self, block_id: &BlockId, page: &mut Page) {
+    pub fn read(&self, block_id: &BlockId, page: &mut Page) {
         let block_size = self.block_size;
         let file = self.get_file(block_id.get_file_name());
+        let file = file.lock().unwrap();
         let offset = block_id.get_block_number() as usize * block_size;
         file.read_at(page.get_data().as_mut_slice(), offset as u64)
             .unwrap();
     }
 
-    pub fn write(&mut self, block_id: &BlockId, page: &mut Page) {
-        // もし、ファイルが存在しない場合は作成
-        let file_path = self.directory_path.join(&block_id.get_file_name());
-        if !Path::new(&file_path).exists() {
-            File::create(&file_path).unwrap();
-        }
-
+    pub fn write(&self, block_id: &BlockId, page: &mut Page) {
         let block_size = self.block_size;
         let file = self.get_file(block_id.get_file_name());
+        let file = file.lock().unwrap();
         let offset = block_id.get_block_number() as usize * block_size;
         file.write_at(page.get_data().as_slice(), offset as u64)
             .unwrap();
     }
-    pub fn append(&mut self, file_name: &str) -> BlockId {
+    pub fn append(&self, file_name: &str) -> BlockId {
         let block_size = self.block_size;
         let file = self.get_file(file_name);
+        let file = file.lock().unwrap();
         let offset = file.metadata().unwrap().len() as usize;
         let block_number = offset / block_size;
         let byte_array = vec![0; block_size];
@@ -93,12 +91,13 @@ impl FileManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{fs::remove_file, path::Path};
+    use std::{fs::remove_file, path::Path, sync::Barrier, thread, time::Duration};
 
     // FileManagerのテスト
     #[test]
     fn test_file_manager_read_write() {
-        let test_dir = Path::new("test_data");
+        let test_dir_name = format!("test_dir_{}", uuid::Uuid::new_v4());
+        let test_dir = Path::new(&test_dir_name);
         let block_size = 400;
         let mut file_manager = FileManager::new(test_dir, block_size);
 
@@ -133,5 +132,37 @@ mod tests {
 
         // // テスト後にディレクトリを削除
         remove_file(test_dir.join(&test_file_name)).unwrap_or_default();
+    }
+
+    #[test]
+    fn file_lock_blocks_concurrent_access() {
+        let test_dir_name = format!("test_dir_{}", uuid::Uuid::new_v4());
+        let test_dir = Path::new(&test_dir_name);
+        let fm = Arc::new(FileManager::new(test_dir, 400));
+        let file_arc = fm.get_file("locktest");
+
+        let barrier = Arc::new(Barrier::new(2));
+        let file_clone = Arc::clone(&file_arc);
+        let barrier_clone = Arc::clone(&barrier);
+
+        let holder = thread::spawn(move || {
+            let _guard = file_clone.lock().unwrap();
+            barrier_clone.wait(); // ロック取得を通知
+            thread::sleep(Duration::from_millis(200));
+            // _guardはここでドロップされロック解放
+        });
+
+        barrier.wait(); // ロックが取られるまで待つ
+                        // この時点でロックは別スレッドが保持中
+        assert!(
+            file_arc.try_lock().is_err(),
+            "lock should be held by another thread"
+        );
+
+        holder.join().unwrap();
+        assert!(
+            file_arc.try_lock().is_ok(),
+            "lock should be released after holder finishes"
+        );
     }
 }
