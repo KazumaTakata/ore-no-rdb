@@ -114,3 +114,191 @@ impl PlanV2 for MaterializePlan {
         self.src_plan.get_schema()
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use std::{fs::remove_file, path::Path};
+
+    use crate::{
+        database::Database,
+        metadata_manager::MetadataManager,
+        parser::parse_sql,
+        plan_v2::{execute_create_table, execute_insert, TablePlanV2},
+        predicate::ConstantValue,
+    };
+
+    use super::*;
+
+    fn prepare_test_data(directory_path_name: String) -> Result<(), ValueNotFound> {
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
+
+        let create_table_sql =
+            "create table test_table_1 (A_1 integer, B_1 varchar(10))".to_string();
+
+        let parsed_sql_list = parse_sql(create_table_sql.clone());
+
+        let create_table_data = match &parsed_sql_list[0] {
+            crate::parser::ParsedSQL::CreateTable(q) => q,
+            _ => panic!("Expected a CreateTable variant from parse_sql"),
+        };
+
+        let result = execute_create_table(
+            transaction.clone(),
+            &mut metadata_manager,
+            create_table_data.clone(),
+        );
+
+        if result.is_err() {
+            println!("Table already exists");
+        }
+
+        let create_table_sql =
+            "create table test_table_2 (A_2 integer, B_2 varchar(10))".to_string();
+
+        let parsed_sql_list = parse_sql(create_table_sql.clone());
+
+        let create_table_data = match &parsed_sql_list[0] {
+            crate::parser::ParsedSQL::CreateTable(q) => q,
+            _ => panic!("Expected a CreateTable variant from parse_sql"),
+        };
+
+        let result = execute_create_table(
+            transaction.clone(),
+            &mut metadata_manager,
+            create_table_data.clone(),
+        );
+
+        if result.is_err() {
+            println!("Table already exists");
+        }
+
+        let insert_sql_list = [
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World3!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (4, 'Hello World4!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World3!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (4, 'Hello World4!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (1, 'Hello World!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (2, 'Hello World2!')".to_string(),
+            "insert into test_table_1 (A_1, B_1) values (3, 'Hello World3!')".to_string(),
+        ];
+
+        for insert_sql in insert_sql_list.iter() {
+            let parsed_sql_list = parse_sql(insert_sql.clone());
+
+            let insert_data = match &parsed_sql_list[0] {
+                crate::parser::ParsedSQL::Insert(q) => q,
+                _ => panic!("Expected a Insert variant from parse_sql"),
+            };
+
+            execute_insert(
+                transaction.clone(),
+                &mut metadata_manager,
+                insert_data.clone(),
+            );
+        }
+
+        transaction.borrow_mut().commit();
+
+        return Ok(());
+    }
+
+    #[test]
+    fn test_materialize() -> Result<(), ValueNotFound> {
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        prepare_test_data(directory_path_name.clone());
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
+
+        let table_plan = TablePlanV2::new(
+            "test_table_1".to_string(),
+            transaction.clone(),
+            &mut metadata_manager,
+        )
+        .unwrap();
+
+        let mut materialize_plan = MaterializePlan::new(transaction.clone(), Box::new(table_plan));
+
+        let mut temp_table = materialize_plan.open()?;
+
+        struct TestValue {
+            a1: ConstantValue,
+            b1: ConstantValue,
+        }
+
+        let test_value_list = vec![
+            TestValue {
+                a1: ConstantValue::Number(1),
+                b1: ConstantValue::String("Hello World!".to_string()),
+            },
+            TestValue {
+                a1: ConstantValue::Number(2),
+                b1: ConstantValue::String("Hello World2!".to_string()),
+            },
+            TestValue {
+                a1: ConstantValue::Number(3),
+                b1: ConstantValue::String("Hello World3!".to_string()),
+            },
+            TestValue {
+                a1: ConstantValue::Number(4),
+                b1: ConstantValue::String("Hello World4!".to_string()),
+            },
+            TestValue {
+                a1: ConstantValue::Number(1),
+                b1: ConstantValue::String("Hello World!".to_string()),
+            },
+            TestValue {
+                a1: ConstantValue::Number(2),
+                b1: ConstantValue::String("Hello World2!".to_string()),
+            },
+            TestValue {
+                a1: ConstantValue::Number(3),
+                b1: ConstantValue::String("Hello World3!".to_string()),
+            },
+            TestValue {
+                a1: ConstantValue::Number(4),
+                b1: ConstantValue::String("Hello World4!".to_string()),
+            },
+            TestValue {
+                a1: ConstantValue::Number(1),
+                b1: ConstantValue::String("Hello World!".to_string()),
+            },
+            TestValue {
+                a1: ConstantValue::Number(2),
+                b1: ConstantValue::String("Hello World2!".to_string()),
+            },
+            TestValue {
+                a1: ConstantValue::Number(3),
+                b1: ConstantValue::String("Hello World3!".to_string()),
+            },
+        ];
+
+        let mut count = 0;
+
+        while temp_table.next()? {
+            let a1_value = temp_table
+                .get_value(TableNameAndFieldName::new(None, "A_1".to_string()))
+                .unwrap();
+            let b1_value = temp_table
+                .get_value(TableNameAndFieldName::new(None, "B_1".to_string()))
+                .unwrap();
+            println!("A_1: {:?}, B_1: {:?}", a1_value, b1_value);
+
+            assert_eq!(a1_value, test_value_list[count].a1);
+            assert_eq!(b1_value, test_value_list[count].b1);
+
+            count += 1;
+        }
+
+        return Ok(());
+    }
+}
