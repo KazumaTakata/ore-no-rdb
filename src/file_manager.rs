@@ -96,7 +96,7 @@ mod tests {
     // FileManagerのテスト
     #[test]
     fn test_file_manager_read_write() {
-        let test_dir_name = format!("test_dir_{}", uuid::Uuid::new_v4());
+        let test_dir_name = format!("test_data_{}", uuid::Uuid::new_v4());
         let test_dir = Path::new(&test_dir_name);
         let block_size = 400;
         let mut file_manager = FileManager::new(test_dir, block_size);
