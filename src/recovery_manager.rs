@@ -1,3 +1,4 @@
+use std::sync::{Arc, Mutex};
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
@@ -371,17 +372,17 @@ impl LogRecord for RollbackRecord {
 
 pub struct RecoveryManager {
     transaction_number: i32,
-    buffer_manager: Rc<RefCell<BufferManagerV2>>,
-    log_manager: Rc<RefCell<LogManagerV2>>,
+    buffer_manager: Arc<Mutex<BufferManagerV2>>,
+    log_manager: Arc<Mutex<LogManagerV2>>,
 }
 
 impl RecoveryManager {
     pub fn new(
         transaction_number: i32,
-        buffer_manager: Rc<RefCell<BufferManagerV2>>,
-        log_manager: Rc<RefCell<LogManagerV2>>,
+        buffer_manager: Arc<Mutex<BufferManagerV2>>,
+        log_manager: Arc<Mutex<LogManagerV2>>,
     ) -> Self {
-        let _ = StartRecord::write_to_log(&mut log_manager.borrow_mut(), transaction_number);
+        let _ = StartRecord::write_to_log(&mut log_manager.lock().unwrap(), transaction_number);
 
         RecoveryManager {
             transaction_number,
@@ -392,27 +393,31 @@ impl RecoveryManager {
 
     pub fn commit(&self) {
         self.buffer_manager
-            .borrow_mut()
+            .lock()
+            .unwrap()
             .flush_all(self.transaction_number);
-        let lsn =
-            CommitRecord::write_to_log(&mut self.log_manager.borrow_mut(), self.transaction_number);
-        self.log_manager.borrow_mut().flush_with_lsn(lsn);
+        let lsn = CommitRecord::write_to_log(
+            &mut self.log_manager.lock().unwrap(),
+            self.transaction_number,
+        );
+        self.log_manager.lock().unwrap().flush_with_lsn(lsn);
     }
 
     pub fn rollback(&mut self, transaction: &mut InnerTransactionV2) {
         self.do_rollback(transaction);
         self.buffer_manager
-            .borrow_mut()
+            .lock()
+            .unwrap()
             .flush_all(self.transaction_number);
         let lsn = RollbackRecord::write_to_log(
-            &mut self.log_manager.borrow_mut(),
+            &mut self.log_manager.lock().unwrap(),
             self.transaction_number,
         );
-        self.log_manager.borrow_mut().flush_with_lsn(lsn);
+        self.log_manager.lock().unwrap().flush_with_lsn(lsn);
     }
 
     fn do_rollback(&mut self, transaction: &mut InnerTransactionV2) {
-        let mut iterator = self.log_manager.borrow_mut().iterator();
+        let mut iterator = self.log_manager.lock().unwrap().iterator();
         while iterator.has_next() {
             let bytes = iterator.next();
             let log_record = create_log_record(bytes);
@@ -429,7 +434,7 @@ impl RecoveryManager {
     fn do_recover(&mut self, transaction: &mut InnerTransactionV2) {
         let mut finished_transactions = vec![];
 
-        let mut iterator = self.log_manager.borrow_mut().iterator();
+        let mut iterator = self.log_manager.lock().unwrap().iterator();
         while iterator.has_next() {
             let bytes = iterator.next();
             let log_record = create_log_record(bytes);
@@ -450,17 +455,18 @@ impl RecoveryManager {
     fn recover(&mut self, transaction: &mut InnerTransactionV2) {
         self.do_recover(transaction);
         self.buffer_manager
-            .borrow_mut()
+            .lock()
+            .unwrap()
             .flush_all(self.transaction_number);
-        let lsn = CheckpointRecord::write_to_log(&mut self.log_manager.borrow_mut());
-        self.log_manager.borrow_mut().flush_with_lsn(lsn);
+        let lsn = CheckpointRecord::write_to_log(&mut self.log_manager.lock().unwrap());
+        self.log_manager.lock().unwrap().flush_with_lsn(lsn);
     }
 
     pub fn set_integer(&self, offset: usize, buffer: &mut BufferV2) -> i32 {
         let old_value = buffer.content().get_integer(offset);
         let block = buffer.block_id().as_ref().unwrap().clone();
         let lsn = SetIntegerRecord::write_to_log(
-            &mut self.log_manager.borrow_mut(),
+            &mut self.log_manager.lock().unwrap(),
             self.transaction_number,
             &block,
             offset,
@@ -474,7 +480,7 @@ impl RecoveryManager {
         let block = buffer.block_id().as_ref().unwrap().clone();
 
         let lsn = SetStringRecord::write_to_log(
-            &mut self.log_manager.borrow_mut(),
+            &mut self.log_manager.lock().unwrap(),
             self.transaction_number,
             &block,
             offset,

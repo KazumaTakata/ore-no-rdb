@@ -1,3 +1,4 @@
+use std::sync::{Arc, Mutex};
 use std::{cell::RefCell, rc::Rc};
 
 use crate::block::BlockId;
@@ -11,11 +12,11 @@ use crate::{concurrency_manager::ConcurrencyManagerV2, file_manager::FileManager
 
 pub struct InnerTransactionV2 {
     tx_num: i32,
-    buffer_manager: Rc<RefCell<BufferManagerV2>>,
-    lock_table: Rc<RefCell<LockTable>>,
+    buffer_manager: Arc<Mutex<BufferManagerV2>>,
+    lock_table: Arc<Mutex<LockTable>>,
     concurrency_manager: ConcurrencyManagerV2,
     buffer_list: BufferListV2,
-    file_manager: Rc<RefCell<FileManager>>,
+    file_manager: Arc<Mutex<FileManager>>,
 }
 
 pub struct TransactionV2 {
@@ -26,9 +27,9 @@ pub struct TransactionV2 {
 impl InnerTransactionV2 {
     fn new(
         tx_num: i32,
-        file_manager: Rc<RefCell<FileManager>>,
-        buffer_manager: Rc<RefCell<BufferManagerV2>>,
-        lock_table: Rc<RefCell<LockTable>>,
+        file_manager: Arc<Mutex<FileManager>>,
+        buffer_manager: Arc<Mutex<BufferManagerV2>>,
+        lock_table: Arc<Mutex<LockTable>>,
     ) -> InnerTransactionV2 {
         let concurrency_manager = ConcurrencyManagerV2::new(lock_table.clone());
         let buffer_list = BufferListV2::new(buffer_manager.clone());
@@ -44,7 +45,7 @@ impl InnerTransactionV2 {
     }
 
     fn get_block_size(&self) -> usize {
-        self.file_manager.borrow().get_block_size()
+        self.file_manager.lock().unwrap().get_block_size()
     }
 
     pub fn pin(&mut self, block_id: BlockId) {
@@ -78,7 +79,7 @@ impl InnerTransactionV2 {
         self.concurrency_manager.x_lock(block_id.clone());
 
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
-        let mut buffer = buffer.borrow_mut();
+        let mut buffer = buffer.lock().unwrap();
 
         let mut lsn = -1;
 
@@ -102,7 +103,7 @@ impl InnerTransactionV2 {
         self.concurrency_manager.x_lock(block_id.clone());
 
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
-        let mut buffer = buffer.borrow_mut();
+        let mut buffer = buffer.lock().unwrap();
 
         if set_to_log {
             recovery_manager.set_string(offset, &mut buffer);
@@ -116,39 +117,39 @@ impl InnerTransactionV2 {
     fn get_integer(&mut self, block_id: BlockId, offset: usize) -> i32 {
         self.concurrency_manager.s_lock(block_id.clone());
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
-        let mut buffer = buffer.borrow_mut();
+        let mut buffer = buffer.lock().unwrap();
         let page = buffer.content();
         page.get_integer(offset)
     }
 
     fn get_size(&self, file_name: String) -> usize {
-        return self.file_manager.borrow_mut().length(&file_name);
+        return self.file_manager.lock().unwrap().length(&file_name);
     }
 
     fn get_string(&mut self, block_id: BlockId, offset: usize) -> String {
         self.concurrency_manager.s_lock(block_id.clone());
         let buffer = self.buffer_list.get_buffer(block_id).unwrap();
-        let mut buffer = buffer.borrow_mut();
+        let mut buffer = buffer.lock().unwrap();
         let page = buffer.content();
         page.get_string(offset)
     }
 
     fn append(&mut self, file_name: &str) -> BlockId {
-        self.file_manager.borrow_mut().append(file_name)
+        self.file_manager.lock().unwrap().append(file_name)
     }
 
     fn get_available_buffer_size(&self) -> i32 {
-        self.buffer_manager.borrow().get_available_buffer_size()
+        self.buffer_manager.lock().unwrap().get_available_buffer_size()
     }
 }
 
 impl TransactionV2 {
     pub fn new(
         tx_num: i32,
-        file_manager: Rc<RefCell<FileManager>>,
-        buffer_manager: Rc<RefCell<BufferManagerV2>>,
-        lock_table: Rc<RefCell<LockTable>>,
-        log_manager: Rc<RefCell<LogManagerV2>>,
+        file_manager: Arc<Mutex<FileManager>>,
+        buffer_manager: Arc<Mutex<BufferManagerV2>>,
+        lock_table: Arc<Mutex<LockTable>>,
+        log_manager: Arc<Mutex<LogManagerV2>>,
     ) -> TransactionV2 {
         let recovery_manager =
             RecoveryManager::new(tx_num, buffer_manager.clone(), log_manager.clone());
@@ -237,17 +238,17 @@ mod tests {
         let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
 
         let block_size = 400;
-        let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
-        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+        let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
+        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
             file_manager.clone(),
             log_file_name.clone(),
         )));
-        let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
+        let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             10,
             file_manager.clone(),
             log_manager.clone(),
         )));
-        let lock_table = Rc::new(RefCell::new(LockTable::new()));
+        let lock_table = Arc::new(Mutex::new(LockTable::new()));
 
         let mut transaction = TransactionV2::new(
             1,
