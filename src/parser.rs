@@ -1,10 +1,9 @@
-use std::{collections::HashMap, fs, slice::RChunks, vec};
+use std::{collections::HashMap, vec};
 
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 
 use crate::{
-    group_by::{self, AggregateFunction},
     predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
     predicate_v3::{ExpressionV2, PredicateV2, TermV2},
     record_page::{TableFieldInfo, TableFieldType, TableSchema},
@@ -924,19 +923,7 @@ pub fn parse_sql(sql: String) -> Vec<ParsedSQL> {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, f32::consts::E, path::Path, rc::Rc};
-
-    use rand::Rng;
-
-    use crate::{
-        buffer_manager_v2::BufferManagerV2,
-        concurrency_manager::LockTable,
-        file_manager::{self, FileManager},
-        log_manager_v2::LogManagerV2,
-        predicate::{Constant, ConstantValue, ExpressionValue},
-        predicate_v3::{ExpressionV2, TermV2},
-        record_page::TableSchema,
-    };
+    use std::fs;
 
     use super::*;
 

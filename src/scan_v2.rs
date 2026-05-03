@@ -1,5 +1,3 @@
-use pest::pratt_parser::Op;
-
 use crate::{
     error::ValueNotFound,
     predicate::{ConstantValue, TableNameAndFieldName},
@@ -303,7 +301,7 @@ mod tests {
     use crate::{
         buffer_manager_v2::BufferManagerV2,
         concurrency_manager::LockTable,
-        file_manager::{self, FileManager},
+        file_manager::FileManager,
         log_manager_v2::LogManagerV2,
         predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
         predicate_v3::{ExpressionV2, PredicateV2, TermV2},

@@ -1,18 +1,13 @@
-use std::{cell::RefCell, cmp::min, collections::HashMap, fs::Metadata, path::Path, rc::Rc};
+use std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc};
 
 use crate::{
-    block,
-    buffer_manager_v2::BufferManagerV2,
-    concurrency_manager::LockTable,
     error::{TableAlreadyExists, ValueNotFound},
-    file_manager::FileManager,
     group_by::{AggregateFunction, GroupByPlan, MaxFunction},
     hash_index::IndexSelectPlan,
     index_manager::IndexInfo,
-    log_manager_v2::LogManagerV2,
-    metadata_manager::{self, MetadataManager},
+    metadata_manager::MetadataManager,
     parser::{parse_sql, CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
-    predicate::{Constant, ConstantValue, TableNameAndFieldName},
+    predicate::TableNameAndFieldName,
     predicate_v3::PredicateV2,
     record_page::{Layout, TableSchema},
     scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
@@ -473,7 +468,11 @@ pub fn execute_create_table(
 mod tests {
 
     use super::*;
-    use crate::{database::Database, metadata_manager::MetadataManager, parser::parse_sql};
+    use crate::{
+        database::Database, metadata_manager::MetadataManager, parser::parse_sql,
+        predicate::ConstantValue,
+    };
+    use std::path::Path;
 
     #[test]
 

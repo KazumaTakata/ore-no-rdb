@@ -1,29 +1,29 @@
-use std::{
-    cell::RefCell,
-    path::Path,
-    rc::Rc,
-    sync::{Arc, Mutex},
+use std::{cell::RefCell, rc::Rc};
+
+use crate::{
+    hash_index::HashIndex,
+    index_update_planner::IndexUpdatePlanner,
+    metadata_manager::MetadataManager,
+    parser::InsertData,
+    predicate::{Constant, ConstantValue, TableNameAndFieldName},
+    scan_v2::ScanV2,
+    table_scan_v2::TableScan,
+    transaction_v2::TransactionV2,
 };
 
+#[cfg(test)]
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
+#[cfg(test)]
 use crate::{
     buffer_manager_v2::BufferManagerV2,
     concurrency_manager::LockTable,
     file_manager::FileManager,
-    hash_index::HashIndex,
-    index_join_scan,
-    index_manager::IndexInfo,
-    index_update_planner::{self, IndexUpdatePlanner},
     log_manager_v2::LogManagerV2,
-    metadata_manager::MetadataManager,
-    parser::InsertData,
-    predicate::{Constant, ConstantValue, TableNameAndFieldName},
-    predicate_v3::PredicateV2,
-    record_page::{Layout, TableSchema},
-    scan_v2::{ScanV2, SelectScanV2},
+    record_page::TableSchema,
     table_manager_v2::TableManagerV2,
-    table_scan_v2::TableScan,
-    transaction_v2::TransactionV2,
-    view_manager::ViewManager,
 };
 
 pub struct IndexJoinScan {

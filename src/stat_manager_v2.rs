@@ -1,9 +1,8 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    error::ValueNotFound, file_manager::FileManager, predicate::TableNameAndFieldName, record_page,
-    scan_v2::ScanV2, table_manager_v2::TableManagerV2, table_scan_v2::TableScan,
-    transaction_v2::TransactionV2,
+    error::ValueNotFound, predicate::TableNameAndFieldName, record_page, scan_v2::ScanV2,
+    table_manager_v2::TableManagerV2, table_scan_v2::TableScan, transaction_v2::TransactionV2,
 };
 
 pub struct StatManagerV2 {
@@ -144,20 +143,16 @@ impl StatManagerV2 {
 mod tests {
     use std::{
         cell::RefCell,
-        fs::remove_file,
         path::Path,
         rc::Rc,
         sync::{Arc, Mutex},
     };
 
-    use rand::Rng;
-
     use crate::{
         buffer_manager_v2::BufferManagerV2,
         concurrency_manager::LockTable,
-        file_manager::{self, FileManager},
+        file_manager::FileManager,
         log_manager_v2::LogManagerV2,
-        record_page::TableSchema,
     };
 
     use super::*;

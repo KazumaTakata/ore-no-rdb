@@ -8,7 +8,7 @@ use crate::{
     predicate::{ConstantValue, TableNameAndFieldName},
     record_page::{Layout, TableFieldType, TableSchema},
     record_page_v2::RecordPage,
-    scan_v2::{ProductScanV2, ScanV2},
+    scan_v2::ScanV2,
     transaction_v2::TransactionV2,
 };
 

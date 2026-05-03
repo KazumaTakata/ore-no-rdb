@@ -6,7 +6,7 @@ use crate::{
     metadata_manager::MetadataManager,
     parser::QueryData,
     plan_v2::create_query_plan,
-    predicate::{ConstantValue, TableNameAndFieldName},
+    predicate::ConstantValue,
     transaction_v2::TransactionV2,
 };
 
@@ -88,10 +88,8 @@ mod tests {
 
     use crate::{
         database::Database,
-        group_by::AggregateFunction,
-        page,
         parser::AggregateFunctionInfo,
-        predicate::{Constant, ConstantValue, ExpressionValue},
+        predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
         predicate_v3::{ExpressionV2, PredicateV2, TermV2},
     };
 

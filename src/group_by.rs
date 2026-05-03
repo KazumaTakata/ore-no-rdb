@@ -319,7 +319,7 @@ impl AggregateFunction for MaxFunction {
 #[cfg(test)]
 mod tests {
 
-    use std::{fs::remove_file, path::Path};
+    use std::path::Path;
 
     use crate::{
         database::Database,

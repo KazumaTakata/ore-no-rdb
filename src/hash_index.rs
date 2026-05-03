@@ -1,12 +1,8 @@
-use core::hash;
 use std::{
     cell::RefCell,
     hash::{DefaultHasher, Hash, Hasher},
-    iter::Scan,
     rc::Rc,
 };
-
-use rand::seq::index;
 
 use crate::{
     error::ValueNotFound,
