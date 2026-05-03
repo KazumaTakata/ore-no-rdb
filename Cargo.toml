@@ -12,3 +12,5 @@ rustyline = "17.0.1"
 clap = { version = "4.0", features = ["derive"] }
 glob = "0.3.2"
 uuid = { version = "1.19.0", features = ["v4"] }
+reedline = "0.47.0"
+nu-ansi-term = "0.50"
