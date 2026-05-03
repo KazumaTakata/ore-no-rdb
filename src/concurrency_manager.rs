@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::{cell::RefCell, rc::Rc};
 
 use crate::block::BlockId;
@@ -60,11 +61,11 @@ impl LockTable {
 
 pub struct ConcurrencyManagerV2 {
     locks: HashMap<BlockId, String>,
-    lock_table: Rc<RefCell<LockTable>>,
+    lock_table: Arc<Mutex<LockTable>>,
 }
 
 impl ConcurrencyManagerV2 {
-    pub fn new(lock_table: Rc<RefCell<LockTable>>) -> ConcurrencyManagerV2 {
+    pub fn new(lock_table: Arc<Mutex<LockTable>>) -> ConcurrencyManagerV2 {
         let locks: HashMap<BlockId, String> = HashMap::new();
         ConcurrencyManagerV2 { locks, lock_table }
     }
@@ -72,7 +73,7 @@ impl ConcurrencyManagerV2 {
     pub fn s_lock(&mut self, block_id: BlockId) {
         let lock_value = self.locks.get(&block_id);
         if lock_value.is_none() {
-            self.lock_table.borrow_mut().s_lock(block_id.clone());
+            self.lock_table.lock().unwrap().s_lock(block_id.clone());
             self.locks.insert(block_id, "S".to_string());
         }
     }
@@ -80,7 +81,7 @@ impl ConcurrencyManagerV2 {
     pub fn x_lock(&mut self, block_id: BlockId) {
         if !self.has_xlock(&block_id) {
             self.s_lock(block_id.clone());
-            self.lock_table.borrow_mut().x_lock(block_id.clone());
+            self.lock_table.lock().unwrap().x_lock(block_id.clone());
             self.locks.insert(block_id, "X".to_string());
         }
     }
@@ -99,7 +100,7 @@ impl ConcurrencyManagerV2 {
 
     pub fn release(&mut self) {
         for (key, value) in self.locks.iter() {
-            self.lock_table.borrow_mut().unlock(key);
+            self.lock_table.lock().unwrap().unlock(key);
         }
         self.locks.clear();
     }

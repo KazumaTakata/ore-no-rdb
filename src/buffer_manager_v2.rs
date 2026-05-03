@@ -1,3 +1,4 @@
+use std::sync::{Arc, Mutex};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::file_manager::FileManager;
@@ -10,16 +11,16 @@ pub struct BufferV2 {
     pub tx_num: Option<i32>,
     lsn: Option<i32>,
     pin_count: i32,
-    log_manager: Rc<RefCell<LogManagerV2>>,
-    file_manager: Rc<RefCell<FileManager>>,
+    log_manager: Arc<Mutex<LogManagerV2>>,
+    file_manager: Arc<Mutex<FileManager>>,
 }
 
 impl BufferV2 {
     pub fn new(
-        file_manager: Rc<RefCell<FileManager>>,
-        log_manager: Rc<RefCell<LogManagerV2>>,
+        file_manager: Arc<Mutex<FileManager>>,
+        log_manager: Arc<Mutex<LogManagerV2>>,
     ) -> BufferV2 {
-        let page = Page::new(file_manager.borrow().block_size);
+        let page = Page::new(file_manager.lock().unwrap().block_size);
         let pin_count = 0;
 
         BufferV2 {
@@ -59,7 +60,8 @@ impl BufferV2 {
     pub fn assign_to_block(&mut self, block_id: BlockId) {
         self.flush();
         self.file_manager
-            .borrow_mut()
+            .lock()
+            .unwrap()
             .read(&block_id, &mut self.page);
         self.block_id = Some(block_id);
         self.pin_count = 0;
@@ -69,10 +71,12 @@ impl BufferV2 {
         if self.tx_num.is_some() && self.block_id.is_some() {
             let block_id = self.block_id.as_ref().unwrap();
             self.log_manager
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .flush_with_lsn(self.lsn.unwrap_or(-1));
             self.file_manager
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .write(&block_id, &mut self.page);
             self.tx_num = None;
         }
@@ -88,20 +92,20 @@ impl BufferV2 {
 }
 
 pub struct BufferManagerV2 {
-    buffer_pool: Vec<Rc<RefCell<BufferV2>>>,
+    buffer_pool: Vec<Arc<Mutex<BufferV2>>>,
     number_of_available: i32,
-    file_manager: Rc<RefCell<FileManager>>,
+    file_manager: Arc<Mutex<FileManager>>,
 }
 
 impl BufferManagerV2 {
     pub fn new(
         number_of_buffer: i32,
-        file_manager: Rc<RefCell<FileManager>>,
-        log_manager: Rc<RefCell<LogManagerV2>>,
+        file_manager: Arc<Mutex<FileManager>>,
+        log_manager: Arc<Mutex<LogManagerV2>>,
     ) -> BufferManagerV2 {
         let mut buffer_pool = Vec::new();
         for _ in 0..number_of_buffer {
-            buffer_pool.push(Rc::new(RefCell::new(BufferV2::new(
+            buffer_pool.push(Arc::new(Mutex::new(BufferV2::new(
                 file_manager.clone(),
                 log_manager.clone(),
             ))));
@@ -114,24 +118,24 @@ impl BufferManagerV2 {
         }
     }
 
-    pub fn unpin(&mut self, buffer: &mut BufferV2) {
-        buffer.unpin();
-        if !buffer.is_pinned() {
+    pub fn unpin(&mut self, buffer: &Arc<Mutex<BufferV2>>) {
+        let mut buf = buffer.lock().unwrap();
+        buf.unpin();
+        if !buf.is_pinned() {
             self.number_of_available = self.number_of_available + 1;
-            return;
         }
     }
 
     pub fn flush_all(&mut self, tx_num: i32) {
         for buffer in self.buffer_pool.iter() {
-            let mut buffer = buffer.borrow_mut();
+            let mut buffer = buffer.lock().unwrap();
             if buffer.tx_num.is_some() && buffer.tx_num.unwrap() == tx_num {
                 buffer.flush();
             }
         }
     }
 
-    pub fn try_to_pin(&mut self, block_id: BlockId) -> Option<Rc<RefCell<BufferV2>>> {
+    pub fn try_to_pin(&mut self, block_id: BlockId) -> Option<Arc<Mutex<BufferV2>>> {
         let buffer = self.find_existing_buffer(&block_id);
 
         let buffer = match buffer {
@@ -140,7 +144,7 @@ impl BufferManagerV2 {
                 let buffer = self.choose_unpinned_buffer();
                 match buffer {
                     Some(buffer) => {
-                        buffer.borrow_mut().assign_to_block(block_id);
+                        buffer.lock().unwrap().assign_to_block(block_id);
                         Some(buffer)
                     }
                     None => panic!("All buffers are pinned"),
@@ -149,7 +153,7 @@ impl BufferManagerV2 {
         };
 
         if let Some(buffer) = buffer {
-            let mut buffer_mut = buffer.borrow_mut();
+            let mut buffer_mut = buffer.lock().unwrap();
             if !buffer_mut.is_pinned() {
                 self.number_of_available = self.number_of_available - 1;
             }
@@ -160,9 +164,9 @@ impl BufferManagerV2 {
         }
     }
 
-    fn find_existing_buffer(&mut self, block_id: &BlockId) -> Option<Rc<RefCell<BufferV2>>> {
+    fn find_existing_buffer(&mut self, block_id: &BlockId) -> Option<Arc<Mutex<BufferV2>>> {
         let buffer = self.buffer_pool.iter().find(|buffer| {
-            let buffer_ref = buffer.borrow();
+            let buffer_ref = buffer.lock().unwrap();
             buffer_ref.block_id().is_some()
                 && buffer_ref.block_id().as_ref().unwrap().equals(&block_id)
         });
@@ -174,9 +178,9 @@ impl BufferManagerV2 {
         }
     }
 
-    fn choose_unpinned_buffer(&mut self) -> Option<Rc<RefCell<BufferV2>>> {
+    fn choose_unpinned_buffer(&mut self) -> Option<Arc<Mutex<BufferV2>>> {
         let buffer = self.buffer_pool.iter().find(|buffer| {
-            let buffer = buffer.borrow();
+            let buffer = buffer.lock().unwrap();
             !buffer.is_pinned()
         });
 
@@ -187,7 +191,7 @@ impl BufferManagerV2 {
         }
     }
 
-    pub fn pin(&mut self, block_id: BlockId) -> Option<Rc<RefCell<BufferV2>>> {
+    pub fn pin(&mut self, block_id: BlockId) -> Option<Arc<Mutex<BufferV2>>> {
         return self.try_to_pin(block_id);
     }
 
@@ -197,13 +201,13 @@ impl BufferManagerV2 {
 }
 
 pub struct BufferListV2 {
-    buffers: HashMap<BlockId, Rc<RefCell<BufferV2>>>,
+    buffers: HashMap<BlockId, Arc<Mutex<BufferV2>>>,
     pins: Vec<BlockId>,
-    buffer_manager: Rc<RefCell<BufferManagerV2>>,
+    buffer_manager: Arc<Mutex<BufferManagerV2>>,
 }
 
 impl BufferListV2 {
-    pub fn new(buffer_manager: Rc<RefCell<BufferManagerV2>>) -> BufferListV2 {
+    pub fn new(buffer_manager: Arc<Mutex<BufferManagerV2>>) -> BufferListV2 {
         BufferListV2 {
             buffers: HashMap::new(),
             pins: Vec::new(),
@@ -212,8 +216,8 @@ impl BufferListV2 {
     }
 
     pub fn pin(&mut self, block_id: BlockId) {
-        if let Some(buffer) = self.buffer_manager.borrow_mut().pin(block_id.clone()) {
-            self.buffers.insert(block_id.clone(), Rc::clone(&buffer));
+        if let Some(buffer) = self.buffer_manager.lock().unwrap().pin(block_id.clone()) {
+            self.buffers.insert(block_id.clone(), Arc::clone(&buffer));
             self.pins.push(block_id);
         }
     }
@@ -222,8 +226,7 @@ impl BufferListV2 {
         let mut should_remove_from_buffers = false;
 
         if let Some(buffer) = self.buffers.get(&block_id) {
-            let mut buffer = buffer.borrow_mut();
-            self.buffer_manager.borrow_mut().unpin(&mut buffer);
+            self.buffer_manager.lock().unwrap().unpin(buffer);
             // self.pinsから始めに見つかったblock_idを削除
             if let Some(index) = self.pins.iter().position(|x| *x == block_id) {
                 self.pins.remove(index);
@@ -242,15 +245,14 @@ impl BufferListV2 {
     pub fn unpin_all(&mut self) {
         for block_id in self.pins.iter() {
             if let Some(buffer) = self.buffers.get(block_id) {
-                let mut buffer = buffer.borrow_mut();
-                self.buffer_manager.borrow_mut().unpin(&mut buffer);
+                self.buffer_manager.lock().unwrap().unpin(buffer);
             }
         }
         self.buffers.clear();
         self.pins.clear();
     }
 
-    pub fn get_buffer(&mut self, block_id: BlockId) -> Option<&Rc<RefCell<BufferV2>>> {
+    pub fn get_buffer(&mut self, block_id: BlockId) -> Option<&Arc<Mutex<BufferV2>>> {
         let buffer = self.buffers.get(&block_id);
         return buffer;
     }
@@ -268,16 +270,16 @@ mod tests {
         let test_dir = std::path::Path::new("test_data");
 
         let block_size = 400;
-        let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
+        let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
 
-        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
             file_manager.clone(),
             "log.txt".to_string(),
         )));
 
         let number_of_buffers = 3;
 
-        let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
+        let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             number_of_buffers,
             file_manager.clone(),
             log_manager.clone(),
@@ -287,10 +289,10 @@ mod tests {
 
         let block_1_id = BlockId::new(data_file_name.clone(), 0);
 
-        let buffer = buffer_manager.borrow_mut().pin(block_1_id).unwrap();
+        let buffer = buffer_manager.lock().unwrap().pin(block_1_id).unwrap();
 
         {
-            let mut borrowed_buffer = buffer.borrow_mut();
+            let mut borrowed_buffer = buffer.lock().unwrap();
 
             let page_1 = borrowed_buffer.content();
 
@@ -299,27 +301,24 @@ mod tests {
             page_1.set_string(140, "hello buffer manager");
 
             borrowed_buffer.set_modified(1, 0);
-
-            buffer_manager.borrow_mut().unpin(&mut borrowed_buffer);
         }
+        buffer_manager.lock().unwrap().unpin(&buffer);
 
         let block_2_id = BlockId::new("test_buffer_manager.txt".to_string(), 1);
-        let buffer_2 = buffer_manager.borrow_mut().pin(block_2_id).unwrap();
+        let buffer_2 = buffer_manager.lock().unwrap().pin(block_2_id).unwrap();
 
         let block_3_id = BlockId::new("test_buffer_manager.txt".to_string(), 2);
-        let _buffer_3 = buffer_manager.borrow_mut().pin(block_3_id).unwrap();
+        let _buffer_3 = buffer_manager.lock().unwrap().pin(block_3_id).unwrap();
 
         let block_4_id = BlockId::new("test_buffer_manager.txt".to_string(), 3);
-        let _buffer_4 = buffer_manager.borrow_mut().pin(block_4_id).unwrap();
+        let _buffer_4 = buffer_manager.lock().unwrap().pin(block_4_id).unwrap();
 
-        buffer_manager
-            .borrow_mut()
-            .unpin(&mut buffer_2.borrow_mut());
+        buffer_manager.lock().unwrap().unpin(&buffer_2);
 
         let block_5_id = BlockId::new("test_buffer_manager.txt".to_string(), 0);
-        let buffer_5 = buffer_manager.borrow_mut().pin(block_5_id).unwrap();
+        let buffer_5 = buffer_manager.lock().unwrap().pin(block_5_id).unwrap();
 
-        let mut borrowed_buffer_5 = buffer_5.borrow_mut();
+        let mut borrowed_buffer_5 = buffer_5.lock().unwrap();
 
         let content = borrowed_buffer_5.content();
         let value = content.get_integer(80);

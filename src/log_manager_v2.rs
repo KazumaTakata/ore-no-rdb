@@ -7,6 +7,7 @@ use std::{
     os::unix::fs::FileExt,
     path::Path,
     rc::Rc,
+    sync::{Arc, Mutex},
 };
 
 use crate::file_manager::{self, FileManager};
@@ -18,12 +19,12 @@ pub struct LogManagerV2 {
     log_page: Page,
     latest_lsn: i32,
     latest_saved_lsn: i32,
-    file_manager: Rc<RefCell<FileManager>>,
+    file_manager: Arc<Mutex<FileManager>>,
 }
 
 impl LogManagerV2 {
-    pub fn new(file_manager: Rc<RefCell<FileManager>>, log_file_name: String) -> LogManagerV2 {
-        let mut file_manager_mut_ref = file_manager.borrow_mut();
+    pub fn new(file_manager: Arc<Mutex<FileManager>>, log_file_name: String) -> LogManagerV2 {
+        let file_manager_mut_ref = file_manager.lock().unwrap();
         let log_size = file_manager_mut_ref.length(&log_file_name);
 
         let mut log_page = Page::new(400);
@@ -50,19 +51,25 @@ impl LogManagerV2 {
     }
 
     pub fn append_new_block(&mut self) -> BlockId {
-        let block_id = self.file_manager.borrow_mut().append(&self.log_file_name);
-        self.log_page = Page::new(self.file_manager.borrow().block_size);
+        let block_id = self
+            .file_manager
+            .lock()
+            .unwrap()
+            .append(&self.log_file_name);
+        self.log_page = Page::new(self.file_manager.lock().unwrap().block_size);
         self.log_page
-            .set_integer(0, self.file_manager.borrow().block_size as i32);
+            .set_integer(0, self.file_manager.lock().unwrap().block_size as i32);
         self.file_manager
-            .borrow_mut()
+            .lock()
+            .unwrap()
             .write(&block_id, &mut self.log_page);
         block_id
     }
 
     pub fn flush(&mut self) {
         self.file_manager
-            .borrow_mut()
+            .lock()
+            .unwrap()
             .write(&self.current_block_id, &mut self.log_page);
 
         self.latest_saved_lsn = self.latest_lsn;
@@ -103,13 +110,13 @@ pub struct LogIteratorV2 {
     current_block_id: BlockId,
     current_offset: usize,
     log_page: Page,
-    file_manager: Rc<RefCell<FileManager>>,
+    file_manager: Arc<Mutex<FileManager>>,
 }
 
 impl LogIteratorV2 {
-    fn new(file_manager: Rc<RefCell<FileManager>>, block_id: BlockId) -> LogIteratorV2 {
-        let mut log_page = Page::new(file_manager.borrow().block_size);
-        file_manager.borrow_mut().read(&block_id, &mut log_page);
+    fn new(file_manager: Arc<Mutex<FileManager>>, block_id: BlockId) -> LogIteratorV2 {
+        let mut log_page = Page::new(file_manager.lock().unwrap().block_size);
+        file_manager.lock().unwrap().read(&block_id, &mut log_page);
         let current_offset = log_page.get_integer(0) as usize;
 
         LogIteratorV2 {
@@ -121,19 +128,20 @@ impl LogIteratorV2 {
     }
 
     pub fn has_next(&self) -> bool {
-        self.current_offset < self.file_manager.borrow().block_size
+        self.current_offset < self.file_manager.lock().unwrap().block_size
             || self.current_block_id.get_block_number() > 0
     }
 
     pub fn next(&mut self) -> Vec<u8> {
-        let block_size = self.file_manager.borrow().block_size;
+        let block_size = self.file_manager.lock().unwrap().block_size;
         if block_size == self.current_offset {
             self.current_block_id = BlockId::new(
                 self.current_block_id.get_file_name().to_string(),
                 self.current_block_id.get_block_number() - 1,
             );
             self.file_manager
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .read(&self.current_block_id, &mut self.log_page);
             self.current_offset = self.log_page.get_integer(0) as usize;
         }
@@ -157,9 +165,9 @@ mod tests {
         let test_dir = std::path::Path::new("test_data");
 
         let block_size = 400;
-        let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
+        let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
 
-        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
             file_manager.clone(),
             "log.txt".to_string(),
         )));
@@ -171,8 +179,8 @@ mod tests {
         remove_file(test_dir.join("log.txt")).unwrap_or_default();
     }
 
-    fn print_log_records(log_manager: Rc<RefCell<LogManagerV2>>) {
-        let mut log_iterator = log_manager.borrow_mut().iterator();
+    fn print_log_records(log_manager: Arc<Mutex<LogManagerV2>>) {
+        let mut log_iterator = log_manager.lock().unwrap().iterator();
 
         let mut correct_answer_integer = 35;
 
@@ -189,10 +197,10 @@ mod tests {
         }
     }
 
-    fn create_records(start_index: i32, end_index: i32, log_manager: Rc<RefCell<LogManagerV2>>) {
+    fn create_records(start_index: i32, end_index: i32, log_manager: Arc<Mutex<LogManagerV2>>) {
         for i in start_index..end_index {
             let record_data = create_log_record(&format!("record_{}", i), i + 100);
-            let log_sequence_number = log_manager.borrow_mut().append_record(&record_data);
+            let log_sequence_number = log_manager.lock().unwrap().append_record(&record_data);
         }
     }
 

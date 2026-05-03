@@ -296,7 +296,13 @@ impl ScanV2 for TableScan {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, fs::remove_file, path::Path, rc::Rc};
+    use std::{
+        cell::RefCell,
+        fs::remove_file,
+        path::Path,
+        rc::Rc,
+        sync::{Arc, Mutex},
+    };
 
     use rand::Rng;
 
@@ -316,19 +322,19 @@ mod tests {
         let block_size = 400;
         let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
 
-        let file_manager = Rc::new(RefCell::new(FileManager::new(test_dir, block_size)));
-        let log_manager = Rc::new(RefCell::new(LogManagerV2::new(
+        let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
+        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
             file_manager.clone(),
             log_file_name.clone(),
         )));
 
-        let buffer_manager = Rc::new(RefCell::new(BufferManagerV2::new(
+        let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             3,
             file_manager.clone(),
             log_manager.clone(),
         )));
 
-        let lock_table = Rc::new(RefCell::new(LockTable::new()));
+        let lock_table = Arc::new(Mutex::new(LockTable::new()));
 
         let transaction = Rc::new(RefCell::new(TransactionV2::new(
             1,
