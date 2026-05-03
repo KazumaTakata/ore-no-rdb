@@ -1,8 +1,13 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, vec};
+
+use comfy_table::Table;
 
 use crate::{
-    metadata_manager::MetadataManager, parser::QueryData, plan_v2::create_query_plan,
-    predicate::TableNameAndFieldName, transaction_v2::TransactionV2,
+    metadata_manager::MetadataManager,
+    parser::QueryData,
+    plan_v2::create_query_plan,
+    predicate::{ConstantValue, TableNameAndFieldName},
+    transaction_v2::TransactionV2,
 };
 
 pub fn handle_select_query(
@@ -21,6 +26,19 @@ pub fn handle_select_query(
     let mut scan = plan.open().unwrap();
     scan.move_to_before_first();
 
+    let mut result_vec = vec![];
+    let headers = select_query
+        .field_name_list
+        .iter()
+        .map(|field_name| {
+            if let Some(table_name) = &field_name.table_name {
+                return format!("{}.{}", table_name, field_name.field_name);
+            } else {
+                return field_name.field_name.clone();
+            }
+        })
+        .collect::<Vec<String>>();
+
     loop {
         match scan.next() {
             Ok(has_next) => {
@@ -34,9 +52,18 @@ pub fn handle_select_query(
                         let value = scan.get_value(field_name.clone());
                         return value;
                     })
-                    .collect::<Vec<_>>();
+                    .map(|value| match value {
+                        Some(value) => match value {
+                            ConstantValue::String(s) => s,
+                            ConstantValue::Number(i) => i.to_string(),
+                            ConstantValue::Null => "".to_string(),
+                        },
+                        None => "".to_string(),
+                    })
+                    .collect::<Vec<String>>();
 
                 println!("Results: {:?}", results);
+                result_vec.push(results);
             }
             Err(e) => {
                 println!("Error during scan: {:?}", e);
@@ -44,6 +71,15 @@ pub fn handle_select_query(
             }
         }
     }
+
+    let mut table = Table::new();
+    table.set_header(headers);
+
+    for result in result_vec {
+        table.add_row(result);
+    }
+
+    println!("{table}");
 }
 
 #[cfg(test)]
