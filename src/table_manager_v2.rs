@@ -219,6 +219,15 @@ impl TableManagerV2 {
                 None => continue,
             }
         }
+
+        let Some(slot_size) = slot_size else {
+            table_scan.close();
+            return Err(ValueNotFound::new(
+                table_name,
+                Some(Self::TABLE_CATALOG_TABLE_NAME.to_string()),
+            ));
+        };
+
         table_scan.close();
 
         let mut table_schema = TableSchema::new();
@@ -269,7 +278,7 @@ impl TableManagerV2 {
         return Ok(record_page::Layout::new_with_offset_and_size(
             table_schema,
             offsets,
-            slot_size.unwrap(),
+            slot_size,
         ));
     }
 }
@@ -285,11 +294,8 @@ mod tests {
     };
 
     use crate::{
-        buffer_manager_v2::BufferManagerV2,
-        concurrency_manager::LockTable,
-        file_manager::FileManager,
-        log_manager_v2::LogManagerV2,
-        record_page::TableSchema,
+        buffer_manager_v2::BufferManagerV2, concurrency_manager::LockTable,
+        file_manager::FileManager, log_manager_v2::LogManagerV2, record_page::TableSchema,
     };
 
     use super::*;
