@@ -99,9 +99,22 @@ impl ConcurrencyManagerV2 {
     pub fn x_lock(&mut self, block_id: BlockId) {
         if !self.has_xlock(&block_id) {
             self.s_lock(block_id.clone());
-            let mut lock_table = self.lock_table.lock().unwrap();
-            lock_table.x_lock(block_id.clone());
-            self.locks.insert(block_id, "X".to_string());
+            let current_time = std::time::Instant::now();
+
+            loop {
+                {
+                    let mut lock_table = self.lock_table.lock().unwrap();
+                    if !lock_table.has_other_slock(&block_id) {
+                        lock_table.x_lock(block_id.clone());
+                        self.locks.insert(block_id, "X".to_string());
+                        return;
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                if self.lock_table.lock().unwrap().wait_too_long(current_time) {
+                    panic!("lock wait timeout");
+                }
+            }
         }
     }
 
