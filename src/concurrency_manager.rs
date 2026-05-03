@@ -57,6 +57,11 @@ impl LockTable {
 
         return 0;
     }
+
+    fn wait_too_long(&self, start_time: std::time::Instant) -> bool {
+        let elapsed = start_time.elapsed();
+        elapsed.as_secs() > 5
+    }
 }
 
 pub struct ConcurrencyManagerV2 {
@@ -72,16 +77,30 @@ impl ConcurrencyManagerV2 {
 
     pub fn s_lock(&mut self, block_id: BlockId) {
         let lock_value = self.locks.get(&block_id);
+        let current_time = std::time::Instant::now();
         if lock_value.is_none() {
-            self.lock_table.lock().unwrap().s_lock(block_id.clone());
-            self.locks.insert(block_id, "S".to_string());
+            loop {
+                {
+                    let mut lock_table = self.lock_table.lock().unwrap();
+                    if !lock_table.has_xlock(&block_id) {
+                        lock_table.s_lock(block_id.clone());
+                        self.locks.insert(block_id, "S".to_string());
+                        return;
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                if self.lock_table.lock().unwrap().wait_too_long(current_time) {
+                    panic!("lock wait timeout");
+                }
+            }
         }
     }
 
     pub fn x_lock(&mut self, block_id: BlockId) {
         if !self.has_xlock(&block_id) {
             self.s_lock(block_id.clone());
-            self.lock_table.lock().unwrap().x_lock(block_id.clone());
+            let mut lock_table = self.lock_table.lock().unwrap();
+            lock_table.x_lock(block_id.clone());
             self.locks.insert(block_id, "X".to_string());
         }
     }
