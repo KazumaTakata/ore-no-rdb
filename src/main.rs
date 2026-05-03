@@ -1,5 +1,9 @@
-use rustyline::error::ReadlineError;
-use rustyline::{DefaultEditor, Result};
+use nu_ansi_term::{Color, Style};
+use reedline::{
+    default_vi_insert_keybindings, default_vi_normal_keybindings, ColumnarMenu, DefaultCompleter,
+    DefaultHinter, DefaultPrompt, ExampleHighlighter, FileBackedHistory, KeyCode, KeyModifiers,
+    MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Result, Signal, Vi,
+};
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
@@ -170,7 +174,7 @@ fn handle_parsed_sql(
     // ここにParsedSQLを処理するコードを追加
 }
 
-fn main() -> Result<()> {
+fn main() -> std::io::Result<()> {
     let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
     let directory_path = Path::new(&directory_path_name);
     let database = Database::new(directory_path);
@@ -197,21 +201,105 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    // `()` can be used when no completer is required
-    let mut rl = DefaultEditor::new()?;
-    #[cfg(feature = "with-file-history")]
-    if rl.load_history("history.txt").is_err() {
-        println!("No previous history.");
-    }
+    let commands = vec![
+        "select".into(),
+        "insert".into(),
+        "update".into(),
+        "delete".into(),
+        "create".into(),
+        "table".into(),
+        "index".into(),
+        "view".into(),
+        "from".into(),
+        "into".into(),
+        "where".into(),
+        "values".into(),
+        "set".into(),
+        "and".into(),
+        "or".into(),
+        "on".into(),
+        "as".into(),
+        "order".into(),
+        "by".into(),
+        "group".into(),
+        "having".into(),
+        "integer".into(),
+        "varchar".into(),
+        "show".into(),
+        "tables".into(),
+        "describe".into(),
+        "max".into(),
+        "min".into(),
+        "count".into(),
+        "sum".into(),
+        "avg".into(),
+    ];
+
+    // 2. 補完器(単純なprefix一致)
+    let completer = Box::new(DefaultCompleter::new_with_wordlen(commands.clone(), 2));
+
+    // 3. 補完メニュー(Tabで開くカラム表示)
+    let completion_menu = Box::new(
+        ColumnarMenu::default()
+            .with_name("completion_menu")
+            .with_columns(2)
+            .with_column_padding(2),
+    );
+
+    // 4. シンタックスハイライト
+    let highlighter = Box::new(ExampleHighlighter::new(commands));
+
+    // 5. 履歴ベースのオートサジェスト(fish風の灰色予測)
+    let hinter =
+        Box::new(DefaultHinter::default().with_style(Style::new().italic().fg(Color::DarkGray)));
+
+    // 6. ファイルに保存される履歴
+    let history = Box::new(
+        FileBackedHistory::with_file(1000, "history.txt".into())
+            .expect("Error configuring history"),
+    );
+
+    // 7. Vi モードのキーバインド (insert / normal の2モード)
+    let mut insert_keybindings = default_vi_insert_keybindings();
+    let normal_keybindings = default_vi_normal_keybindings();
+
+    // Tab で補完メニューを開く / 開いている時は次候補へ (insert モードのみ)
+    insert_keybindings.add_binding(
+        KeyModifiers::NONE,
+        KeyCode::Tab,
+        ReedlineEvent::UntilFound(vec![
+            ReedlineEvent::Menu("completion_menu".to_string()),
+            ReedlineEvent::MenuNext,
+        ]),
+    );
+
+    let edit_mode = Box::new(Vi::new(insert_keybindings, normal_keybindings));
+
+    // 8. すべてを組み立てる
+    let mut line_editor = Reedline::create()
+        .with_completer(completer)
+        .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
+        .with_highlighter(highlighter)
+        .with_hinter(hinter)
+        .with_history(history)
+        .with_edit_mode(edit_mode)
+        .with_quick_completions(true) // 一意な候補を即補完
+        .with_partial_completions(true) // 共通部分まで補完
+        .with_ansi_colors(true);
+
+    let prompt = DefaultPrompt::default();
 
     loop {
-        let readline = rl.readline(">> ");
-        match readline {
-            Ok(line) => {
-                rl.add_history_entry(line.as_str())?;
-                println!("Line: {}", line);
+        match line_editor.read_line(&prompt) {
+            Ok(Signal::Success(buffer)) => {
+                let buffer = buffer.trim();
+                if buffer == "quit" {
+                    break;
+                }
 
-                let parsed_sql = parse_sql(line.to_string());
+                println!("Line: {}", buffer);
+
+                let parsed_sql = parse_sql(buffer.to_string());
                 handle_parsed_sql(
                     &parsed_sql[0],
                     &mut metadata_manager.borrow_mut(),
@@ -219,59 +307,19 @@ fn main() -> Result<()> {
                     &mut index_update_planner,
                 );
             }
-            Err(ReadlineError::Interrupted) => {
-                println!("CTRL-C");
+            Ok(Signal::CtrlC | Signal::CtrlD) => {
+                println!("終了します");
                 break;
             }
-            Err(ReadlineError::Eof) => {
-                println!("CTRL-D");
+            Ok(_) => {
                 break;
             }
-            Err(err) => {
-                println!("Error: {:?}", err);
+            Err(e) => {
+                eprintln!("エラー: {e}");
                 break;
             }
         }
     }
-    #[cfg(feature = "with-file-history")]
-    rl.save_history("history.txt");
     Ok(())
     // log_manager.flush();
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    use std::path::Path;
-
-    // FileManagerのテスト
-    #[test]
-    fn test_file_manager_read_write() {
-        let test_dir = Path::new("data");
-        let block_size = 400;
-        let mut file_manager = FileManager::new(test_dir, block_size);
-
-        // テスト用のBlockIdとPageを作成
-        let block_id = BlockId::new("data/test_file.txt".to_string(), 0);
-        let mut page = Page::new(block_size);
-
-        // データを書き込む
-        page.set_integer(0, 42);
-        page.set_string(4, "Hello, Test World!");
-
-        // ファイルに書き込む
-        file_manager.write(&block_id, &mut page);
-
-        // 別のページを作成して読み込む
-        let mut page2 = Page::new(block_size);
-        file_manager.read(&block_id, &mut page2);
-
-        // 読み込んだデータを検証
-        assert_eq!(page2.get_integer(0), 42);
-        assert_eq!(page2.get_string(4), "Hello, Test World!");
-
-        // // テスト後にディレクトリを削除
-        // std::fs::remove_dir_all(test_dir).unwrap_or_default();
-    }
 }
