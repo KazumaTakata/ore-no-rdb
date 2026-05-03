@@ -10,8 +10,6 @@ pub fn handle_select_query(
     metadata_manager: &mut MetadataManager,
     transaction: Rc<RefCell<TransactionV2>>,
 ) {
-    println!("Parsed Query: {:?}", select_query);
-
     let table_exist = metadata_manager.validate_select_sql(&select_query, transaction.clone());
 
     if !table_exist {

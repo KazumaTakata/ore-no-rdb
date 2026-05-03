@@ -107,7 +107,6 @@ impl SelectPlanV2 {
 impl PlanV2 for SelectPlanV2 {
     fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
         let scan = self.table_plan.open()?;
-        println!("Opening SelectPlanV2 with predicate: {:?}", self.predicate);
         return Ok(Box::new(SelectScanV2::new(scan, self.predicate.clone())));
     }
 

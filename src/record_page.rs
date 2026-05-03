@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TableFieldInfo {
-    field_type: TableFieldType,
-    field_length: i32,
+    pub field_type: TableFieldType,
+    pub field_length: i32,
 }
 
 impl TableFieldInfo {

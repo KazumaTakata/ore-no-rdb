@@ -973,8 +973,67 @@ mod tests {
     #[test]
     fn test_create_table() {
         let sql = "create table posts (title varchar(10), content varchar(10))".to_string();
-        let parsed_sql = parse_sql(sql);
-        parsed_sql[0].debug_print();
+        let parsed_sql_vec = parse_sql(sql);
+
+        let parsed_sql = &parsed_sql_vec[0];
+
+        match parsed_sql {
+            ParsedSQL::CreateTable(create_table_data) => {
+                assert_eq!(create_table_data.table_name, "posts".to_string());
+                assert_eq!(create_table_data.schema.fields.len(), 2);
+                assert_eq!(create_table_data.schema.fields[0], "title".to_string());
+                assert_eq!(create_table_data.schema.fields[1], "content".to_string());
+                assert_eq!(
+                    create_table_data
+                        .schema
+                        .field_infos
+                        .get("content")
+                        .unwrap()
+                        .field_type,
+                    TableFieldType::VARCHAR
+                );
+
+                assert_eq!(
+                    create_table_data
+                        .schema
+                        .field_infos
+                        .get("title")
+                        .unwrap()
+                        .field_type,
+                    TableFieldType::VARCHAR
+                );
+            }
+            _ => {
+                panic!("Expected CreateTable variant");
+            }
+        }
+    }
+
+    #[test]
+    fn test_create_table_2() {
+        let sql = "create table posts (age integer)".to_string();
+        let parsed_sql_vec = parse_sql(sql);
+        let parsed_sql = &parsed_sql_vec[0];
+
+        match parsed_sql {
+            ParsedSQL::CreateTable(create_table_data) => {
+                assert_eq!(create_table_data.table_name, "posts".to_string());
+                assert_eq!(create_table_data.schema.fields.len(), 1);
+                assert_eq!(create_table_data.schema.fields[0], "age".to_string());
+                assert_eq!(
+                    create_table_data
+                        .schema
+                        .field_infos
+                        .get("age")
+                        .unwrap()
+                        .field_type,
+                    TableFieldType::INTEGER
+                );
+            }
+            _ => {
+                panic!("Expected CreateTable variant");
+            }
+        }
     }
 
     #[test]
