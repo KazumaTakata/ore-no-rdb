@@ -118,11 +118,11 @@ impl BufferManagerV2 {
         }
     }
 
-    pub fn unpin(&mut self, buffer: &mut BufferV2) {
-        buffer.unpin();
-        if !buffer.is_pinned() {
+    pub fn unpin(&mut self, buffer: &Arc<Mutex<BufferV2>>) {
+        let mut buf = buffer.lock().unwrap();
+        buf.unpin();
+        if !buf.is_pinned() {
             self.number_of_available = self.number_of_available + 1;
-            return;
         }
     }
 
@@ -226,8 +226,7 @@ impl BufferListV2 {
         let mut should_remove_from_buffers = false;
 
         if let Some(buffer) = self.buffers.get(&block_id) {
-            let mut buffer = buffer.lock().unwrap();
-            self.buffer_manager.lock().unwrap().unpin(&mut buffer);
+            self.buffer_manager.lock().unwrap().unpin(buffer);
             // self.pinsから始めに見つかったblock_idを削除
             if let Some(index) = self.pins.iter().position(|x| *x == block_id) {
                 self.pins.remove(index);
@@ -246,8 +245,7 @@ impl BufferListV2 {
     pub fn unpin_all(&mut self) {
         for block_id in self.pins.iter() {
             if let Some(buffer) = self.buffers.get(block_id) {
-                let mut buffer = buffer.lock().unwrap();
-                self.buffer_manager.lock().unwrap().unpin(&mut buffer);
+                self.buffer_manager.lock().unwrap().unpin(buffer);
             }
         }
         self.buffers.clear();
@@ -303,9 +301,8 @@ mod tests {
             page_1.set_string(140, "hello buffer manager");
 
             borrowed_buffer.set_modified(1, 0);
-
-            buffer_manager.lock().unwrap().unpin(&mut borrowed_buffer);
         }
+        buffer_manager.lock().unwrap().unpin(&buffer);
 
         let block_2_id = BlockId::new("test_buffer_manager.txt".to_string(), 1);
         let buffer_2 = buffer_manager.lock().unwrap().pin(block_2_id).unwrap();
@@ -316,10 +313,7 @@ mod tests {
         let block_4_id = BlockId::new("test_buffer_manager.txt".to_string(), 3);
         let _buffer_4 = buffer_manager.lock().unwrap().pin(block_4_id).unwrap();
 
-        buffer_manager
-            .lock()
-            .unwrap()
-            .unpin(&mut buffer_2.lock().unwrap());
+        buffer_manager.lock().unwrap().unpin(&buffer_2);
 
         let block_5_id = BlockId::new("test_buffer_manager.txt".to_string(), 0);
         let buffer_5 = buffer_manager.lock().unwrap().pin(block_5_id).unwrap();

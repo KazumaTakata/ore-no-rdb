@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn file_lock_blocks_concurrent_access() {
-        let test_dir_name = format!("test_dir_{}", uuid::Uuid::new_v4());
+        let test_dir_name = format!("test_data_{}", uuid::Uuid::new_v4());
         let test_dir = Path::new(&test_dir_name);
         let fm = Arc::new(FileManager::new(test_dir, 400));
         let file_arc = fm.get_file("locktest");
