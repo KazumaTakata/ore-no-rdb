@@ -1,10 +1,8 @@
-use std::{cell::RefCell, ops::Index, process::id, rc::Rc};
-
-use rand::seq::index;
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     error::ValueNotFound,
-    metadata_manager::{self, MetadataManager},
+    metadata_manager::MetadataManager,
     parser::{DeleteData, InsertData, UpdateData},
     plan_v2::{PlanV2, SelectPlanV2, TablePlanV2},
     predicate::{Constant, TableNameAndFieldName},
@@ -162,19 +160,9 @@ impl IndexUpdatePlanner {
 
 #[cfg(test)]
 mod tests {
-    use rand::{seq::index, Rng};
-    use std::{cell::RefCell, path::Path, rc::Rc};
+    use std::path::Path;
 
-    use crate::{
-        buffer_manager_v2::BufferManagerV2,
-        concurrency_manager::LockTable,
-        database::Database,
-        file_manager::{self, FileManager},
-        log_manager_v2::LogManagerV2,
-        parser::parse_sql,
-        record_page::TableSchema,
-        transaction_v2::TransactionV2,
-    };
+    use crate::{database::Database, parser::parse_sql, record_page::TableSchema};
 
     use super::*;
 

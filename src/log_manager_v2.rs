@@ -1,16 +1,6 @@
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    fs::{self, File},
-    io::Write,
-    iter::Map,
-    os::unix::fs::FileExt,
-    path::Path,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
-use crate::file_manager::{self, FileManager};
+use crate::file_manager::FileManager;
 use crate::page::Page;
 use crate::{block::BlockId, constant::INTEGER_BYTE_SIZE};
 pub struct LogManagerV2 {

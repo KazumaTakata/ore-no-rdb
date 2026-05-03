@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     error::ValueNotFound,
-    materialize::{self, MaterializePlan, TempTable},
+    materialize::TempTable,
     plan_v2::PlanV2,
     predicate::{Constant, TableNameAndFieldName},
     record_page::TableSchema,
@@ -422,7 +422,7 @@ impl ScanV2 for SortScan {
 #[cfg(test)]
 mod tests {
 
-    use std::{fs::remove_file, path::Path};
+    use std::path::Path;
 
     use crate::{
         database::Database,

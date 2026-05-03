@@ -2,7 +2,7 @@ use nu_ansi_term::{Color, Style};
 use reedline::{
     default_vi_insert_keybindings, default_vi_normal_keybindings, ColumnarMenu, DefaultCompleter,
     DefaultHinter, DefaultPrompt, ExampleHighlighter, FileBackedHistory, KeyCode, KeyModifiers,
-    MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Result, Signal, Vi,
+    MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Signal, Vi,
 };
 use std::cell::RefCell;
 use std::path::Path;
@@ -44,17 +44,14 @@ mod view_manager;
 
 use block::BlockId;
 use clap::Parser;
-use file_manager::FileManager;
 use page::Page;
-use parser::{parse_sql, Rule, SQLParser};
+use parser::parse_sql;
 
 use crate::database::Database;
 use crate::index_update_planner::IndexUpdatePlanner;
 use crate::metadata_manager::MetadataManager;
 use crate::parser::{ParsedSQL, QueryData};
-use crate::plan_v2::{
-    create_query_plan, execute_create_table, execute_delete, execute_insert, execute_update,
-};
+use crate::plan_v2::{create_query_plan, execute_create_table};
 use crate::predicate::{ConstantValue, TableNameAndFieldName};
 use crate::predicate_v3::PredicateV2;
 use crate::query_handler::handle_select_query;

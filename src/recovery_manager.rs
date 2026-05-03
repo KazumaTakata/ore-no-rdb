@@ -1,12 +1,11 @@
 use std::sync::{Arc, Mutex};
-use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     block::BlockId,
     buffer_manager_v2::{BufferManagerV2, BufferV2},
     log_manager_v2::LogManagerV2,
     page::Page,
-    transaction_v2::{InnerTransactionV2, TransactionV2},
+    transaction_v2::InnerTransactionV2,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
