@@ -76,35 +76,55 @@ fn handle_parsed_sql(
         }
         ParsedSQL::Insert(insert_data) => {
             // execute_insert(transaction.clone(), metadata_manager, insert_data.clone());
-            index_update_planner.execute_insert(
+            let result = index_update_planner.execute_insert(
                 insert_data.clone(),
                 transaction.clone(),
                 metadata_manager,
             );
+
+            let Ok(()) = result else {
+                eprintln!("Error executing insert: {:?}", result.err());
+                return;
+            };
+
             transaction.borrow_mut().commit();
         }
         ParsedSQL::Delete(delete_data) => {
-            index_update_planner.execute_delete(
+            let result = index_update_planner.execute_delete(
                 delete_data.clone(),
                 transaction.clone(),
                 metadata_manager,
             );
+
+            let Ok(()) = result else {
+                eprintln!("Error executing delete: {:?}", result.err());
+                return;
+            };
+
             transaction.borrow_mut().commit();
         }
         ParsedSQL::CreateTable(create_table_data) => {
-            execute_create_table(
+            let result = execute_create_table(
                 transaction.clone(),
                 metadata_manager,
                 create_table_data.clone(),
             );
+            let Ok(()) = result else {
+                eprintln!("Error executing create table: {:?}", result.err());
+                return;
+            };
         }
         ParsedSQL::Update(update_data) => {
             // handle_update_query(update_data.clone(), metadata_manager, transaction.clone());
-            index_update_planner.execute_modify(
+            let result = index_update_planner.execute_modify(
                 update_data.clone(),
                 transaction.clone(),
                 metadata_manager,
             );
+            let Ok(()) = result else {
+                eprintln!("Error executing update: {:?}", result.err());
+                return;
+            };
         }
         ParsedSQL::DescribeTable { table_name } => {
             let layout = metadata_manager
@@ -163,7 +183,6 @@ fn handle_parsed_sql(
                 if results.len() == 0 {
                     continue;
                 }
-                println!("Results: {:?}", results);
             }
         }
         _ => panic!("Expected a Query variant from parse_sql"),
@@ -293,8 +312,6 @@ fn main() -> std::io::Result<()> {
                 if buffer == "quit" {
                     break;
                 }
-
-                println!("Line: {}", buffer);
 
                 let parsed_sql = parse_sql(buffer.to_string());
                 handle_parsed_sql(
