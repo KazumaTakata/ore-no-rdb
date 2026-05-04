@@ -188,6 +188,7 @@ impl ScanV2 for ProjectScanV2 {
 pub struct ProductScanV2 {
     left_scan: Box<dyn ScanV2>,
     right_scan: Box<dyn ScanV2>,
+    first_left_scan_next: bool,
 }
 
 impl ProductScanV2 {
@@ -195,6 +196,7 @@ impl ProductScanV2 {
         ProductScanV2 {
             left_scan,
             right_scan,
+            first_left_scan_next: true,
         }
     }
 
@@ -202,6 +204,7 @@ impl ProductScanV2 {
         ProductScanV2 {
             left_scan: product_scan.left_scan,
             right_scan,
+            first_left_scan_next: true,
         }
     }
 }
@@ -209,12 +212,17 @@ impl ProductScanV2 {
 impl ScanV2 for ProductScanV2 {
     fn move_to_before_first(&mut self) -> Result<(), ValueNotFound> {
         self.left_scan.move_to_before_first()?;
-        self.left_scan.next()?;
+        self.first_left_scan_next = self.left_scan.next()?;
         self.right_scan.move_to_before_first()?;
         Ok(())
     }
 
     fn next(&mut self) -> Result<bool, ValueNotFound> {
+        // left_scanにはじめからデータが1件もない場合は、常にfalseを返す
+        if !self.first_left_scan_next {
+            return Ok(false);
+        }
+
         let right_scan_next = self.right_scan.next()?;
 
         if right_scan_next {
