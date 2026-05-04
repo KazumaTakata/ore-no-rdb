@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     error::ValueNotFound,
     materialize::TempTable,
-    plan_v2::PlanV2,
+    plan_v2::{PlanTreeNodeForDebug, PlanV2},
     predicate::{Constant, TableNameAndFieldName},
     record_page::TableSchema,
     scan_v2::ScanV2,
@@ -182,6 +182,13 @@ impl PlanV2 for SortPlan {
     fn blocks_accessed(&self) -> u32 {
         // TODO: 所有権の問題で実装できていない
         return 10;
+    }
+
+    fn get_child_plans(&self) -> PlanTreeNodeForDebug {
+        PlanTreeNodeForDebug {
+            current_node_type: "SortPlan".to_string(),
+            child_nodes: vec![self.plan.get_child_plans()],
+        }
     }
 }
 
@@ -611,4 +618,3 @@ mod tests {
         return Ok(());
     }
 }
-

@@ -113,6 +113,13 @@ impl PlanV2 for MaterializePlan {
     fn get_schema(&self) -> &TableSchema {
         self.src_plan.get_schema()
     }
+
+    fn get_child_plans(&self) -> crate::plan_v2::PlanTreeNodeForDebug {
+        crate::plan_v2::PlanTreeNodeForDebug {
+            current_node_type: "MaterializePlan".to_string(),
+            child_nodes: vec![self.src_plan.get_child_plans()],
+        }
+    }
 }
 
 #[cfg(test)]

@@ -74,6 +74,22 @@ fn handle_parsed_sql(
         ParsedSQL::Query(select_query) => {
             handle_select_query(select_query.clone(), metadata_manager, transaction.clone());
         }
+        ParsedSQL::Explain(query_data) => {
+            let table_exist =
+                metadata_manager.validate_select_sql(&query_data, transaction.clone());
+
+            if !table_exist {
+                println!("Table or field does not exist");
+                return;
+            }
+
+            let mut plan =
+                create_query_plan(&query_data, transaction.clone(), metadata_manager).unwrap();
+
+            let plan_tree = plan.get_child_plans();
+            println!("Query Plan:");
+            plan_tree.print_tree();
+        }
         ParsedSQL::Insert(insert_data) => {
             // execute_insert(transaction.clone(), metadata_manager, insert_data.clone());
             let result = index_update_planner.execute_insert(
@@ -311,6 +327,10 @@ fn main() -> std::io::Result<()> {
                 let buffer = buffer.trim();
                 if buffer == "quit" {
                     break;
+                }
+
+                if buffer.is_empty() {
+                    continue;
                 }
 
                 let parsed_sql = parse_sql(buffer.to_string());
