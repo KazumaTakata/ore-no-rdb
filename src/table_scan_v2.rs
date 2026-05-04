@@ -201,6 +201,13 @@ impl ScanV2 for TableScan {
             None => {}
         }
 
+        if self.current_slot == -1 {
+            panic!(
+                "No current record to get value: {},{}",
+                self.table_name, field_name.field_name
+            );
+        }
+
         self.record_page
             .get_integer(field_name.field_name, self.current_slot)
     }
@@ -213,6 +220,13 @@ impl ScanV2 for TableScan {
                 }
             }
             None => {}
+        }
+
+        if self.current_slot == -1 {
+            panic!(
+                "No current record to get value: {},{}",
+                self.table_name, field_name.field_name
+            );
         }
 
         self.record_page
@@ -307,11 +321,8 @@ mod tests {
     use rand::Rng;
 
     use crate::{
-        buffer_manager_v2::BufferManagerV2,
-        concurrency_manager::LockTable,
-        file_manager::FileManager,
-        log_manager_v2::LogManagerV2,
-        record_page::TableSchema,
+        buffer_manager_v2::BufferManagerV2, concurrency_manager::LockTable,
+        file_manager::FileManager, log_manager_v2::LogManagerV2, record_page::TableSchema,
     };
 
     use super::*;
