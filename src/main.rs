@@ -341,7 +341,12 @@ fn main() -> std::io::Result<()> {
                     &mut index_update_planner,
                 );
             }
-            Ok(Signal::CtrlC | Signal::CtrlD) => {
+            Ok(Signal::CtrlC) => {
+                // 入力中の文字列は reedline が破棄して空のバッファで戻ってくるので、
+                // そのまま次のプロンプトへ進めば良い
+                continue;
+            }
+            Ok(Signal::CtrlD) => {
                 println!("終了します");
                 break;
             }
