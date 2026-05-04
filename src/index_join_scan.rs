@@ -12,18 +12,14 @@ use crate::{
 };
 
 #[cfg(test)]
+use crate::{
+    buffer_manager_v2::BufferManagerV2, concurrency_manager::LockTable, file_manager::FileManager,
+    log_manager_v2::LogManagerV2, record_page::TableSchema, table_manager_v2::TableManagerV2,
+};
+#[cfg(test)]
 use std::{
     path::Path,
     sync::{Arc, Mutex},
-};
-#[cfg(test)]
-use crate::{
-    buffer_manager_v2::BufferManagerV2,
-    concurrency_manager::LockTable,
-    file_manager::FileManager,
-    log_manager_v2::LogManagerV2,
-    record_page::TableSchema,
-    table_manager_v2::TableManagerV2,
 };
 
 pub struct IndexJoinScan {
@@ -173,7 +169,7 @@ fn test_view_mgr() {
         log_manager.clone(),
     )));
 
-    let table_manager = Rc::new(RefCell::new(TableManagerV2::new(transaction.clone(), true)));
+    let table_manager = TableManagerV2::new(transaction.clone(), true);
 
     let mut student_table_schema = TableSchema::new();
     student_table_schema.add_integer_field("student_id".to_string());
@@ -182,7 +178,7 @@ fn test_view_mgr() {
 
     let table_name = "student".to_string();
 
-    table_manager.borrow_mut().create_table(
+    table_manager.create_table(
         table_name.clone(),
         &student_table_schema,
         transaction.clone(),
@@ -195,7 +191,7 @@ fn test_view_mgr() {
 
     let book_table_name = "book".to_string();
 
-    table_manager.borrow_mut().create_table(
+    table_manager.create_table(
         book_table_name.clone(),
         &book_table_schema,
         transaction.clone(),
