@@ -1,6 +1,12 @@
 use std::fmt;
 
 #[derive(Debug, Clone)]
+pub struct UniqueConstraintError {
+    field: String,
+    table: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct ValueNotFound {
     field: String,
     table: Option<String>,

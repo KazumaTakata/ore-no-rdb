@@ -36,6 +36,16 @@ impl IndexUpdatePlanner {
         for field in insert_data.field_name_list.iter() {
             let value = val_inter.next().unwrap();
 
+            let index_info = indexes.get_mut(field);
+
+            if let Some(info) = index_info {
+                let mut index_scan = info.open();
+                index_scan.before_first(value.clone());
+                if index_scan.next()? {
+                    panic!("Duplicate value for unique index");
+                }
+            }
+
             update_scan.set_value(field.clone(), value.value.clone());
 
             let index_info = indexes.get_mut(field);
