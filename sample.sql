@@ -1,1 +1,0 @@
-select field_a, field_b from table_a where field_a = 1
