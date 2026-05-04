@@ -103,6 +103,7 @@ pub enum ParsedSQL {
     Update(UpdateData),
     ShowTables,
     DescribeTable { table_name: String },
+    Explain(QueryData),
 }
 
 impl ParsedSQL {
@@ -156,6 +157,12 @@ impl ParsedSQL {
                     create_index_data.index_name,
                     create_index_data.table_name,
                     create_index_data.field_name
+                );
+            }
+            ParsedSQL::Explain(query_data) => {
+                println!(
+                    "Parsed Explain Command for query: \n{}",
+                    query_data.to_string()
                 );
             }
         }
@@ -882,6 +889,16 @@ pub fn parse_sql(sql: String) -> Vec<ParsedSQL> {
 
                                     Rule::show_tables_sql => {
                                         result.push(ParsedSQL::ShowTables);
+                                    }
+
+                                    Rule::explain_sql => {
+                                        let select_query = parse_select_sql(
+                                            inner_value
+                                                .into_inner()
+                                                .find(|p| p.as_rule() == Rule::select_sql)
+                                                .unwrap(),
+                                        );
+                                        result.push(ParsedSQL::Explain(select_query));
                                     }
 
                                     Rule::describe_table_sql => {

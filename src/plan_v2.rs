@@ -17,6 +17,28 @@ use crate::{
     transaction_v2::TransactionV2,
 };
 
+pub struct PlanTreeNodeForDebug {
+    pub current_node_type: String,
+    pub child_nodes: Vec<PlanTreeNodeForDebug>,
+}
+
+impl PlanTreeNodeForDebug {
+    pub fn print_tree(&self) {
+        self.print_tree_inner("", true);
+    }
+
+    fn print_tree_inner(&self, prefix: &str, is_last: bool) {
+        let connector = if is_last { "└─ " } else { "├─ " };
+        println!("{}{}{}", prefix, connector, self.current_node_type);
+
+        let child_prefix = format!("{}{}", prefix, if is_last { "   " } else { "│  " });
+        let len = self.child_nodes.len();
+        for (i, child) in self.child_nodes.iter().enumerate() {
+            child.print_tree_inner(&child_prefix, i == len - 1);
+        }
+    }
+}
+
 pub trait PlanV2 {
     fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound>;
     fn get_schema(&self) -> &TableSchema;
@@ -26,6 +48,8 @@ pub trait PlanV2 {
     fn records_output(&self) -> u32;
 
     fn get_distinct_value(&self, field_name: String) -> u32;
+
+    fn get_child_plans(&self) -> PlanTreeNodeForDebug;
 }
 
 pub struct TablePlanV2 {
@@ -81,6 +105,13 @@ impl PlanV2 for TablePlanV2 {
 
     fn get_distinct_value(&self, field_name: String) -> u32 {
         self.stat_info.distinct_value(field_name)
+    }
+
+    fn get_child_plans(&self) -> PlanTreeNodeForDebug {
+        PlanTreeNodeForDebug {
+            current_node_type: "TablePlanV2".to_string(),
+            child_nodes: vec![],
+        }
     }
 }
 
@@ -138,6 +169,13 @@ impl PlanV2 for SelectPlanV2 {
     fn records_output(&self) -> u32 {
         self.table_plan.records_output() / self.predicate.reduction_factor(self.table_plan.as_ref())
     }
+
+    fn get_child_plans(&self) -> PlanTreeNodeForDebug {
+        PlanTreeNodeForDebug {
+            current_node_type: "SelectPlanV2".to_string(),
+            child_nodes: vec![self.table_plan.get_child_plans()],
+        }
+    }
 }
 
 struct ProjectPlanV2 {
@@ -183,6 +221,13 @@ impl PlanV2 for ProjectPlanV2 {
 
     fn records_output(&self) -> u32 {
         self.plan.records_output()
+    }
+
+    fn get_child_plans(&self) -> PlanTreeNodeForDebug {
+        PlanTreeNodeForDebug {
+            current_node_type: "ProjectPlanV2".to_string(),
+            child_nodes: vec![self.plan.get_child_plans()],
+        }
     }
 }
 
@@ -243,6 +288,16 @@ impl PlanV2 for ProductPlanV2 {
             return self.left_plan.get_distinct_value(field_name);
         } else {
             return self.right_plan.get_distinct_value(field_name);
+        }
+    }
+
+    fn get_child_plans(&self) -> PlanTreeNodeForDebug {
+        PlanTreeNodeForDebug {
+            current_node_type: "ProductPlanV2".to_string(),
+            child_nodes: vec![
+                self.left_plan.get_child_plans(),
+                self.right_plan.get_child_plans(),
+            ],
         }
     }
 }

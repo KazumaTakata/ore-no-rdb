@@ -7,7 +7,7 @@ use std::{
 use crate::{
     error::ValueNotFound,
     index_manager::IndexInfo,
-    plan_v2::PlanV2,
+    plan_v2::{PlanTreeNodeForDebug, PlanV2},
     predicate::{Constant, ConstantValue, TableNameAndFieldName},
     record_page::{Layout, TableSchema},
     scan_v2::ScanV2,
@@ -186,6 +186,13 @@ impl PlanV2 for IndexSelectPlan {
 
     fn get_schema(&self) -> &TableSchema {
         self.plan.get_schema()
+    }
+
+    fn get_child_plans(&self) -> PlanTreeNodeForDebug {
+        PlanTreeNodeForDebug {
+            current_node_type: "IndexSelectPlan".to_string(),
+            child_nodes: vec![self.plan.get_child_plans()],
+        }
     }
 }
 

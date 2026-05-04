@@ -5,7 +5,7 @@ use comfy_table::Table;
 use crate::{
     metadata_manager::MetadataManager,
     parser::QueryData,
-    plan_v2::create_query_plan,
+    plan_v2::{create_query_plan, PlanV2},
     predicate::ConstantValue,
     transaction_v2::TransactionV2,
 };
@@ -23,6 +23,11 @@ pub fn handle_select_query(
     }
 
     let mut plan = create_query_plan(&select_query, transaction.clone(), metadata_manager).unwrap();
+
+    let plan_tree = plan.get_child_plans();
+    println!("Query Plan:");
+    plan_tree.print_tree();
+
     let mut scan = plan.open().unwrap();
     scan.move_to_before_first();
 
@@ -62,7 +67,6 @@ pub fn handle_select_query(
                     })
                     .collect::<Vec<String>>();
 
-                println!("Results: {:?}", results);
                 result_vec.push(results);
             }
             Err(e) => {

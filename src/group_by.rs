@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     error::ValueNotFound,
-    plan_v2::PlanV2,
+    plan_v2::{PlanTreeNodeForDebug, PlanV2},
     predicate::{Constant, ConstantValue, TableNameAndFieldName},
     record_page::{TableFieldType, TableSchema},
     scan_v2::ScanV2,
@@ -78,6 +78,13 @@ impl PlanV2 for GroupByPlan {
 
     fn get_schema(&self) -> &TableSchema {
         self.plan.get_schema()
+    }
+
+    fn get_child_plans(&self) -> PlanTreeNodeForDebug {
+        PlanTreeNodeForDebug {
+            current_node_type: "GroupByPlan".to_string(),
+            child_nodes: vec![self.plan.get_child_plans()],
+        }
     }
 }
 
