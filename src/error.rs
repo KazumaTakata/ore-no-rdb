@@ -1,9 +1,58 @@
 use std::fmt;
 
 #[derive(Debug, Clone)]
+pub enum DatabaseError {
+    UniqueConstraintViolation(UniqueConstraintError),
+    ValueNotFound(ValueNotFound),
+    TableAlreadyExists(TableAlreadyExists),
+}
+
+impl From<ValueNotFound> for DatabaseError {
+    fn from(e: ValueNotFound) -> Self {
+        DatabaseError::ValueNotFound(e)
+    }
+}
+
+impl From<TableAlreadyExists> for DatabaseError {
+    fn from(e: TableAlreadyExists) -> Self {
+        DatabaseError::TableAlreadyExists(e)
+    }
+}
+
+impl From<UniqueConstraintError> for DatabaseError {
+    fn from(e: UniqueConstraintError) -> Self {
+        DatabaseError::UniqueConstraintViolation(e)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct UniqueConstraintError {
     field: String,
     table: String,
+}
+
+impl UniqueConstraintError {
+    pub fn new(field: String, table: String) -> Self {
+        UniqueConstraintError { field, table }
+    }
+}
+
+impl fmt::Display for UniqueConstraintError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Duplicate value for unique index on table '{}', field '{}'",
+            self.table, self.field
+        )
+    }
+}
+
+impl std::error::Error for UniqueConstraintError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

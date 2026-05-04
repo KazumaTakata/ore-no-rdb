@@ -1,7 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, f32::consts::E, rc::Rc};
 
 use crate::{
-    error::ValueNotFound,
+    error::{DatabaseError, UniqueConstraintError, ValueNotFound},
     metadata_manager::MetadataManager,
     parser::{DeleteData, InsertData, UpdateData},
     plan_v2::{PlanV2, SelectPlanV2, TablePlanV2},
@@ -21,31 +21,40 @@ impl IndexUpdatePlanner {
         insert_data: InsertData,
         transaction: Rc<RefCell<TransactionV2>>,
         metadata_manager: &mut MetadataManager,
-    ) -> Result<(), ValueNotFound> {
+    ) -> Result<(), DatabaseError> {
         let table_name = insert_data.table_name.clone();
         let mut indexes =
             metadata_manager.get_index_info(table_name.clone(), transaction.clone())?;
         let mut plan = TablePlanV2::new(table_name.clone(), transaction.clone(), metadata_manager)?;
 
         let mut update_scan = plan.open()?;
-        update_scan.insert();
-        let record_id = update_scan.get_record_id();
 
-        let mut val_inter = insert_data.value_list.iter();
-
-        for field in insert_data.field_name_list.iter() {
-            let value = val_inter.next().unwrap();
-
+        for (field, insert_value) in insert_data
+            .field_name_list
+            .iter()
+            .zip(insert_data.value_list.iter())
+        {
             let index_info = indexes.get_mut(field);
 
             if let Some(info) = index_info {
                 let mut index_scan = info.open();
-                index_scan.before_first(value.clone());
+                index_scan.before_first(insert_value.clone());
                 if index_scan.next()? {
-                    panic!("Duplicate value for unique index");
+                    return Err(DatabaseError::UniqueConstraintViolation(
+                        UniqueConstraintError::new(field.clone(), table_name.clone()),
+                    ));
                 }
             }
+        }
 
+        update_scan.insert();
+        let record_id = update_scan.get_record_id();
+
+        for (field, value) in insert_data
+            .field_name_list
+            .iter()
+            .zip(insert_data.value_list.iter())
+        {
             update_scan.set_value(field.clone(), value.value.clone());
 
             let index_info = indexes.get_mut(field);
