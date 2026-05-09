@@ -1,3 +1,5 @@
+use std::fmt;
+use std::str::FromStr;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
@@ -93,6 +95,31 @@ pub trait AggregateFunction {
     fn process_next(&mut self, scan: &mut dyn ScanV2);
     fn get_field(&self) -> String;
     fn get_value(&self) -> Constant;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AggregateFunctionType {
+    Max,
+}
+
+impl fmt::Display for AggregateFunctionType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            Self::Max => "max",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl FromStr for AggregateFunctionType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "max" => Ok(AggregateFunctionType::Max),
+            _ => Err(()),
+        }
+    }
 }
 
 struct GroupValue {
@@ -314,7 +341,11 @@ impl AggregateFunction for MaxFunction {
     }
 
     fn get_field(&self) -> String {
-        let field_name = format!("max_{}", self.field_name.clone().field_name);
+        let field_name = format!(
+            "{}_{}",
+            AggregateFunctionType::Max,
+            self.field_name.clone().field_name
+        );
         return field_name;
     }
 
@@ -478,7 +509,10 @@ mod tests {
                 .get_value(TableNameAndFieldName::new(None, "B_1".to_string()))
                 .unwrap();
             let field2_value = group_by_scan
-                .get_value(TableNameAndFieldName::new(None, "max_A_1".to_string()))
+                .get_value(TableNameAndFieldName::new(
+                    None,
+                    format!("{}_A_1", AggregateFunctionType::Max),
+                ))
                 .unwrap();
 
             println!(

@@ -1,9 +1,10 @@
-use std::{collections::HashMap, vec};
+use std::{collections::HashMap, str::FromStr, vec};
 
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 
 use crate::{
+    group_by::AggregateFunctionType,
     predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
     predicate_v3::{ExpressionV2, PredicateV2, TermV2},
     record_page::{TableFieldInfo, TableFieldType, TableSchema},
@@ -192,7 +193,7 @@ impl fmt::Display for CreateTableData {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregateFunctionInfo {
-    pub function_name: String,
+    pub function_type: AggregateFunctionType,
     pub field: TableNameAndFieldName,
 }
 
@@ -284,7 +285,7 @@ impl QueryData {
         for agg in &self.aggregate_functions {
             result.push_str(&format!(
                 "{}({} {}) ",
-                agg.function_name,
+                agg.function_type,
                 agg.field.table_name.clone().unwrap_or("".to_string()),
                 agg.field.field_name
             ));
@@ -442,6 +443,9 @@ fn parse_select_sql(record: Pair<Rule>) -> QueryData {
                             Rule::aggregate_function => {
                                 let mut inner_iter = inner_value.into_inner();
                                 let function_name = inner_iter.next().unwrap().as_str().to_string();
+                                let function_type =
+                                    AggregateFunctionType::from_str(&function_name).unwrap();
+
                                 let field_pair = inner_iter.next().unwrap();
                                 let field = match field_pair.into_inner().next() {
                                     Some(field_inner) => match field_inner.as_rule() {
@@ -469,7 +473,7 @@ fn parse_select_sql(record: Pair<Rule>) -> QueryData {
                                 };
 
                                 aggregate_functions.push(AggregateFunctionInfo {
-                                    function_name,
+                                    function_type,
                                     field,
                                 });
                             }

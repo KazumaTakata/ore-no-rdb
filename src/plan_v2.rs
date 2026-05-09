@@ -416,6 +416,7 @@ pub fn create_query_plan(
         let max_aggregate_functions = query_data
             .aggregate_functions
             .iter()
+            // TODO: 現状はmax関数のみ対応しているが、将来的には他の集約関数も対応する必要がある
             .map(|f| Box::new(MaxFunction::new(f.field.clone())) as Box<dyn AggregateFunction>)
             .collect::<Vec<Box<dyn AggregateFunction>>>();
 

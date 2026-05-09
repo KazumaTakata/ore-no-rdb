@@ -6,7 +6,7 @@ use crate::{
     metadata_manager::MetadataManager,
     parser::QueryData,
     plan_v2::{create_query_plan, PlanV2},
-    predicate::ConstantValue,
+    predicate::{ConstantValue, TableNameAndFieldName},
     transaction_v2::TransactionV2,
 };
 
@@ -32,7 +32,7 @@ pub fn handle_select_query(
     scan.move_to_before_first();
 
     let mut result_vec = vec![];
-    let headers = select_query
+    let mut headers = select_query
         .field_name_list
         .iter()
         .map(|field_name| {
@@ -43,6 +43,22 @@ pub fn handle_select_query(
             }
         })
         .collect::<Vec<String>>();
+
+    let aggregate_function_headers = select_query
+        .aggregate_functions
+        .iter()
+        .map(|aggregate_function_info| {
+            let field_name = aggregate_function_info.field.clone();
+            let function_name = aggregate_function_info.function_type.clone();
+            if let Some(table_name) = &field_name.table_name {
+                return format!("{}_{}.{}", function_name, table_name, field_name.field_name);
+            } else {
+                return format!("{}_{}", function_name, field_name.field_name);
+            }
+        })
+        .collect::<Vec<String>>();
+
+    headers.extend(aggregate_function_headers);
 
     loop {
         match scan.next() {
@@ -68,6 +84,33 @@ pub fn handle_select_query(
                     .collect::<Vec<String>>();
 
                 result_vec.push(results);
+
+                let aggregate_function_results = select_query
+                    .aggregate_functions
+                    .iter()
+                    .map(|aggregate_function_info| {
+                        let field_name = aggregate_function_info.field.clone();
+                        let function_type = aggregate_function_info.function_type.clone();
+                        let value = scan.get_value(TableNameAndFieldName::new(
+                            None,
+                            format!("{}_{}", function_type, field_name.field_name),
+                        ));
+                        return value;
+                    })
+                    .map(|value| match value {
+                        Some(value) => match value {
+                            ConstantValue::String(s) => s,
+                            ConstantValue::Number(i) => i.to_string(),
+                            ConstantValue::Null => "".to_string(),
+                        },
+                        None => "".to_string(),
+                    })
+                    .collect::<Vec<String>>();
+
+                result_vec
+                    .last_mut()
+                    .unwrap()
+                    .extend(aggregate_function_results);
             }
             Err(e) => {
                 println!("Error during scan: {:?}", e);
@@ -92,6 +135,7 @@ mod tests {
 
     use crate::{
         database::Database,
+        group_by::AggregateFunctionType,
         parser::AggregateFunctionInfo,
         predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
         predicate_v3::{ExpressionV2, PredicateV2, TermV2},
@@ -320,7 +364,7 @@ mod tests {
             order_by_list: vec![],
             group_by_list: vec![TableNameAndFieldName::new(None, "content".to_string())],
             aggregate_functions: vec![AggregateFunctionInfo {
-                function_name: "max".to_string(),
+                function_type: AggregateFunctionType::Max,
                 field: TableNameAndFieldName::new(None, "title".to_string()),
             }],
         };
