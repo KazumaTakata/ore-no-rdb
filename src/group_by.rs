@@ -101,6 +101,7 @@ pub trait AggregateFunction {
 pub enum AggregateFunctionType {
     Max,
     Avg,
+    Sum,
 }
 
 impl fmt::Display for AggregateFunctionType {
@@ -108,6 +109,7 @@ impl fmt::Display for AggregateFunctionType {
         let s = match self {
             Self::Max => "max",
             Self::Avg => "avg",
+            Self::Sum => "sum",
         };
         write!(f, "{}", s)
     }
@@ -120,6 +122,7 @@ impl FromStr for AggregateFunctionType {
         match s.to_lowercase().as_str() {
             "max" => Ok(AggregateFunctionType::Max),
             "avg" => Ok(AggregateFunctionType::Avg),
+            "sum" => Ok(AggregateFunctionType::Sum),
             _ => Err(()),
         }
     }
@@ -311,6 +314,57 @@ impl ScanV2 for GroupByScan {
 
     fn move_to_record_id(&mut self, record_id: crate::table_scan_v2::RecordID) {
         panic!("Cannot move to RecordID in GroupByScan")
+    }
+}
+
+pub struct SumFunction {
+    field_name: TableNameAndFieldName,
+    sum_value: i32,
+}
+
+impl SumFunction {
+    pub fn new(field_name: TableNameAndFieldName) -> Self {
+        SumFunction {
+            field_name,
+            sum_value: 0,
+        }
+    }
+}
+
+impl AggregateFunction for SumFunction {
+    fn process_first(&mut self, scan: &mut dyn ScanV2) {
+        let value = scan.get_value(self.field_name.clone()).unwrap();
+
+        match value {
+            ConstantValue::Number(n) => {
+                self.sum_value = n;
+            }
+            _ => panic!("SumFunction only supports numeric values"),
+        }
+    }
+
+    fn process_next(&mut self, scan: &mut dyn ScanV2) {
+        let new_value = scan.get_value(self.field_name.clone()).unwrap();
+
+        match new_value {
+            ConstantValue::Number(n) => {
+                self.sum_value += n;
+            }
+            _ => panic!("SumFunction only supports numeric values"),
+        };
+    }
+
+    fn get_field(&self) -> String {
+        let field_name = format!(
+            "{}_{}",
+            AggregateFunctionType::Sum,
+            self.field_name.clone().field_name
+        );
+        return field_name;
+    }
+
+    fn get_value(&self) -> Constant {
+        Constant::new(ConstantValue::Number(self.sum_value))
     }
 }
 

@@ -424,6 +424,10 @@ pub fn create_query_plan(
                 AggregateFunctionType::Avg => {
                     Box::new(AvgFunction::new(f.field.clone())) as Box<dyn AggregateFunction>
                 }
+                AggregateFunctionType::Sum => {
+                    Box::new(crate::group_by::SumFunction::new(f.field.clone()))
+                        as Box<dyn AggregateFunction>
+                }
             })
             .collect::<Vec<Box<dyn AggregateFunction>>>();
 
