@@ -100,12 +100,14 @@ pub trait AggregateFunction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggregateFunctionType {
     Max,
+    Avg,
 }
 
 impl fmt::Display for AggregateFunctionType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self {
             Self::Max => "max",
+            Self::Avg => "avg",
         };
         write!(f, "{}", s)
     }
@@ -117,6 +119,7 @@ impl FromStr for AggregateFunctionType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "max" => Ok(AggregateFunctionType::Max),
+            "avg" => Ok(AggregateFunctionType::Avg),
             _ => Err(()),
         }
     }
@@ -308,6 +311,65 @@ impl ScanV2 for GroupByScan {
 
     fn move_to_record_id(&mut self, record_id: crate::table_scan_v2::RecordID) {
         panic!("Cannot move to RecordID in GroupByScan")
+    }
+}
+
+pub struct AvgFunction {
+    field_name: TableNameAndFieldName,
+    sum_value: i32,
+    number_of_values: u32,
+}
+
+impl AvgFunction {
+    pub fn new(field_name: TableNameAndFieldName) -> Self {
+        AvgFunction {
+            field_name,
+            sum_value: 0,
+            number_of_values: 0,
+        }
+    }
+}
+
+impl AggregateFunction for AvgFunction {
+    fn process_first(&mut self, scan: &mut dyn ScanV2) {
+        let value = scan.get_value(self.field_name.clone()).unwrap();
+
+        match value {
+            ConstantValue::Number(n) => {
+                self.sum_value = n;
+                self.number_of_values = 1;
+            }
+            _ => panic!("AvgFunction only supports numeric values"),
+        }
+    }
+
+    fn process_next(&mut self, scan: &mut dyn ScanV2) {
+        let new_value = scan.get_value(self.field_name.clone()).unwrap();
+
+        match new_value {
+            ConstantValue::Number(n) => {
+                self.sum_value += n;
+                self.number_of_values += 1;
+            }
+            _ => panic!("AvgFunction only supports numeric values"),
+        };
+    }
+
+    fn get_field(&self) -> String {
+        let field_name = format!(
+            "{}_{}",
+            AggregateFunctionType::Avg,
+            self.field_name.clone().field_name
+        );
+        return field_name;
+    }
+
+    fn get_value(&self) -> Constant {
+        if self.number_of_values == 0 {
+            panic!("No values processed");
+        }
+        let avg = self.sum_value / self.number_of_values as i32;
+        Constant::new(ConstantValue::Number(avg))
     }
 }
 

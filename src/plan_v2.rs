@@ -2,7 +2,7 @@ use std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc};
 
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
-    group_by::{AggregateFunction, GroupByPlan, MaxFunction},
+    group_by::{AggregateFunction, AggregateFunctionType, AvgFunction, GroupByPlan, MaxFunction},
     hash_index::IndexSelectPlan,
     index_manager::IndexInfo,
     metadata_manager::MetadataManager,
@@ -417,7 +417,14 @@ pub fn create_query_plan(
             .aggregate_functions
             .iter()
             // TODO: 現状はmax関数のみ対応しているが、将来的には他の集約関数も対応する必要がある
-            .map(|f| Box::new(MaxFunction::new(f.field.clone())) as Box<dyn AggregateFunction>)
+            .map(|f| match f.function_type {
+                AggregateFunctionType::Max => {
+                    Box::new(MaxFunction::new(f.field.clone())) as Box<dyn AggregateFunction>
+                }
+                AggregateFunctionType::Avg => {
+                    Box::new(AvgFunction::new(f.field.clone())) as Box<dyn AggregateFunction>
+                }
+            })
             .collect::<Vec<Box<dyn AggregateFunction>>>();
 
         let group_by_plan = GroupByPlan::new(
