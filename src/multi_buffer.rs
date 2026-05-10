@@ -3,8 +3,8 @@ use std::{cell::RefCell, rc::Rc, vec};
 use crate::{
     block::BlockId,
     error::ValueNotFound,
-    materialize::TempTable,
-    plan_v2::PlanV2,
+    materialize::{MaterializePlan, TempTable},
+    plan_v2::{PlanTreeNodeForDebug, PlanV2},
     predicate::{ConstantValue, TableNameAndFieldName},
     record_page::{Layout, TableFieldType, TableSchema},
     record_page_v2::RecordPage,
@@ -271,12 +271,53 @@ impl PlanV2 for MultiBufferProductPlan {
         )));
     }
 
-    fn 
+    fn blocks_accessed(&self) -> u32 {
+        let available_buffer_size = self.transaction.borrow().get_available_buffer_size() as usize;
+
+        let right_plan_block_accessed = {
+            let layout = Layout::new(self.right_plan.get_schema().clone());
+            let rpb = self.transaction.borrow().get_block_size() as i32 / layout.get_slot_size();
+            self.right_plan.records_output() as u32 / rpb as u32
+        };
+
+        let number_of_chunks =
+            (right_plan_block_accessed as f64 / available_buffer_size as f64).ceil() as u32;
+
+        return self.left_plan.blocks_accessed() * number_of_chunks
+            + self.right_plan.blocks_accessed() as u32;
+    }
+
+    fn records_output(&self) -> u32 {
+        return self.left_plan.records_output() * self.right_plan.records_output();
+    }
+
+    fn get_distinct_value(&self, field_name: String) -> u32 {
+        if self.left_plan.get_schema().has_field(field_name.clone()) {
+            return self.left_plan.get_distinct_value(field_name);
+        } else {
+            return self.right_plan.get_distinct_value(field_name);
+        }
+    }
+
+    fn get_schema(&self) -> &TableSchema {
+        return &self.schema;
+    }
+
+    fn get_child_plans(&self) -> PlanTreeNodeForDebug {
+        PlanTreeNodeForDebug {
+            current_node_type: "MultiBufferProductPlan".to_string(),
+            child_nodes: vec![
+                self.left_plan.get_child_plans(),
+                self.right_plan.get_child_plans(),
+            ],
+        }
+    }
 }
 
 struct MultiBufferProductScan {
     transaction: Rc<RefCell<TransactionV2>>,
     left_scan: Box<dyn ScanV2>,
+    right_scan: Option<Box<dyn ScanV2>>,
     product_scan: Option<ProductScanV2>,
     layout: Layout,
     file_name: String,
@@ -303,6 +344,7 @@ impl MultiBufferProductScan {
             transaction,
             left_scan,
             product_scan: None,
+            right_scan: None,
             layout,
             file_name,
             chunk_size,
