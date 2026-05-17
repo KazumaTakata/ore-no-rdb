@@ -235,11 +235,11 @@ impl MultiBufferProductPlan {
         }
     }
 
-    fn copy_records(&mut self, plan: &mut dyn PlanV2) -> TempTable {
+    fn copy_records(transaction: Rc<RefCell<TransactionV2>>, plan: &mut dyn PlanV2) -> TempTable {
         let mut source = plan.open().unwrap();
         let schema = plan.get_schema().clone();
 
-        let mut temp_table = TempTable::new(self.transaction.clone(), schema.clone());
+        let mut temp_table = TempTable::new(transaction.clone(), schema.clone());
 
         let mut destination_scan = temp_table.open();
 
@@ -262,7 +262,8 @@ impl MultiBufferProductPlan {
 impl PlanV2 for MultiBufferProductPlan {
     fn open(&mut self) -> Result<Box<dyn ScanV2>, ValueNotFound> {
         let left_scan = self.left_plan.open()?;
-        let temp_table = self.copy_records(self.right_plan.as_mut());
+        let right_plan = self.right_plan.as_mut();
+        let temp_table = Self::copy_records(self.transaction.clone(), right_plan);
 
         return Ok(Box::new(MultiBufferProductScan::new(
             self.transaction.clone(),
@@ -316,7 +317,7 @@ impl PlanV2 for MultiBufferProductPlan {
 
 struct MultiBufferProductScan {
     transaction: Rc<RefCell<TransactionV2>>,
-    left_scan: Box<dyn ScanV2>,
+    left_scan: Option<Box<dyn ScanV2>>,
     right_scan: Option<Box<dyn ScanV2>>,
     product_scan: Option<ProductScanV2>,
     layout: Layout,
@@ -342,7 +343,7 @@ impl MultiBufferProductScan {
 
         MultiBufferProductScan {
             transaction,
-            left_scan,
+            left_scan: Some(left_scan),
             product_scan: None,
             right_scan: None,
             layout,
@@ -353,7 +354,7 @@ impl MultiBufferProductScan {
         }
     }
 
-    fn use_next_chunk(&mut self, left_scan: Option<Box<dyn ScanV2>>) -> bool {
+    fn use_next_chunk(&mut self) -> bool {
         if let Some(right_scan) = self.right_scan.as_mut() {
             right_scan.close();
         }
@@ -376,21 +377,108 @@ impl MultiBufferProductScan {
             end_block_index,
         );
 
-        self.left_scan.move_to_before_first().unwrap();
-
         let current_product_scan = self.product_scan.take();
 
-        self.product_scan = if let Some(left_scan) = left_scan {
-            Some(ProductScanV2::new(left_scan, Box::new(right_scan)))
+        self.left_scan = if let Some(prod_scan) = current_product_scan {
+            Some(prod_scan.left_scan)
         } else {
-            Some(ProductScanV2::new_with_product_scan(
-                current_product_scan.unwrap(),
-                Box::new(right_scan),
-            ))
+            self.left_scan.take()
         };
+
+        self.left_scan
+            .as_mut()
+            .unwrap()
+            .move_to_before_first()
+            .unwrap();
+
+        self.product_scan = Some(ProductScanV2::new(
+            self.left_scan.take().unwrap(),
+            Box::new(right_scan),
+        ));
 
         self.next_block_index = end_block_index + 1;
 
         return true;
+    }
+}
+
+impl ScanV2 for MultiBufferProductScan {
+    fn next(&mut self) -> Result<bool, ValueNotFound> {
+        while !self.product_scan.as_mut().unwrap().next()? {
+            if !self.use_next_chunk() {
+                return Ok(false);
+            }
+        }
+
+        return Ok(true);
+    }
+
+    fn get_integer(&mut self, field_name: crate::predicate::TableNameAndFieldName) -> Option<i32> {
+        let product_scan = self.product_scan.as_mut().unwrap();
+        product_scan.get_integer(field_name)
+    }
+
+    fn get_string(
+        &mut self,
+        field_name: crate::predicate::TableNameAndFieldName,
+    ) -> Option<String> {
+        let product_scan = self.product_scan.as_mut().unwrap();
+        product_scan.get_string(field_name)
+    }
+
+    fn move_to_before_first(&mut self) -> Result<(), ValueNotFound> {
+        if let Some(product_scan) = self.product_scan.as_mut() {
+            product_scan.move_to_before_first()?;
+        }
+        Ok(())
+    }
+
+    fn close(&mut self) {
+        if let Some(product_scan) = self.product_scan.as_mut() {
+            product_scan.close();
+        }
+    }
+
+    fn get_value(
+        &mut self,
+        field_name: crate::predicate::TableNameAndFieldName,
+    ) -> Option<ConstantValue> {
+        let product_scan = self.product_scan.as_mut().unwrap();
+        product_scan.get_value(field_name)
+    }
+
+    fn has_field(&self, field_name: crate::predicate::TableNameAndFieldName) -> bool {
+        if let Some(product_scan) = self.product_scan.as_ref() {
+            return product_scan.has_field(field_name);
+        } else if let Some(left_scan) = self.left_scan.as_ref() {
+            return left_scan.has_field(field_name);
+        } else {
+            panic!("invalid state");
+        }
+    }
+
+    fn delete(&mut self) {
+        panic!("not implemented");
+    }
+
+    fn insert(&mut self) {
+        panic!("not implemented");
+    }
+
+    fn get_record_id(&self) -> crate::table_scan_v2::RecordID {
+        panic!("not implemented");
+    }
+
+    fn move_to_record_id(&mut self, record_id: crate::table_scan_v2::RecordID) {
+        panic!("not implemented");
+    }
+    fn set_integer(&mut self, field_name: String, value: i32) {
+        panic!("not implemented");
+    }
+    fn set_string(&mut self, field_name: String, value: String) {
+        panic!("not implemented");
+    }
+    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+        panic!("not implemented");
     }
 }
