@@ -186,7 +186,7 @@ impl ScanV2 for ProjectScanV2 {
 }
 
 pub struct ProductScanV2 {
-    left_scan: Box<dyn ScanV2>,
+    pub left_scan: Box<dyn ScanV2>,
     right_scan: Box<dyn ScanV2>,
     first_left_scan_next: bool,
 }

@@ -1,5 +1,5 @@
-use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use crate::file_manager::FileManager;
 use crate::page::Page;
@@ -139,8 +139,20 @@ impl BufferManagerV2 {
         let buffer = self.find_existing_buffer(&block_id);
 
         let buffer = match buffer {
-            Some(buffer) => Some(buffer),
+            Some(buffer) => {
+                println!(
+                    "Block {} is already in buffer pool. Pinning it. Number of available buffers: {}",
+                    block_id.to_string(),
+                    self.number_of_available
+                );
+                Some(buffer)
+            }
             None => {
+                println!(
+                    "Block {} is not in buffer pool. Choosing an unpinned buffer. Number of available buffers: {}",
+                    block_id.to_string(),
+                    self.number_of_available
+                );
                 let buffer = self.choose_unpinned_buffer();
                 match buffer {
                     Some(buffer) => {
@@ -216,13 +228,31 @@ impl BufferListV2 {
     }
 
     pub fn pin(&mut self, block_id: BlockId) {
-        if let Some(buffer) = self.buffer_manager.lock().unwrap().pin(block_id.clone()) {
+        let mut buffer_manager = self.buffer_manager.lock().unwrap();
+        if let Some(buffer) = buffer_manager.pin(block_id.clone()) {
+            println!(
+                "Pinned block: {}, number of available buffers: {}",
+                block_id.to_string(),
+                buffer_manager.get_available_buffer_size()
+            );
+
+            drop(buffer_manager);
+
             self.buffers.insert(block_id.clone(), Arc::clone(&buffer));
             self.pins.push(block_id);
         }
     }
 
     pub fn unpin(&mut self, block_id: BlockId) {
+        println!(
+            "Unpinned block: {}, number of available buffers: {}",
+            block_id.to_string(),
+            self.buffer_manager
+                .lock()
+                .unwrap()
+                .get_available_buffer_size()
+        );
+
         let mut should_remove_from_buffers = false;
 
         if let Some(buffer) = self.buffers.get(&block_id) {

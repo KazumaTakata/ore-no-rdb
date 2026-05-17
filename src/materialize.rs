@@ -99,7 +99,7 @@ impl PlanV2 for MaterializePlan {
     fn blocks_accessed(&self) -> u32 {
         let layout = Layout::new(self.src_plan.get_schema().clone());
         let rpb = self.transaction.borrow().get_block_size() as i32 / layout.get_slot_size();
-        return self.src_plan.blocks_accessed() as u32 / rpb as u32;
+        return self.src_plan.records_output() as u32 / rpb as u32;
     }
 
     fn records_output(&self) -> u32 {
