@@ -70,8 +70,9 @@ impl ChunkScan {
         end_buffer_index: usize,
     ) -> ChunkScan {
         let mut record_page_list = vec![];
-        for i in start_buffer_index..end_buffer_index {
-            let block = BlockId::new(file_name.clone(), i as u64);
+        for i in start_buffer_index..end_buffer_index + 1 {
+            let file_name_with_extension = format!("{}.tbl", file_name);
+            let block = BlockId::new(file_name_with_extension, i as u64);
             let record_page = RecordPage::new(transaction.clone(), layout.clone(), block);
             record_page_list.push(record_page);
         }
@@ -107,7 +108,7 @@ impl ScanV2 for ChunkScan {
             let record_page = self.get_current_record_page();
             record_page
                 .find_next_after_slot_id(current_slot_id)
-                .unwrap()
+                .unwrap_or(-1)
         };
 
         while self.current_slot_id < 0 {
@@ -255,6 +256,8 @@ impl MultiBufferProductPlan {
                 );
             }
         }
+        transaction.borrow_mut().commit();
+
         return temp_table;
     }
 }
@@ -320,8 +323,8 @@ struct MultiBufferProductScan {
     left_scan: Option<Box<dyn ScanV2>>,
     right_scan: Option<Box<dyn ScanV2>>,
     product_scan: Option<ProductScanV2>,
-    layout: Layout,
     file_name: String,
+    layout: Layout,
     chunk_size: usize,
     next_block_index: usize,
     file_size: usize,
@@ -335,7 +338,10 @@ impl MultiBufferProductScan {
     ) -> MultiBufferProductScan {
         let layout = temp_table.get_layout().clone();
         let file_name = temp_table.get_table_name().clone();
-        let file_size = transaction.borrow().get_size(file_name.clone());
+        let file_name_with_extension = format!("{}.tbl", file_name);
+        let file_size = transaction
+            .borrow()
+            .get_size(file_name_with_extension.clone());
 
         let available_buffer_size = transaction.borrow().get_available_buffer_size() as usize;
 
@@ -396,6 +402,12 @@ impl MultiBufferProductScan {
             Box::new(right_scan),
         ));
 
+        self.product_scan
+            .as_mut()
+            .unwrap()
+            .move_to_before_first()
+            .unwrap();
+
         self.next_block_index = end_block_index + 1;
 
         return true;
@@ -427,9 +439,8 @@ impl ScanV2 for MultiBufferProductScan {
     }
 
     fn move_to_before_first(&mut self) -> Result<(), ValueNotFound> {
-        if let Some(product_scan) = self.product_scan.as_mut() {
-            product_scan.move_to_before_first()?;
-        }
+        self.next_block_index = 0;
+        self.use_next_chunk();
         Ok(())
     }
 
@@ -480,5 +491,165 @@ impl ScanV2 for MultiBufferProductScan {
     }
     fn set_value(&mut self, field_name: String, value: ConstantValue) {
         panic!("not implemented");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::{
+        database::Database,
+        metadata_manager::MetadataManager,
+        parser::parse_sql,
+        plan_v2::{execute_create_table, execute_insert, get_optimized_product_plan, TablePlanV2},
+        predicate::ConstantValue,
+    };
+    use std::path::Path;
+
+    #[test]
+
+    fn test_optimized_product_plan() -> Result<(), ValueNotFound> {
+        let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+        let directory_path = Path::new(&directory_path_name);
+        let database = Database::new(directory_path);
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
+
+        let create_table_sql =
+            "create table test_table_1 (A_1 integer, B_1 varchar(10))".to_string();
+
+        let parsed_sql_list = parse_sql(create_table_sql.clone());
+
+        let create_table_data = match &parsed_sql_list[0] {
+            crate::parser::ParsedSQL::CreateTable(q) => q,
+            _ => panic!("Expected a CreateTable variant from parse_sql"),
+        };
+
+        let result = execute_create_table(
+            transaction.clone(),
+            &mut metadata_manager,
+            create_table_data.clone(),
+        );
+
+        if result.is_err() {
+            println!("Table already exists");
+        }
+
+        let create_table_sql =
+            "create table test_table_2 (A_2 integer, B_2 varchar(10))".to_string();
+
+        let parsed_sql_list = parse_sql(create_table_sql.clone());
+
+        let create_table_data = match &parsed_sql_list[0] {
+            crate::parser::ParsedSQL::CreateTable(q) => q,
+            _ => panic!("Expected a CreateTable variant from parse_sql"),
+        };
+
+        let result = execute_create_table(
+            transaction.clone(),
+            &mut metadata_manager,
+            create_table_data.clone(),
+        );
+
+        if result.is_err() {
+            println!("Table already exists");
+        }
+
+        let insert_sql_list_for_table_1 = (0..100)
+            .map(|i| {
+                format!(
+                    "insert into test_table_1 (A_1, B_1) values ({}, 'Hello World{}!')",
+                    i, i
+                )
+            })
+            .collect::<Vec<String>>();
+
+        let insert_sql_list_for_table_2 = (0..100)
+            .map(|i| {
+                format!(
+                    "insert into test_table_2 (A_2, B_2) values ({}, 'Hello World!{}!')",
+                    i + 1000,
+                    i + 1000
+                )
+            })
+            .collect::<Vec<String>>();
+
+        for insert_sql in insert_sql_list_for_table_1.iter() {
+            let parsed_sql_list = parse_sql(insert_sql.clone());
+
+            let insert_data = match &parsed_sql_list[0] {
+                crate::parser::ParsedSQL::Insert(q) => q,
+                _ => panic!("Expected a Insert variant from parse_sql"),
+            };
+
+            execute_insert(
+                transaction.clone(),
+                &mut metadata_manager,
+                insert_data.clone(),
+            );
+        }
+
+        for insert_sql in insert_sql_list_for_table_2.iter() {
+            let parsed_sql_list = parse_sql(insert_sql.clone());
+
+            let insert_data = match &parsed_sql_list[0] {
+                crate::parser::ParsedSQL::Insert(q) => q,
+                _ => panic!("Expected a Insert variant from parse_sql"),
+            };
+
+            execute_insert(
+                transaction.clone(),
+                &mut metadata_manager,
+                insert_data.clone(),
+            );
+        }
+
+        transaction.borrow_mut().commit();
+
+        let database = Database::new(directory_path);
+        let transaction = database.new_transaction(1);
+        let mut metadata_manager = MetadataManager::new(transaction.clone())?;
+
+        let table_plan_1 = TablePlanV2::new(
+            "test_table_1".to_string(),
+            transaction.clone(),
+            &mut metadata_manager,
+        )?;
+
+        let table_plan_2 = TablePlanV2::new(
+            "test_table_2".to_string(),
+            transaction.clone(),
+            &mut metadata_manager,
+        )?;
+
+        let left_plan = Box::new(table_plan_1) as Box<dyn PlanV2>;
+        let right_plan = Box::new(table_plan_2) as Box<dyn PlanV2>;
+
+        let mut prod_plan = MultiBufferProductPlan::new(transaction.clone(), left_plan, right_plan);
+
+        let mut scan = prod_plan.open()?;
+
+        scan.move_to_before_first()?;
+
+        while scan.next()? {
+            let a_1_value = scan.get_integer(TableNameAndFieldName::new(
+                Some("test_table_1".to_string()),
+                "A_1".to_string(),
+            ));
+            let b_1_value = scan.get_string(TableNameAndFieldName::new(
+                Some("test_table_1".to_string()),
+                "B_1".to_string(),
+            ));
+            let a_2_value = scan.get_integer(TableNameAndFieldName::new(None, "A_2".to_string()));
+            let b_2_value = scan.get_string(TableNameAndFieldName::new(None, "B_2".to_string()));
+
+            println!(
+                "A_1: {:?}, B_1: {:?}, A_2: {:?}, B_2: {:?}",
+                a_1_value, b_1_value, a_2_value, b_2_value
+            );
+        }
+
+        return Ok(());
     }
 }

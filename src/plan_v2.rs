@@ -332,7 +332,6 @@ pub fn get_optimized_product_plan(plans: &mut Vec<Box<dyn PlanV2>>) -> Box<dyn P
             plan = Box::new(product_plan_2);
         }
     }
-
     return plan;
 }
 
