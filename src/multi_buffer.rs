@@ -556,7 +556,7 @@ mod tests {
             println!("Table already exists");
         }
 
-        let insert_sql_list_for_table_1 = (0..100)
+        let insert_sql_list_for_table_1 = (0..2)
             .map(|i| {
                 format!(
                     "insert into test_table_1 (A_1, B_1) values ({}, 'Hello World{}!')",
@@ -565,7 +565,7 @@ mod tests {
             })
             .collect::<Vec<String>>();
 
-        let insert_sql_list_for_table_2 = (0..100)
+        let insert_sql_list_for_table_2 = (0..30)
             .map(|i| {
                 format!(
                     "insert into test_table_2 (A_2, B_2) values ({}, 'Hello World!{}!')",
@@ -632,6 +632,8 @@ mod tests {
 
         scan.move_to_before_first()?;
 
+        let mut result = vec![];
+
         while scan.next()? {
             let a_1_value = scan.get_integer(TableNameAndFieldName::new(
                 Some("test_table_1".to_string()),
@@ -644,10 +646,64 @@ mod tests {
             let a_2_value = scan.get_integer(TableNameAndFieldName::new(None, "A_2".to_string()));
             let b_2_value = scan.get_string(TableNameAndFieldName::new(None, "B_2".to_string()));
 
-            println!(
-                "A_1: {:?}, B_1: {:?}, A_2: {:?}, B_2: {:?}",
-                a_1_value, b_1_value, a_2_value, b_2_value
-            );
+            result.push((a_1_value, b_1_value, a_2_value, b_2_value));
+        }
+
+        let test_assert_value = (0..21)
+            .map(|i| {
+                (
+                    Some(0),
+                    Some(format!("Hello World{}!", 0)),
+                    Some(i + 1000),
+                    Some(format!("Hello World!{}!", i + 1000)),
+                )
+            })
+            .collect::<Vec<(Option<i32>, Option<String>, Option<i32>, Option<String>)>>();
+
+        let test_assert_value_2 = (0..21)
+            .map(|i| {
+                (
+                    Some(1),
+                    Some(format!("Hello World{}!", 1)),
+                    Some(i + 1000),
+                    Some(format!("Hello World!{}!", i + 1000)),
+                )
+            })
+            .collect::<Vec<(Option<i32>, Option<String>, Option<i32>, Option<String>)>>();
+
+        let test_assert_value_3 = (21..30)
+            .map(|i| {
+                (
+                    Some(0),
+                    Some(format!("Hello World{}!", 0)),
+                    Some(i + 1000),
+                    Some(format!("Hello World!{}!", i + 1000)),
+                )
+            })
+            .collect::<Vec<(Option<i32>, Option<String>, Option<i32>, Option<String>)>>();
+
+        let test_assert_value_4 = (21..30)
+            .map(|i| {
+                (
+                    Some(1),
+                    Some(format!("Hello World{}!", 1)),
+                    Some(i + 1000),
+                    Some(format!("Hello World!{}!", i + 1000)),
+                )
+            })
+            .collect::<Vec<(Option<i32>, Option<String>, Option<i32>, Option<String>)>>();
+
+        let test_assert_values = [
+            test_assert_value,
+            test_assert_value_2,
+            test_assert_value_3,
+            test_assert_value_4,
+        ]
+        .concat();
+
+        assert_eq!(result.len(), test_assert_values.len());
+        for (result, test_assert_value) in result.iter().zip(test_assert_values.iter()) {
+            assert_eq!(result, test_assert_value);
         }
 
         return Ok(());
