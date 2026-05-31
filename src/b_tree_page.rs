@@ -1,10 +1,12 @@
 use std::sync::{Arc, Mutex};
 
 use crate::{
+    b_tree_leaf::DirectoryEntry,
     block::BlockId,
     constant::INTEGER_BYTE_SIZE,
     predicate::{Constant, ConstantValue},
     record_page::{Layout, TableFieldType},
+    table_scan_v2::RecordID,
     transaction_v2::TransactionV2,
 };
 
@@ -15,7 +17,11 @@ pub struct BTreePage {
 }
 
 impl BTreePage {
-    fn new(transaction: Arc<Mutex<TransactionV2>>, current_block: BlockId, layout: Layout) -> Self {
+    pub fn new(
+        transaction: Arc<Mutex<TransactionV2>>,
+        current_block: BlockId,
+        layout: Layout,
+    ) -> Self {
         transaction.lock().unwrap().pin(current_block.clone());
         BTreePage {
             transaction,
@@ -24,7 +30,7 @@ impl BTreePage {
         }
     }
 
-    fn find_slot_before(&self, key: Constant) -> i32 {
+    pub fn find_slot_before(&self, key: Constant) -> i32 {
         let mut slot = 0;
 
         while slot < self.get_number_of_records()
@@ -36,7 +42,7 @@ impl BTreePage {
         return slot - 1;
     }
 
-    fn split(&mut self, split_pos: usize, flag: i32) -> BlockId {
+    pub fn split(&mut self, split_pos: usize, flag: i32) -> BlockId {
         let new_block_id = self.append_new(flag);
         let mut new_page = BTreePage::new(
             self.transaction.clone(),
@@ -49,7 +55,13 @@ impl BTreePage {
         return new_block_id;
     }
 
-    fn set_flag(&mut self, flag: i32) {
+    pub fn get_data_record_id(&self, slot: usize) -> RecordID {
+        let block_id = self.get_integer(slot, "block");
+        let slot_number = self.get_integer(slot, "id");
+        return RecordID::new(block_id as u64, slot_number);
+    }
+
+    pub fn set_flag(&mut self, flag: i32) {
         self.transaction.lock().unwrap().set_integer(
             self.current_block.clone().unwrap(),
             0,
@@ -58,7 +70,7 @@ impl BTreePage {
         );
     }
 
-    fn get_flag(&self) -> i32 {
+    pub fn get_flag(&self) -> i32 {
         self.transaction
             .lock()
             .unwrap()
@@ -87,7 +99,7 @@ impl BTreePage {
         self.set_number_of_records(number_of_records + 1);
     }
 
-    fn delete(&mut self, slot: usize) {
+    pub fn delete(&mut self, slot: usize) {
         let number_of_records = self.get_number_of_records();
         for i in slot..number_of_records as usize - 1 {
             self.copy_record(i + 1, i);
@@ -157,7 +169,7 @@ impl BTreePage {
         );
     }
 
-    fn close(&mut self) {
+    pub fn close(&mut self) {
         if let Some(current_block) = self.current_block.clone() {
             self.transaction
                 .lock()
@@ -168,7 +180,7 @@ impl BTreePage {
         self.current_block = None;
     }
 
-    fn is_full(&self) -> bool {
+    pub fn is_full(&self) -> bool {
         let number_of_records = self.get_number_of_records();
         let slot_position = self.get_slot_position(number_of_records as usize + 1);
         return slot_position >= self.transaction.lock().unwrap().get_block_size();
@@ -256,14 +268,31 @@ impl BTreePage {
         }
     }
 
-    fn get_number_of_records(&self) -> i32 {
+    pub fn insert_leaf(&mut self, slot: usize, value: Constant, record_id: RecordID) {
+        self.insert(slot);
+        self.set_value("dataval", slot, value);
+        self.set_integer(slot, "block", record_id.get_block_number() as i32);
+        self.set_integer(slot, "id", record_id.get_slot_number() as i32);
+    }
+
+    pub fn insert_directory(&mut self, slot: usize, directory_entry: DirectoryEntry) {
+        self.insert(slot);
+        self.set_value("dataval", slot, directory_entry.data_value.clone());
+        self.set_integer(slot, "block", directory_entry.block_number as i32);
+    }
+
+    pub fn get_child_number(&self, slot: usize) -> i32 {
+        return self.get_integer(slot, "block");
+    }
+
+    pub fn get_number_of_records(&self) -> i32 {
         self.transaction
             .lock()
             .unwrap()
             .get_integer(self.current_block.clone().unwrap(), INTEGER_BYTE_SIZE)
     }
 
-    fn get_data_value(&self, slot: i32) -> Constant {
+    pub fn get_data_value(&self, slot: usize) -> Constant {
         return self.get_value(slot, "dataval");
     }
 
@@ -284,8 +313,8 @@ impl BTreePage {
         }
     }
 
-    fn get_integer(&self, slot: i32, field_name: &str) -> i32 {
-        let position = self.field_position(slot as usize, field_name);
+    fn get_integer(&self, slot: usize, field_name: &str) -> i32 {
+        let position = self.field_position(slot, field_name);
         self.transaction
             .lock()
             .unwrap()
