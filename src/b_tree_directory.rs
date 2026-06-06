@@ -7,7 +7,7 @@ use crate::predicate::Constant;
 use crate::record_page::Layout;
 use crate::transaction_v2::TransactionV2;
 
-struct BTreeDirectory {
+pub struct BTreeDirectory {
     transaction: Arc<Mutex<TransactionV2>>,
     layout: Layout,
     contents: BTreePage,
@@ -15,7 +15,7 @@ struct BTreeDirectory {
 }
 
 impl BTreeDirectory {
-    fn new(
+    pub fn new(
         transaction: Arc<Mutex<TransactionV2>>,
         layout: Layout,
         block_id: BlockId,
@@ -31,7 +31,7 @@ impl BTreeDirectory {
         }
     }
 
-    fn close(&mut self) {
+    pub fn close(&mut self) {
         self.contents.close();
     }
 

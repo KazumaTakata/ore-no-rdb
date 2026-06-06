@@ -12,7 +12,7 @@ use crate::{
 
 pub struct BTreePage {
     transaction: Arc<Mutex<TransactionV2>>,
-    current_block: Option<BlockId>,
+    current_block: BlockId,
     layout: Layout,
 }
 
@@ -34,7 +34,10 @@ impl BTreePage {
         let mut slot = 0;
 
         while slot < self.get_number_of_records()
-            && self.get_data_value(slot).compare_to(key.value.clone()) == std::cmp::Ordering::Less
+            && self
+                .get_data_value(slot as usize)
+                .compare_to(key.value.clone())
+                == std::cmp::Ordering::Less
         {
             slot += 1;
         }
@@ -62,19 +65,17 @@ impl BTreePage {
     }
 
     pub fn set_flag(&mut self, flag: i32) {
-        self.transaction.lock().unwrap().set_integer(
-            self.current_block.clone().unwrap(),
-            0,
-            flag,
-            true,
-        );
+        self.transaction
+            .lock()
+            .unwrap()
+            .set_integer(self.current_block.clone(), 0, flag, true);
     }
 
     pub fn get_flag(&self) -> i32 {
         self.transaction
             .lock()
             .unwrap()
-            .get_integer(self.current_block.clone().unwrap(), 0)
+            .get_integer(self.current_block.clone(), 0)
     }
 
     fn transfer_records(&mut self, slot: usize, dest: &mut BTreePage) {
@@ -109,7 +110,7 @@ impl BTreePage {
 
     fn set_number_of_records(&mut self, number_of_records: i32) {
         self.transaction.lock().unwrap().set_integer(
-            self.current_block.clone().unwrap(),
+            self.current_block.clone(),
             INTEGER_BYTE_SIZE,
             number_of_records,
             true,
@@ -152,7 +153,7 @@ impl BTreePage {
     fn set_integer(&mut self, slot: usize, field_name: &str, integer_value: i32) {
         let position = self.field_position(slot, field_name);
         self.transaction.lock().unwrap().set_integer(
-            self.current_block.clone().unwrap(),
+            self.current_block.clone(),
             position,
             integer_value,
             true,
@@ -162,7 +163,7 @@ impl BTreePage {
     fn set_string(&mut self, slot: usize, field_name: &str, string_value: String) {
         let position = self.field_position(slot, field_name);
         self.transaction.lock().unwrap().set_string(
-            self.current_block.clone().unwrap(),
+            self.current_block.clone(),
             position,
             &string_value,
             true,
@@ -170,14 +171,10 @@ impl BTreePage {
     }
 
     pub fn close(&mut self) {
-        if let Some(current_block) = self.current_block.clone() {
-            self.transaction
-                .lock()
-                .unwrap()
-                .unpin(current_block.clone());
-        }
-
-        self.current_block = None;
+        self.transaction
+            .lock()
+            .unwrap()
+            .unpin(self.current_block.clone());
     }
 
     pub fn is_full(&self) -> bool {
@@ -191,7 +188,7 @@ impl BTreePage {
             .transaction
             .lock()
             .unwrap()
-            .append(self.current_block.clone().unwrap().get_file_name());
+            .append(self.current_block.clone().get_file_name());
 
         self.transaction.lock().unwrap().pin(block_id.clone());
         self.format(block_id.clone(), flag);
@@ -216,15 +213,13 @@ impl BTreePage {
     /// - `4..8`   : このページが持つレコード数（初期値 0）
     /// - `8..`    : レコード本体。slot ごとに `layout` の各 field が
     ///              `get_offset(field)` の位置に格納される。
-    fn format(&self, block_id: BlockId, flag: i32) {
+    pub fn format(&self, block_id: BlockId, flag: i32) {
+        self.transaction
+            .lock()
+            .unwrap()
+            .set_integer(self.current_block.clone(), 0, flag, false);
         self.transaction.lock().unwrap().set_integer(
-            self.current_block.clone().unwrap(),
-            0,
-            flag,
-            false,
-        );
-        self.transaction.lock().unwrap().set_integer(
-            self.current_block.clone().unwrap(),
+            self.current_block.clone(),
             INTEGER_BYTE_SIZE,
             0,
             false,
@@ -289,7 +284,7 @@ impl BTreePage {
         self.transaction
             .lock()
             .unwrap()
-            .get_integer(self.current_block.clone().unwrap(), INTEGER_BYTE_SIZE)
+            .get_integer(self.current_block.clone(), INTEGER_BYTE_SIZE)
     }
 
     pub fn get_data_value(&self, slot: usize) -> Constant {
@@ -321,8 +316,8 @@ impl BTreePage {
             .get_integer(self.current_block.clone(), position)
     }
 
-    fn get_string(&self, slot: i32, field_name: &str) -> String {
-        let position = self.field_position(slot as usize, field_name);
+    fn get_string(&self, slot: usize, field_name: &str) -> String {
+        let position = self.field_position(slot, field_name);
         self.transaction
             .lock()
             .unwrap()

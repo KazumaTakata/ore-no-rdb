@@ -12,7 +12,7 @@ pub struct DirectoryEntry {
     pub data_value: Constant,
 }
 
-struct BTreeLeaf {
+pub struct BTreeLeaf {
     transaction: Arc<Mutex<TransactionV2>>,
     layout: Layout,
     search_key: Constant,
@@ -21,7 +21,7 @@ struct BTreeLeaf {
 }
 
 impl BTreeLeaf {
-    fn new(
+    pub fn new(
         transaction: Arc<Mutex<TransactionV2>>,
         layout: Layout,
         search_key: Constant,
@@ -29,7 +29,7 @@ impl BTreeLeaf {
     ) -> BTreeLeaf {
         let contents = BTreePage::new(transaction.clone(), block_id, layout.clone());
 
-        let current_slot = contents.find_slot_before(search_key.clone());
+        let current_slot = contents.find_slot_before(search_key.clone()) as usize;
 
         BTreeLeaf {
             transaction,
@@ -40,28 +40,28 @@ impl BTreeLeaf {
         }
     }
 
-    fn close(&mut self) {
+    pub fn close(&mut self) {
         self.contents.close();
     }
 
-    fn next(&mut self) -> bool {
+    pub fn next(&mut self) -> bool {
         self.current_slot += 1;
 
-        if self.current_slot >= self.contents.get_number_of_records() {
-            return self.try_overflow();
+        if self.current_slot >= self.contents.get_number_of_records() as usize {
+            self.try_overflow()
         } else if self
             .contents
             .get_data_value(self.current_slot)
             .equals(self.search_key.value.clone())
         {
-            return true;
+            true
         } else {
-            return self.try_overflow();
+            self.try_overflow()
         }
     }
 
     pub fn get_data_record_id(&self) -> RecordID {
-        return self.contents.get_data_record_id(self.current_slot);
+        self.contents.get_data_record_id(self.current_slot)
     }
 
     pub fn delete(&mut self, record_id: RecordID) {
@@ -75,10 +75,12 @@ impl BTreeLeaf {
     }
 
     fn try_overflow(&mut self) -> bool {
-        return true;
+        // TODO: Handle overflow by checking if there is a directory entry for the next block and
+        // moving to it if necessary
+        true
     }
 
-    fn insert(&mut self, record_id: RecordID) -> Option<DirectoryEntry> {
+    pub fn insert(&mut self, record_id: RecordID) -> Option<DirectoryEntry> {
         if self.contents.get_flag() >= 0
             && self
                 .contents

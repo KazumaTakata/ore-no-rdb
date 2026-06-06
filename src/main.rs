@@ -10,6 +10,7 @@ use std::rc::Rc;
 use std::vec;
 
 mod b_tree_directory;
+mod b_tree_index;
 mod b_tree_leaf;
 mod b_tree_page;
 mod block;
