@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::{
     b_tree_leaf::DirectoryEntry,
@@ -11,18 +12,18 @@ use crate::{
 };
 
 pub struct BTreePage {
-    transaction: Arc<Mutex<TransactionV2>>,
+    transaction: Rc<RefCell<TransactionV2>>,
     current_block: BlockId,
     layout: Layout,
 }
 
 impl BTreePage {
     pub fn new(
-        transaction: Arc<Mutex<TransactionV2>>,
+        transaction: Rc<RefCell<TransactionV2>>,
         current_block: BlockId,
         layout: Layout,
     ) -> Self {
-        transaction.lock().unwrap().pin(current_block.clone());
+        transaction.borrow_mut().pin(current_block.clone());
         BTreePage {
             transaction,
             current_block,
@@ -66,15 +67,13 @@ impl BTreePage {
 
     pub fn set_flag(&mut self, flag: i32) {
         self.transaction
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .set_integer(self.current_block.clone(), 0, flag, true);
     }
 
     pub fn get_flag(&self) -> i32 {
         self.transaction
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .get_integer(self.current_block.clone(), 0)
     }
 
@@ -109,7 +108,7 @@ impl BTreePage {
     }
 
     fn set_number_of_records(&mut self, number_of_records: i32) {
-        self.transaction.lock().unwrap().set_integer(
+        self.transaction.borrow_mut().set_integer(
             self.current_block.clone(),
             INTEGER_BYTE_SIZE,
             number_of_records,
@@ -152,7 +151,7 @@ impl BTreePage {
 
     fn set_integer(&mut self, slot: usize, field_name: &str, integer_value: i32) {
         let position = self.field_position(slot, field_name);
-        self.transaction.lock().unwrap().set_integer(
+        self.transaction.borrow_mut().set_integer(
             self.current_block.clone(),
             position,
             integer_value,
@@ -162,7 +161,7 @@ impl BTreePage {
 
     fn set_string(&mut self, slot: usize, field_name: &str, string_value: String) {
         let position = self.field_position(slot, field_name);
-        self.transaction.lock().unwrap().set_string(
+        self.transaction.borrow_mut().set_string(
             self.current_block.clone(),
             position,
             &string_value,
@@ -172,25 +171,23 @@ impl BTreePage {
 
     pub fn close(&mut self) {
         self.transaction
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .unpin(self.current_block.clone());
     }
 
     pub fn is_full(&self) -> bool {
         let number_of_records = self.get_number_of_records();
         let slot_position = self.get_slot_position(number_of_records as usize + 1);
-        return slot_position >= self.transaction.lock().unwrap().get_block_size();
+        return slot_position >= self.transaction.borrow_mut().get_block_size();
     }
 
     fn append_new(&self, flag: i32) -> BlockId {
         let block_id = self
             .transaction
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .append(self.current_block.clone().get_file_name());
 
-        self.transaction.lock().unwrap().pin(block_id.clone());
+        self.transaction.borrow_mut().pin(block_id.clone());
         self.format(block_id.clone(), flag);
         return block_id;
     }
@@ -215,10 +212,9 @@ impl BTreePage {
     ///              `get_offset(field)` の位置に格納される。
     pub fn format(&self, block_id: BlockId, flag: i32) {
         self.transaction
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .set_integer(self.current_block.clone(), 0, flag, false);
-        self.transaction.lock().unwrap().set_integer(
+        self.transaction.borrow_mut().set_integer(
             self.current_block.clone(),
             INTEGER_BYTE_SIZE,
             0,
@@ -227,7 +223,7 @@ impl BTreePage {
 
         let record_size = self.layout.get_slot_size() as usize;
 
-        for position in (INTEGER_BYTE_SIZE * 2..=self.transaction.lock().unwrap().get_block_size())
+        for position in (INTEGER_BYTE_SIZE * 2..=self.transaction.borrow_mut().get_block_size())
             .step_by(record_size)
         {
             self.make_default_record(block_id.clone(), position as i32);
@@ -244,7 +240,7 @@ impl BTreePage {
                 .unwrap();
             match field_type {
                 crate::record_page::TableFieldType::INTEGER => {
-                    self.transaction.lock().unwrap().set_integer(
+                    self.transaction.borrow_mut().set_integer(
                         block_id.clone(),
                         position as usize + offset,
                         0,
@@ -252,7 +248,7 @@ impl BTreePage {
                     );
                 }
                 crate::record_page::TableFieldType::VARCHAR => {
-                    self.transaction.lock().unwrap().set_string(
+                    self.transaction.borrow_mut().set_string(
                         block_id.clone(),
                         position as usize + offset,
                         "",
@@ -282,8 +278,7 @@ impl BTreePage {
 
     pub fn get_number_of_records(&self) -> i32 {
         self.transaction
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .get_integer(self.current_block.clone(), INTEGER_BYTE_SIZE)
     }
 
@@ -311,16 +306,14 @@ impl BTreePage {
     fn get_integer(&self, slot: usize, field_name: &str) -> i32 {
         let position = self.field_position(slot, field_name);
         self.transaction
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .get_integer(self.current_block.clone(), position)
     }
 
     fn get_string(&self, slot: usize, field_name: &str) -> String {
         let position = self.field_position(slot, field_name);
         self.transaction
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .get_string(self.current_block.clone(), position)
     }
 

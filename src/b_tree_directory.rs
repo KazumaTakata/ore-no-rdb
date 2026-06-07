@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::b_tree_leaf::DirectoryEntry;
 use crate::b_tree_page::BTreePage;
@@ -8,7 +9,7 @@ use crate::record_page::Layout;
 use crate::transaction_v2::TransactionV2;
 
 pub struct BTreeDirectory {
-    transaction: Arc<Mutex<TransactionV2>>,
+    transaction: Rc<RefCell<TransactionV2>>,
     layout: Layout,
     contents: BTreePage,
     file_name: String,
@@ -16,7 +17,7 @@ pub struct BTreeDirectory {
 
 impl BTreeDirectory {
     pub fn new(
-        transaction: Arc<Mutex<TransactionV2>>,
+        transaction: Rc<RefCell<TransactionV2>>,
         layout: Layout,
         block_id: BlockId,
     ) -> BTreeDirectory {

@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::b_tree_page::BTreePage;
 use crate::block::BlockId;
@@ -13,7 +14,7 @@ pub struct DirectoryEntry {
 }
 
 pub struct BTreeLeaf {
-    transaction: Arc<Mutex<TransactionV2>>,
+    transaction: Rc<RefCell<TransactionV2>>,
     layout: Layout,
     search_key: Constant,
     contents: BTreePage,
@@ -22,7 +23,7 @@ pub struct BTreeLeaf {
 
 impl BTreeLeaf {
     pub fn new(
-        transaction: Arc<Mutex<TransactionV2>>,
+        transaction: Rc<RefCell<TransactionV2>>,
         layout: Layout,
         search_key: Constant,
         block_id: BlockId,

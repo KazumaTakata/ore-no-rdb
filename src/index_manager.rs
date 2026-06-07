@@ -1,6 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
+    b_tree_index::BTreeIndex,
     error::ValueNotFound,
     hash_index::HashIndex,
     predicate::TableNameAndFieldName,
@@ -157,20 +158,31 @@ impl IndexInfo {
         }
     }
 
-    pub fn open(&mut self) -> HashIndex {
+    pub fn open(&mut self) -> BTreeIndex {
         self.schema = TableSchema::new();
-        HashIndex::new(
+
+        BTreeIndex::new(
             self.transaction.clone(),
             self.index_name.clone(),
             self.index_layout.clone(),
         )
+        //
+        // HashIndex::new(
+        //     self.transaction.clone(),
+        //     self.index_name.clone(),
+        //     self.index_layout.clone(),
+        // )
+        //
     }
 
     pub fn blocks_accessed(&self) -> u32 {
         let record_per_block =
             self.transaction.borrow().get_block_size() as i32 / self.index_layout.get_slot_size();
         let number_of_blocks = self.stat_info.get_num_records() / record_per_block as u32;
-        return HashIndex::get_search_cost(number_of_blocks as u32);
+        BTreeIndex::search_cost(number_of_blocks as i32, record_per_block as i32) as u32
+        //
+        // return HashIndex::get_search_cost(number_of_blocks as u32);
+        //
     }
 
     pub fn records_output(&self) -> u32 {
@@ -217,17 +229,10 @@ mod tests {
     };
 
     use crate::{
-        buffer_manager_v2::BufferManagerV2,
-        concurrency_manager::LockTable,
-        file_manager::FileManager,
-        index_manager::IndexManager,
-        log_manager_v2::LogManagerV2,
-        record_page::TableSchema,
-        scan_v2::ScanV2,
-        stat_manager_v2::StatManagerV2,
-        table_manager_v2::TableManagerV2,
-        table_scan_v2::TableScan,
-        transaction_v2::TransactionV2,
+        buffer_manager_v2::BufferManagerV2, concurrency_manager::LockTable,
+        file_manager::FileManager, index_manager::IndexManager, log_manager_v2::LogManagerV2,
+        record_page::TableSchema, scan_v2::ScanV2, stat_manager_v2::StatManagerV2,
+        table_manager_v2::TableManagerV2, table_scan_v2::TableScan, transaction_v2::TransactionV2,
     };
 
     #[test]

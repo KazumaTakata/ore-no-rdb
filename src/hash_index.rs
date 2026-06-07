@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::{
+    b_tree_index::BTreeIndex,
     error::ValueNotFound,
     index_manager::IndexInfo,
     plan_v2::{PlanTreeNodeForDebug, PlanV2},
@@ -198,12 +199,12 @@ impl PlanV2 for IndexSelectPlan {
 
 pub struct IndexSelectScan {
     table_scan: Box<dyn ScanV2>,
-    index: Rc<RefCell<HashIndex>>,
+    index: Rc<RefCell<BTreeIndex>>,
     key: Constant,
 }
 
 impl IndexSelectScan {
-    pub fn new(table_scan: Box<dyn ScanV2>, index: Rc<RefCell<HashIndex>>, key: Constant) -> Self {
+    pub fn new(table_scan: Box<dyn ScanV2>, index: Rc<RefCell<BTreeIndex>>, key: Constant) -> Self {
         index.borrow_mut().before_first(key.clone());
         let index_select_scan = IndexSelectScan {
             table_scan,
@@ -221,10 +222,10 @@ impl ScanV2 for IndexSelectScan {
     }
 
     fn next(&mut self) -> Result<bool, ValueNotFound> {
-        let has_next = self.index.borrow_mut().next()?;
+        let has_next = self.index.borrow_mut().next();
 
         if has_next {
-            let record_id = self.index.borrow_mut().get_data_record_id()?;
+            let record_id = self.index.borrow_mut().get_data_record_id();
 
             if let Some(rid) = record_id {
                 self.table_scan.move_to_record_id(rid);

@@ -39,7 +39,7 @@ impl IndexUpdatePlanner {
             if let Some(info) = index_info {
                 let mut index_scan = info.open();
                 index_scan.before_first(insert_value.clone());
-                if index_scan.next()? {
+                if index_scan.next() {
                     return Err(DatabaseError::UniqueConstraintViolation(
                         UniqueConstraintError::new(field.clone(), table_name.clone()),
                     ));

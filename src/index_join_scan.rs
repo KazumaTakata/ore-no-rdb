@@ -1,6 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
+    b_tree_index::BTreeIndex,
     hash_index::HashIndex,
     index_update_planner::IndexUpdatePlanner,
     metadata_manager::MetadataManager,
@@ -24,7 +25,7 @@ use std::{
 
 pub struct IndexJoinScan {
     pub left_scan: Box<dyn ScanV2>,
-    pub index: HashIndex,
+    pub index: BTreeIndex,
     pub join_field: TableNameAndFieldName,
     pub right_scan: TableScan,
 }
@@ -32,7 +33,7 @@ pub struct IndexJoinScan {
 impl IndexJoinScan {
     pub fn new(
         left_scan: Box<dyn ScanV2>,
-        index: HashIndex,
+        index: BTreeIndex,
         join_field: TableNameAndFieldName,
         right_scan: TableScan,
     ) -> Self {
@@ -61,8 +62,8 @@ impl ScanV2 for IndexJoinScan {
 
     fn next(&mut self) -> Result<bool, crate::error::ValueNotFound> {
         loop {
-            if self.index.next().unwrap() {
-                let new_record_id = self.index.get_data_record_id().unwrap().unwrap();
+            if self.index.next() {
+                let new_record_id = self.index.get_data_record_id().unwrap();
                 self.right_scan.move_to_record_id(new_record_id);
                 return Ok(true);
             }
