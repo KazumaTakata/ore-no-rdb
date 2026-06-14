@@ -223,9 +223,8 @@ impl BTreePage {
 
         let record_size = self.layout.get_slot_size() as usize;
 
-        for position in (INTEGER_BYTE_SIZE * 2..=self.transaction.borrow_mut().get_block_size())
-            .step_by(record_size)
-        {
+        let block_size = self.transaction.borrow().get_block_size();
+        for position in (INTEGER_BYTE_SIZE * 2..=block_size - record_size).step_by(record_size) {
             self.make_default_record(block_id.clone(), position as i32);
         }
     }
@@ -261,14 +260,14 @@ impl BTreePage {
 
     pub fn insert_leaf(&mut self, slot: usize, value: Constant, record_id: RecordID) {
         self.insert(slot);
-        self.set_value("dataval", slot, value);
+        self.set_value("data_value", slot, value);
         self.set_integer(slot, "block", record_id.get_block_number() as i32);
         self.set_integer(slot, "id", record_id.get_slot_number() as i32);
     }
 
     pub fn insert_directory(&mut self, slot: usize, directory_entry: DirectoryEntry) {
         self.insert(slot);
-        self.set_value("dataval", slot, directory_entry.data_value.clone());
+        self.set_value("data_value", slot, directory_entry.data_value.clone());
         self.set_integer(slot, "block", directory_entry.block_number as i32);
     }
 
@@ -283,7 +282,7 @@ impl BTreePage {
     }
 
     pub fn get_data_value(&self, slot: usize) -> Constant {
-        return self.get_value(slot, "dataval");
+        return self.get_value(slot, "data_value");
     }
 
     fn get_value(&self, slot: usize, field_name: &str) -> Constant {

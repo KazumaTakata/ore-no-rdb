@@ -38,8 +38,11 @@ impl BTreeIndex {
 
         // directoryを初期化する
         let mut directory_schema = TableSchema::new();
+        // directory nodeのレイアウトは以下のようにする
+        // - block: 子供のブロック番号を格納する整数フィールド
+        // - data_value: インデックスが作成されているフィールドの値
         directory_schema.add("block".to_string(), leaf_layout.schema.clone());
-        directory_schema.add("dataval".to_string(), leaf_layout.schema.clone());
+        directory_schema.add("data_value".to_string(), leaf_layout.schema.clone());
 
         let directory_table_name = format!("{}_directory", index_name);
         let directory_layout = Layout::new(directory_schema.clone());
@@ -58,7 +61,7 @@ impl BTreeIndex {
             );
             node.format(root_block_id.clone(), 0);
             let field_type = directory_schema
-                .get_field_type("dataval".to_string())
+                .get_field_type("data_value".to_string())
                 .unwrap();
 
             let min_value = match field_type {

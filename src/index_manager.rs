@@ -3,7 +3,6 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     b_tree_index::BTreeIndex,
     error::ValueNotFound,
-    hash_index::HashIndex,
     predicate::TableNameAndFieldName,
     record_page::{Layout, TableFieldType, TableSchema},
     scan_v2::ScanV2,
@@ -198,6 +197,11 @@ impl IndexInfo {
 
     pub fn create_index_layout(table_schema: &TableSchema, field_name: String) -> Layout {
         let mut schema = TableSchema::new();
+
+        // leaf nodeのレイアウトは以下のようにする
+        // - block: ブロック番号を格納する整数フィールド
+        // - id: レコードIDを格納する整数フィールド
+        // - data_value: インデックスが作成されているフィールドの値
         schema.add_integer_field("block".to_string());
         schema.add_integer_field("id".to_string());
 
