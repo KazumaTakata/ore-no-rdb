@@ -117,7 +117,37 @@ impl BTreeLeaf {
             return None;
         }
 
-        // TODO: Handle overflow by splitting the leaf and creating a new directory entry
-        return None;
+        // TODO 最後のレコードと最初のレコードが同じ値の場合
+        // let first_value = self.contents.get_data_value(0);
+        // ...
+
+        let mut split_position = self.contents.get_number_of_records() / 2;
+        let mut split_key = self.contents.get_data_value(split_position as usize);
+
+        if split_key.equals(self.search_key.value.clone()) {
+            while self
+                .contents
+                .get_data_value(split_position as usize)
+                .equals(split_key.value.clone())
+            {
+                split_position += 1;
+            }
+
+            split_key = self.contents.get_data_value(split_position as usize);
+        } else {
+            while self
+                .contents
+                .get_data_value((split_position - 1) as usize)
+                .equals(split_key.value.clone())
+            {
+                split_position -= 1;
+            }
+        }
+
+        let new_block_id = self.contents.split(split_position as usize, -1);
+        return Some(DirectoryEntry {
+            block_number: new_block_id.get_block_number(),
+            data_value: split_key,
+        });
     }
 }

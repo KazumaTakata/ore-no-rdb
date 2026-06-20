@@ -203,15 +203,6 @@ mod tests {
 
         metadata_manager.create_table(table_name.clone(), &schema, transaction.clone());
 
-        let parsed_sql = parse_sql(
-            "insert into test_table (A, B) values (44, 'Hello World yay!111')".to_string(),
-        );
-
-        let insert_data = match &parsed_sql[0] {
-            crate::parser::ParsedSQL::Insert(q) => q,
-            _ => panic!("Expected a Insert variant from parse_sql"),
-        };
-
         metadata_manager.create_index(
             "my_index".to_string(),
             table_name.clone(),
@@ -219,15 +210,63 @@ mod tests {
             transaction.clone(),
         );
 
+        for i in 0..100 {
+            let parsed_sql = parse_sql(format!(
+                "insert into test_table (A, B) values ({}, 'Hello World yay!{}')",
+                i, i
+            ));
+
+            let insert_data = match &parsed_sql[0] {
+                crate::parser::ParsedSQL::Insert(q) => q,
+                _ => panic!("Expected a Insert variant from parse_sql"),
+            };
+            let index_update_planner = IndexUpdatePlanner::new();
+
+            println!("Inserting record: A = {}, B = 'Hello World yay!{}'", i, i);
+
+            index_update_planner.execute_insert(
+                insert_data.clone(),
+                transaction.clone(),
+                &mut metadata_manager,
+            );
+        }
+
         let index_update_planner = IndexUpdatePlanner::new();
 
-        index_update_planner.execute_insert(
-            insert_data.clone(),
-            transaction.clone(),
-            &mut metadata_manager,
-        );
-
         transaction.borrow_mut().commit();
+
+        let table_name = "test_table".to_string();
+
+        let mut indexes =
+            metadata_manager.get_index_info(table_name.clone(), transaction.clone())?;
+
+        let index_info = indexes.get_mut("A");
+
+        if let Some(info) = index_info {
+            let mut index = info.open();
+            index.before_first(Constant::new(crate::predicate::ConstantValue::Number(65)));
+            index.next();
+            let record_id = index.get_data_record_id();
+            let record_id = record_id.unwrap();
+
+            // assert_eq!(record_id.get_block_number(), 6);
+
+            let mut table_plan = TablePlanV2::new(
+                table_name.clone(),
+                transaction.clone(),
+                &mut metadata_manager,
+            )?;
+
+            let mut table_scan = table_plan.open()?;
+
+            table_scan.move_to_record_id(record_id);
+            let a_value = table_scan.get_integer(TableNameAndFieldName::new(None, "A".to_string()));
+            let b_value = table_scan.get_string(TableNameAndFieldName::new(None, "B".to_string()));
+            println!("Retrieved record: A = {:?}, B = {:?}", a_value, b_value);
+
+            // assert_eq!(a_value, Some(50));
+            // assert_eq!(b_value, Some("Hello World yay!50".to_string()));
+        }
 
         return Ok(());
     }
