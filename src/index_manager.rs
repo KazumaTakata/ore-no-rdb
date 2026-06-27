@@ -97,11 +97,6 @@ impl IndexManager {
                     .get_string(TableNameAndFieldName::new(None, "field_name".to_string()))
                     .unwrap();
 
-                println!(
-                    "Found index: {} on field: {} for table: {}",
-                    index_name, field_name, table_name
-                );
-
                 let layout = self
                     .table_manager
                     .borrow()

@@ -96,6 +96,7 @@ impl BTreePage {
         for i in (slot + 1..=number_of_records as usize).rev() {
             self.copy_record(i - 1, i);
         }
+
         self.set_number_of_records(number_of_records + 1);
     }
 
@@ -213,13 +214,10 @@ impl BTreePage {
     pub fn format(&self, block_id: BlockId, flag: i32) {
         self.transaction
             .borrow_mut()
-            .set_integer(self.current_block.clone(), 0, flag, false);
-        self.transaction.borrow_mut().set_integer(
-            self.current_block.clone(),
-            INTEGER_BYTE_SIZE,
-            0,
-            false,
-        );
+            .set_integer(block_id.clone(), 0, flag, false);
+        self.transaction
+            .borrow_mut()
+            .set_integer(block_id.clone(), INTEGER_BYTE_SIZE, 0, false);
 
         let record_size = self.layout.get_slot_size() as usize;
 

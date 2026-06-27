@@ -48,7 +48,9 @@ impl BTreeLeaf {
     pub fn next(&mut self) -> bool {
         self.current_slot += 1;
 
-        if self.current_slot >= self.contents.get_number_of_records() {
+        let number_of_records = self.contents.get_number_of_records();
+
+        if self.current_slot >= number_of_records {
             self.try_overflow()
         } else if self
             .contents
