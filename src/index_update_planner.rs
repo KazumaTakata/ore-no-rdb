@@ -210,7 +210,7 @@ mod tests {
             transaction.clone(),
         );
 
-        for i in 0..100 {
+        for i in 0..1000 {
             let parsed_sql = parse_sql(format!(
                 "insert into test_table (A, B) values ({}, 'Hello World yay!{}')",
                 i, i
@@ -231,9 +231,9 @@ mod tests {
             );
         }
 
-        let index_update_planner = IndexUpdatePlanner::new();
-
         transaction.borrow_mut().commit();
+
+        let index_update_planner = IndexUpdatePlanner::new();
 
         let table_name = "test_table".to_string();
 
@@ -244,7 +244,7 @@ mod tests {
 
         if let Some(info) = index_info {
             let mut index = info.open();
-            index.before_first(Constant::new(crate::predicate::ConstantValue::Number(65)));
+            index.before_first(Constant::new(crate::predicate::ConstantValue::Number(55)));
             index.next();
             let record_id = index.get_data_record_id();
             let record_id = record_id.unwrap();
