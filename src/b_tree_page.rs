@@ -130,7 +130,7 @@ impl BTreePage {
             .layout
             .schema
             .get_field_type(field_name.to_string())
-            .unwrap();
+            .unwrap_or_else(|| panic!("field '{}' not found in schema", field_name));
 
         match value_type {
             TableFieldType::INTEGER => {
@@ -229,12 +229,17 @@ impl BTreePage {
 
     fn make_default_record(&self, block_id: BlockId, position: i32) {
         for field_name in self.layout.schema.fields() {
-            let offset = self.layout.get_offset(field_name).unwrap() as usize;
+            // field_name は schema.fields() 由来なので offset / type は必ず存在する
+            let offset = self
+                .layout
+                .get_offset(field_name)
+                .expect("offset must exist for a field listed by the schema")
+                as usize;
             let field_type = self
                 .layout
                 .schema
                 .get_field_type(field_name.to_string())
-                .unwrap();
+                .expect("type must exist for a field listed by the schema");
             match field_type {
                 crate::record_page::TableFieldType::INTEGER => {
                     self.transaction.borrow_mut().set_integer(
@@ -315,8 +320,11 @@ impl BTreePage {
     }
 
     fn field_position(&self, slot: usize, field_name: &str) -> usize {
-        let offset = self.layout.get_offset(field_name);
-        return self.get_slot_position(slot) + offset.unwrap() as usize;
+        let offset = self
+            .layout
+            .get_offset(field_name)
+            .unwrap_or_else(|| panic!("field '{}' not found in layout", field_name));
+        return self.get_slot_position(slot) + offset as usize;
     }
 
     fn get_slot_position(&self, slot: usize) -> usize {

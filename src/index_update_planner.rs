@@ -244,6 +244,10 @@ mod tests {
 
         if let Some(info) = index_info {
             let mut index = info.open();
+
+            // 構築された B-tree を stdout に可視化する
+            index.print_tree();
+
             index.before_first(Constant::new(crate::predicate::ConstantValue::Number(55)));
             index.next();
             let record_id = index.get_data_record_id();
