@@ -3,8 +3,8 @@ use std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc};
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
     group_by::{AggregateFunction, AggregateFunctionType, AvgFunction, GroupByPlan, MaxFunction},
-    hash_index::IndexSelectPlan,
     index_manager::IndexInfo,
+    index_select_plan::IndexSelectPlan,
     metadata_manager::MetadataManager,
     parser::{parse_sql, CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
     predicate::TableNameAndFieldName,

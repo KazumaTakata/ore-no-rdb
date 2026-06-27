@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::b_tree_directory::BTreeDirectory;
 use crate::b_tree_leaf::{BTreeLeaf, DirectoryEntry};
@@ -9,9 +10,9 @@ use crate::record_page::{Layout, TableFieldType, TableSchema};
 use crate::table_scan_v2::RecordID;
 use crate::transaction_v2::TransactionV2;
 
-struct BTreeIndex {
+pub struct BTreeIndex {
     leaf_table_name: String,
-    transaction: Arc<Mutex<TransactionV2>>,
+    transaction: Rc<RefCell<TransactionV2>>,
     directory_layout: Layout,
     leaf_layout: Layout,
     leaf: Option<BTreeLeaf>,
@@ -19,41 +20,40 @@ struct BTreeIndex {
 }
 
 impl BTreeIndex {
-    fn new(
-        transaction: Arc<Mutex<TransactionV2>>,
+    pub fn new(
+        transaction: Rc<RefCell<TransactionV2>>,
         index_name: String,
         leaf_layout: Layout,
     ) -> BTreeIndex {
         // leafを初期化する
         let leaf_table_name = format!("{}_leaf", index_name);
 
-        let leaf_table_size = transaction
-            .lock()
-            .unwrap()
-            .get_size(leaf_table_name.clone());
+        let leaf_table_size = transaction.borrow_mut().get_size(leaf_table_name.clone());
 
         if leaf_table_size == 0 {
-            let block_id = transaction.lock().unwrap().append(&leaf_table_name);
+            let block_id = transaction.borrow_mut().append(&leaf_table_name);
             let node = BTreePage::new(transaction.clone(), block_id.clone(), leaf_layout.clone());
             node.format(block_id.clone(), -1);
         }
 
         // directoryを初期化する
         let mut directory_schema = TableSchema::new();
+        // directory nodeのレイアウトは以下のようにする
+        // - block: 子供のブロック番号を格納する整数フィールド
+        // - data_value: インデックスが作成されているフィールドの値
         directory_schema.add("block".to_string(), leaf_layout.schema.clone());
-        directory_schema.add("dataval".to_string(), leaf_layout.schema.clone());
+        directory_schema.add("data_value".to_string(), leaf_layout.schema.clone());
 
         let directory_table_name = format!("{}_directory", index_name);
         let directory_layout = Layout::new(directory_schema.clone());
         let root_block_id = BlockId::new(directory_table_name.clone(), 0);
 
         if transaction
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .get_size(directory_table_name.clone())
             == 0
         {
-            transaction.lock().unwrap().append(&directory_table_name);
+            transaction.borrow_mut().append(&directory_table_name);
             let mut node = BTreePage::new(
                 transaction.clone(),
                 root_block_id.clone(),
@@ -61,7 +61,7 @@ impl BTreeIndex {
             );
             node.format(root_block_id.clone(), 0);
             let field_type = directory_schema
-                .get_field_type("dataval".to_string())
+                .get_field_type("data_value".to_string())
                 .unwrap();
 
             let min_value = match field_type {
@@ -87,7 +87,7 @@ impl BTreeIndex {
         }
     }
 
-    fn before_first(&mut self, search_key: Constant) {
+    pub fn before_first(&mut self, search_key: Constant) {
         self.close();
         let mut btree_root = BTreeDirectory::new(
             self.transaction.clone(),
@@ -115,7 +115,7 @@ impl BTreeIndex {
         false
     }
 
-    fn close(&mut self) {
+    pub fn close(&mut self) {
         if let Some(leaf) = &mut self.leaf {
             leaf.close();
         }

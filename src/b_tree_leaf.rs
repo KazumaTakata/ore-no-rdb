@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::b_tree_page::BTreePage;
 use crate::block::BlockId;
@@ -13,23 +14,23 @@ pub struct DirectoryEntry {
 }
 
 pub struct BTreeLeaf {
-    transaction: Arc<Mutex<TransactionV2>>,
+    transaction: Rc<RefCell<TransactionV2>>,
     layout: Layout,
     search_key: Constant,
     contents: BTreePage,
-    current_slot: usize,
+    current_slot: i32,
 }
 
 impl BTreeLeaf {
     pub fn new(
-        transaction: Arc<Mutex<TransactionV2>>,
+        transaction: Rc<RefCell<TransactionV2>>,
         layout: Layout,
         search_key: Constant,
         block_id: BlockId,
     ) -> BTreeLeaf {
         let contents = BTreePage::new(transaction.clone(), block_id, layout.clone());
 
-        let current_slot = contents.find_slot_before(search_key.clone()) as usize;
+        let current_slot = contents.find_slot_before(search_key.clone());
 
         BTreeLeaf {
             transaction,
@@ -47,11 +48,13 @@ impl BTreeLeaf {
     pub fn next(&mut self) -> bool {
         self.current_slot += 1;
 
-        if self.current_slot >= self.contents.get_number_of_records() as usize {
+        let number_of_records = self.contents.get_number_of_records();
+
+        if self.current_slot >= number_of_records {
             self.try_overflow()
         } else if self
             .contents
-            .get_data_value(self.current_slot)
+            .get_data_value(self.current_slot as usize)
             .equals(self.search_key.value.clone())
         {
             true
@@ -61,14 +64,14 @@ impl BTreeLeaf {
     }
 
     pub fn get_data_record_id(&self) -> RecordID {
-        self.contents.get_data_record_id(self.current_slot)
+        self.contents.get_data_record_id(self.current_slot as usize)
     }
 
     pub fn delete(&mut self, record_id: RecordID) {
         while self.next() {
             let data_record_id = self.get_data_record_id();
             if data_record_id.equals(&record_id) {
-                self.contents.delete(self.current_slot);
+                self.contents.delete(self.current_slot as usize);
                 return;
             }
         }
@@ -93,8 +96,11 @@ impl BTreeLeaf {
             let new_block_id = self.contents.split(0, current_flag);
             self.current_slot = 0;
             self.contents.set_flag(-1);
-            self.contents
-                .insert_leaf(self.current_slot, self.search_key.clone(), record_id);
+            self.contents.insert_leaf(
+                self.current_slot as usize,
+                self.search_key.clone(),
+                record_id,
+            );
             let directory_entry = DirectoryEntry {
                 block_number: new_block_id.get_block_number(),
                 data_value: first_value,
@@ -103,14 +109,47 @@ impl BTreeLeaf {
         }
 
         self.current_slot += 1;
-        self.contents
-            .insert_leaf(self.current_slot, self.search_key.clone(), record_id);
+        self.contents.insert_leaf(
+            self.current_slot as usize,
+            self.search_key.clone(),
+            record_id,
+        );
 
         if !self.contents.is_full() {
             return None;
         }
 
-        // TODO: Handle overflow by splitting the leaf and creating a new directory entry
-        return None;
+        // TODO 最後のレコードと最初のレコードが同じ値の場合
+        // let first_value = self.contents.get_data_value(0);
+        // ...
+
+        let mut split_position = self.contents.get_number_of_records() / 2;
+        let mut split_key = self.contents.get_data_value(split_position as usize);
+
+        if split_key.equals(self.search_key.value.clone()) {
+            while self
+                .contents
+                .get_data_value(split_position as usize)
+                .equals(split_key.value.clone())
+            {
+                split_position += 1;
+            }
+
+            split_key = self.contents.get_data_value(split_position as usize);
+        } else {
+            while self
+                .contents
+                .get_data_value((split_position - 1) as usize)
+                .equals(split_key.value.clone())
+            {
+                split_position -= 1;
+            }
+        }
+
+        let new_block_id = self.contents.split(split_position as usize, -1);
+        return Some(DirectoryEntry {
+            block_number: new_block_id.get_block_number(),
+            data_value: split_key,
+        });
     }
 }
