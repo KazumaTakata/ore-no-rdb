@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::storage::file_manager::FileManager;
 use crate::storage::page::Page;
-use crate::{storage::block::BlockId, constant::INTEGER_BYTE_SIZE};
+use crate::{constant::INTEGER_BYTE_SIZE, storage::block::BlockId};
 pub struct LogManagerV2 {
     current_block_id: BlockId,
     log_file_name: String,
@@ -13,7 +13,10 @@ pub struct LogManagerV2 {
 }
 
 impl LogManagerV2 {
-    pub fn new(file_manager: Arc<Mutex<FileManager>>, log_file_name: String) -> LogManagerV2 {
+    pub fn new(
+        file_manager: Arc<Mutex<FileManager>>,
+        log_file_name: String,
+    ) -> std::io::Result<LogManagerV2> {
         let file_manager_mut_ref = file_manager.lock().unwrap();
         let log_size = file_manager_mut_ref.length(&log_file_name);
 
@@ -22,7 +25,7 @@ impl LogManagerV2 {
         let block_id;
 
         if log_size == 0 {
-            block_id = file_manager_mut_ref.append(&log_file_name);
+            block_id = file_manager_mut_ref.append(&log_file_name)?;
             log_page.set_integer(0, file_manager_mut_ref.block_size as i32);
             file_manager_mut_ref.write(&block_id, &mut log_page);
         } else {
@@ -30,30 +33,30 @@ impl LogManagerV2 {
             file_manager_mut_ref.read(&block_id, &mut log_page);
         }
 
-        LogManagerV2 {
+        Ok(LogManagerV2 {
             current_block_id: block_id,
             log_file_name,
             log_page,
             latest_lsn: 0,
             latest_saved_lsn: 0,
             file_manager: file_manager.clone(),
-        }
+        })
     }
 
-    pub fn append_new_block(&mut self) -> BlockId {
+    pub fn append_new_block(&mut self) -> std::io::Result<BlockId> {
         let block_id = self
             .file_manager
             .lock()
             .unwrap()
-            .append(&self.log_file_name);
+            .append(&self.log_file_name)?;
         self.log_page = Page::new(self.file_manager.lock().unwrap().block_size);
         self.log_page
             .set_integer(0, self.file_manager.lock().unwrap().block_size as i32);
         self.file_manager
             .lock()
             .unwrap()
-            .write(&block_id, &mut self.log_page);
-        block_id
+            .write(&block_id, &mut self.log_page)?;
+        Ok(block_id)
     }
 
     pub fn flush(&mut self) {
@@ -71,7 +74,7 @@ impl LogManagerV2 {
         }
     }
 
-    pub fn append_record(&mut self, record: &[u8]) -> i32 {
+    pub fn append_record(&mut self, record: &[u8]) -> std::io::Result<i32> {
         let record_length = record.len();
         let mut boundary = self.log_page.get_integer(0);
 
@@ -79,7 +82,7 @@ impl LogManagerV2 {
 
         if (boundary as usize) < bytes_needed + 4 {
             self.flush();
-            self.current_block_id = self.append_new_block();
+            self.current_block_id = self.append_new_block()?;
             boundary = self.log_page.get_integer(0);
         }
 
@@ -87,7 +90,7 @@ impl LogManagerV2 {
         self.log_page.set_integer(0, offset as i32);
         self.log_page.set_bytes(offset, record);
         self.latest_lsn += 1;
-        self.latest_lsn
+        Ok(self.latest_lsn)
     }
 
     pub fn iterator(&mut self) -> LogIteratorV2 {
@@ -151,7 +154,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_log_manager() {
+    fn test_log_manager() -> std::io::Result<()> {
         let test_dir = std::path::Path::new("test_data");
 
         let block_size = 400;
@@ -160,13 +163,14 @@ mod tests {
         let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
             file_manager.clone(),
             "log.txt".to_string(),
-        )));
+        )?));
 
         create_records(1, 36, log_manager.clone());
 
         print_log_records(log_manager.clone());
 
         remove_file(test_dir.join("log.txt")).unwrap_or_default();
+        Ok(())
     }
 
     fn print_log_records(log_manager: Arc<Mutex<LogManagerV2>>) {
