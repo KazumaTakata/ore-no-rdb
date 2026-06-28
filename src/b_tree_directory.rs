@@ -5,7 +5,7 @@ use crate::b_tree_leaf::DirectoryEntry;
 use crate::b_tree_page::BTreePage;
 use crate::storage::block::BlockId;
 use crate::predicate::Constant;
-use crate::record_page::Layout;
+use crate::record::record_page::Layout;
 use crate::tx::transaction_v2::TransactionV2;
 
 pub struct BTreeDirectory {

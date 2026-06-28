@@ -10,9 +10,9 @@ use crate::{
     index_manager::IndexInfo,
     plan_v2::{PlanTreeNodeForDebug, PlanV2},
     predicate::{Constant, ConstantValue, TableNameAndFieldName},
-    record_page::{Layout, TableSchema},
-    scan_v2::ScanV2,
-    table_scan_v2::{RecordID, TableScan},
+    record::record_page::{Layout, TableSchema},
+    record::scan_v2::ScanV2,
+    record::table_scan_v2::{RecordID, TableScan},
     tx::transaction_v2::TransactionV2,
 };
 

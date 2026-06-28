@@ -6,8 +6,8 @@ use crate::{
     storage::block::BlockId,
     constant::INTEGER_BYTE_SIZE,
     predicate::{Constant, ConstantValue},
-    record_page::{Layout, TableFieldType},
-    table_scan_v2::RecordID,
+    record::record_page::{Layout, TableFieldType},
+    record::table_scan_v2::RecordID,
     tx::transaction_v2::TransactionV2,
 };
 
@@ -241,7 +241,7 @@ impl BTreePage {
                 .get_field_type(field_name.to_string())
                 .expect("type must exist for a field listed by the schema");
             match field_type {
-                crate::record_page::TableFieldType::INTEGER => {
+                crate::record::record_page::TableFieldType::INTEGER => {
                     self.transaction.borrow_mut().set_integer(
                         block_id.clone(),
                         position as usize + offset,
@@ -249,7 +249,7 @@ impl BTreePage {
                         false,
                     );
                 }
-                crate::record_page::TableFieldType::VARCHAR => {
+                crate::record::record_page::TableFieldType::VARCHAR => {
                     self.transaction.borrow_mut().set_string(
                         block_id.clone(),
                         position as usize + offset,
@@ -292,11 +292,11 @@ impl BTreePage {
         let value_type = self.layout.schema.get_field_type(field_name.to_string());
         match value_type {
             Some(field_type) => match field_type {
-                crate::record_page::TableFieldType::INTEGER => {
+                crate::record::record_page::TableFieldType::INTEGER => {
                     let value = self.get_integer(slot, field_name);
                     Constant::new(ConstantValue::Number(value))
                 }
-                crate::record_page::TableFieldType::VARCHAR => {
+                crate::record::record_page::TableFieldType::VARCHAR => {
                     let value = self.get_string(slot, field_name);
                     Constant::new(ConstantValue::String(value))
                 }

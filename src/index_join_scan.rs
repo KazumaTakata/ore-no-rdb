@@ -7,16 +7,16 @@ use crate::{
     metadata_manager::MetadataManager,
     parser::InsertData,
     predicate::{Constant, ConstantValue, TableNameAndFieldName},
-    scan_v2::ScanV2,
+    record::scan_v2::ScanV2,
     storage::file_manager::FileManager,
-    table_scan_v2::TableScan,
+    record::table_scan_v2::TableScan,
     tx::transaction_v2::TransactionV2,
 };
 
 #[cfg(test)]
 use crate::{
     buffer::buffer_manager_v2::BufferManagerV2, tx::concurrency_manager::LockTable,
-    storage::log_manager_v2::LogManagerV2, record_page::TableSchema, table_manager_v2::TableManagerV2,
+    storage::log_manager_v2::LogManagerV2, record::record_page::TableSchema, table_manager_v2::TableManagerV2,
 };
 #[cfg(test)]
 use std::{
@@ -116,7 +116,7 @@ impl ScanV2 for IndexJoinScan {
         panic!("IndexJoinScan does not support delete operation");
     }
 
-    fn get_record_id(&self) -> crate::table_scan_v2::RecordID {
+    fn get_record_id(&self) -> crate::record::table_scan_v2::RecordID {
         panic!("IndexJoinScan does not support get_record_id operation");
     }
 
@@ -124,7 +124,7 @@ impl ScanV2 for IndexJoinScan {
         panic!("IndexJoinScan does not support insert operation");
     }
 
-    fn move_to_record_id(&mut self, record_id: crate::table_scan_v2::RecordID) {
+    fn move_to_record_id(&mut self, record_id: crate::record::table_scan_v2::RecordID) {
         panic!("IndexJoinScan does not support move_to_record_id operation");
     }
 

@@ -2,7 +2,7 @@ use crate::{
     error::ValueNotFound,
     predicate::{ConstantValue, TableNameAndFieldName},
     predicate_v3::PredicateV2,
-    table_scan_v2::RecordID,
+    record::table_scan_v2::RecordID,
 };
 
 pub trait ScanV2 {
@@ -313,10 +313,10 @@ mod tests {
         storage::log_manager_v2::LogManagerV2,
         predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
         predicate_v3::{ExpressionV2, PredicateV2, TermV2},
-        record_page::{Layout, TableSchema},
-        scan_v2::{ScanV2, SelectScanV2},
+        record::record_page::{Layout, TableSchema},
+        record::scan_v2::{ScanV2, SelectScanV2},
         table_manager_v2::TableManagerV2,
-        table_scan_v2::TableScan,
+        record::table_scan_v2::TableScan,
         tx::transaction_v2::TransactionV2,
         view_manager::ViewManager,
     };

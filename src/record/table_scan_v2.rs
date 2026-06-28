@@ -4,9 +4,9 @@ use crate::{
     storage::block::BlockId,
     error::ValueNotFound,
     predicate::TableNameAndFieldName,
-    record_page::{Layout, TableFieldType},
-    record_page_v2::RecordPage,
-    scan_v2::ScanV2,
+    record::record_page::{Layout, TableFieldType},
+    record::record_page_v2::RecordPage,
+    record::scan_v2::ScanV2,
     tx::transaction_v2::TransactionV2,
 };
 
@@ -322,7 +322,7 @@ mod tests {
 
     use crate::{
         buffer::buffer_manager_v2::BufferManagerV2, tx::concurrency_manager::LockTable,
-        storage::file_manager::FileManager, storage::log_manager_v2::LogManagerV2, record_page::TableSchema,
+        storage::file_manager::FileManager, storage::log_manager_v2::LogManagerV2, record::record_page::TableSchema,
     };
 
     use super::*;

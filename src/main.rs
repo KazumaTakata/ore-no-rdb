@@ -29,17 +29,14 @@ mod plan_v2;
 mod predicate;
 mod predicate_v3;
 mod query_handler;
-mod record_page;
-mod record_page_v2;
-mod scan_v2;
 mod sort_plan;
 mod stat_manager_v2;
 mod storage;
 mod table_manager_v2;
-mod table_scan_v2;
 mod view_manager;
 mod buffer;
 mod tx;
+mod record;
 
 use storage::block::BlockId;
 use clap::Parser;

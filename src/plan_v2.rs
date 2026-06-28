@@ -9,11 +9,11 @@ use crate::{
     parser::{parse_sql, CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
     predicate::TableNameAndFieldName,
     predicate_v3::PredicateV2,
-    record_page::{Layout, TableSchema},
-    scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
+    record::record_page::{Layout, TableSchema},
+    record::scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
     sort_plan::SortPlan,
     stat_manager_v2::StatInfoV2,
-    table_scan_v2::TableScan,
+    record::table_scan_v2::TableScan,
     tx::transaction_v2::TransactionV2,
 };
 

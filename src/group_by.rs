@@ -6,8 +6,8 @@ use crate::{
     error::ValueNotFound,
     plan_v2::{PlanTreeNodeForDebug, PlanV2},
     predicate::{Constant, ConstantValue, TableNameAndFieldName},
-    record_page::{TableFieldType, TableSchema},
-    scan_v2::ScanV2,
+    record::record_page::{TableFieldType, TableSchema},
+    record::scan_v2::ScanV2,
     sort_plan::SortPlan,
     tx::transaction_v2::TransactionV2,
 };
@@ -308,11 +308,11 @@ impl ScanV2 for GroupByScan {
         panic!("Cannot set value in GroupByScan")
     }
 
-    fn get_record_id(&self) -> crate::table_scan_v2::RecordID {
+    fn get_record_id(&self) -> crate::record::table_scan_v2::RecordID {
         panic!("Cannot get RecordID from GroupByScan")
     }
 
-    fn move_to_record_id(&mut self, record_id: crate::table_scan_v2::RecordID) {
+    fn move_to_record_id(&mut self, record_id: crate::record::table_scan_v2::RecordID) {
         panic!("Cannot move to RecordID in GroupByScan")
     }
 }

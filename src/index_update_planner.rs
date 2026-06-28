@@ -155,7 +155,7 @@ impl IndexUpdatePlanner {
     pub fn execute_create_table(
         &mut self,
         table_name: String,
-        schema: &crate::record_page::TableSchema,
+        schema: &crate::record::record_page::TableSchema,
         transaction: Rc<RefCell<TransactionV2>>,
         metadata_manager: &mut MetadataManager,
     ) -> Result<(), ValueNotFound> {
@@ -182,7 +182,7 @@ impl IndexUpdatePlanner {
 mod tests {
     use std::path::Path;
 
-    use crate::{database::Database, parser::parse_sql, record_page::TableSchema};
+    use crate::{database::Database, parser::parse_sql, record::record_page::TableSchema};
 
     use super::*;
 

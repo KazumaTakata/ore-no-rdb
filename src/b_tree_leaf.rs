@@ -4,8 +4,8 @@ use std::rc::Rc;
 use crate::b_tree_page::BTreePage;
 use crate::storage::block::BlockId;
 use crate::predicate::Constant;
-use crate::record_page::Layout;
-use crate::table_scan_v2::RecordID;
+use crate::record::record_page::Layout;
+use crate::record::table_scan_v2::RecordID;
 use crate::tx::transaction_v2::TransactionV2;
 
 pub struct DirectoryEntry {

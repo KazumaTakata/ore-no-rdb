@@ -6,9 +6,9 @@ use crate::{
     materialize::{MaterializePlan, TempTable},
     plan_v2::{PlanTreeNodeForDebug, PlanV2},
     predicate::{ConstantValue, TableNameAndFieldName},
-    record_page::{Layout, TableFieldType, TableSchema},
-    record_page_v2::RecordPage,
-    scan_v2::{ProductScanV2, ScanV2},
+    record::record_page::{Layout, TableFieldType, TableSchema},
+    record::record_page_v2::RecordPage,
+    record::scan_v2::{ProductScanV2, ScanV2},
     tx::transaction_v2::TransactionV2,
 };
 
@@ -189,11 +189,11 @@ impl ScanV2 for ChunkScan {
         panic!("not implemented");
     }
 
-    fn get_record_id(&self) -> crate::table_scan_v2::RecordID {
+    fn get_record_id(&self) -> crate::record::table_scan_v2::RecordID {
         panic!("not implemented");
     }
 
-    fn move_to_record_id(&mut self, record_id: crate::table_scan_v2::RecordID) {
+    fn move_to_record_id(&mut self, record_id: crate::record::table_scan_v2::RecordID) {
         panic!("not implemented");
     }
 
@@ -476,11 +476,11 @@ impl ScanV2 for MultiBufferProductScan {
         panic!("not implemented");
     }
 
-    fn get_record_id(&self) -> crate::table_scan_v2::RecordID {
+    fn get_record_id(&self) -> crate::record::table_scan_v2::RecordID {
         panic!("not implemented");
     }
 
-    fn move_to_record_id(&mut self, record_id: crate::table_scan_v2::RecordID) {
+    fn move_to_record_id(&mut self, record_id: crate::record::table_scan_v2::RecordID) {
         panic!("not implemented");
     }
     fn set_integer(&mut self, field_name: String, value: i32) {

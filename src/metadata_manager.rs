@@ -4,7 +4,7 @@ use crate::{
     error::{TableAlreadyExists, ValueNotFound},
     index_manager::{self, IndexInfo, IndexManager},
     parser::QueryData,
-    record_page::{Layout, TableSchema},
+    record::record_page::{Layout, TableSchema},
     stat_manager_v2::{StatInfoV2, StatManagerV2},
     table_manager_v2::TableManagerV2,
     tx::transaction_v2,

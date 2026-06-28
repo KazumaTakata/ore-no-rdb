@@ -1,8 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    predicate::TableNameAndFieldName, record_page::TableSchema, scan_v2::ScanV2,
-    table_manager_v2::TableManagerV2, table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
+    predicate::TableNameAndFieldName, record::record_page::TableSchema, record::scan_v2::ScanV2,
+    table_manager_v2::TableManagerV2, record::table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
 };
 
 pub struct ViewManager {

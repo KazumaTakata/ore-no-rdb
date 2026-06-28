@@ -7,7 +7,7 @@ use crate::{
     group_by::AggregateFunctionType,
     predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
     predicate_v3::{ExpressionV2, PredicateV2, TermV2},
-    record_page::{TableFieldInfo, TableFieldType, TableSchema},
+    record::record_page::{TableFieldInfo, TableFieldType, TableSchema},
 };
 
 // #[derive(Parser)]

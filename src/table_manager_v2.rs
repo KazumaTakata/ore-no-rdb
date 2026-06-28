@@ -3,15 +3,15 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
     predicate::TableNameAndFieldName,
-    record_page::{self, TableFieldType, TableSchema},
-    scan_v2::ScanV2,
-    table_scan_v2::TableScan,
+    record::record_page::{self, TableFieldType, TableSchema},
+    record::scan_v2::ScanV2,
+    record::table_scan_v2::TableScan,
     tx::transaction_v2::TransactionV2,
 };
 
 pub struct TableManagerV2 {
-    pub table_catalog_layout: record_page::Layout,
-    pub field_catalog_layout: record_page::Layout,
+    pub table_catalog_layout: crate::record::record_page::Layout,
+    pub field_catalog_layout: crate::record::record_page::Layout,
 }
 
 impl TableManagerV2 {
@@ -26,7 +26,7 @@ impl TableManagerV2 {
         table_catalog_schema.add_string_field("table_name".to_string(), 20);
         table_catalog_schema.add_integer_field("slot_size".to_string());
 
-        let table_catalog_layout = record_page::Layout::new(table_catalog_schema.clone());
+        let table_catalog_layout = crate::record::record_page::Layout::new(table_catalog_schema.clone());
 
         let mut field_catalog_schema = TableSchema::new();
         field_catalog_schema.add_string_field("table_name".to_string(), 20);
@@ -34,7 +34,7 @@ impl TableManagerV2 {
         field_catalog_schema.add_integer_field("field_type".to_string());
         field_catalog_schema.add_integer_field("field_length".to_string());
         field_catalog_schema.add_integer_field("field_offset".to_string());
-        let table_field_schema = record_page::Layout::new(field_catalog_schema.clone());
+        let table_field_schema = crate::record::record_page::Layout::new(field_catalog_schema.clone());
 
         let table_manager = TableManagerV2 {
             table_catalog_layout,
@@ -132,7 +132,7 @@ impl TableManagerV2 {
         schema: &TableSchema,
         transaction: Rc<RefCell<TransactionV2>>,
     ) -> Result<(), TableAlreadyExists> {
-        let layout = record_page::Layout::new(schema.clone());
+        let layout = crate::record::record_page::Layout::new(schema.clone());
 
         let mut table_scan = TableScan::new(
             Self::TABLE_CATALOG_TABLE_NAME.to_string(),
@@ -187,7 +187,7 @@ impl TableManagerV2 {
         &self,
         table_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
-    ) -> Result<record_page::Layout, ValueNotFound> {
+    ) -> Result<crate::record::record_page::Layout, ValueNotFound> {
         let mut table_scan = TableScan::new(
             Self::TABLE_CATALOG_TABLE_NAME.to_string(),
             transaction.clone(),
@@ -275,7 +275,7 @@ impl TableManagerV2 {
 
         field_scan.close();
 
-        return Ok(record_page::Layout::new_with_offset_and_size(
+        return Ok(crate::record::record_page::Layout::new_with_offset_and_size(
             table_schema,
             offsets,
             slot_size,
@@ -295,7 +295,7 @@ mod tests {
 
     use crate::{
         buffer::buffer_manager_v2::BufferManagerV2, tx::concurrency_manager::LockTable,
-        storage::file_manager::FileManager, storage::log_manager_v2::LogManagerV2, record_page::TableSchema,
+        storage::file_manager::FileManager, storage::log_manager_v2::LogManagerV2, record::record_page::TableSchema,
     };
 
     use super::*;

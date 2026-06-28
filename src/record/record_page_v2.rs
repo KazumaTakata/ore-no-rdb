@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     storage::block::BlockId,
-    record_page::{Layout, RecordType, TableFieldType},
+    record::record_page::{Layout, RecordType, TableFieldType},
     tx::transaction_v2::TransactionV2,
 };
 
@@ -230,7 +230,7 @@ mod tests {
         storage::file_manager::FileManager,
         storage::log_manager_v2::LogManagerV2,
         storage::page::Page,
-        record_page::TableSchema,
+        record::record_page::TableSchema,
     };
 
     use super::*;

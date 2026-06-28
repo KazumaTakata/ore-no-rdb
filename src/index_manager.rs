@@ -4,11 +4,11 @@ use crate::{
     b_tree_index::BTreeIndex,
     error::ValueNotFound,
     predicate::TableNameAndFieldName,
-    record_page::{Layout, TableFieldType, TableSchema},
-    scan_v2::ScanV2,
+    record::record_page::{Layout, TableFieldType, TableSchema},
+    record::scan_v2::ScanV2,
     stat_manager_v2::{StatInfoV2, StatManagerV2},
     table_manager_v2::TableManagerV2,
-    table_scan_v2::TableScan,
+    record::table_scan_v2::TableScan,
     tx::transaction_v2::TransactionV2,
 };
 
@@ -229,9 +229,9 @@ mod tests {
 
     use crate::{
         buffer::buffer_manager_v2::BufferManagerV2, tx::concurrency_manager::LockTable,
-        index_manager::IndexManager, storage::log_manager_v2::LogManagerV2, record_page::TableSchema,
-        scan_v2::ScanV2, stat_manager_v2::StatManagerV2, storage::file_manager::FileManager,
-        table_manager_v2::TableManagerV2, table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
+        index_manager::IndexManager, storage::log_manager_v2::LogManagerV2, record::record_page::TableSchema,
+        record::scan_v2::ScanV2, stat_manager_v2::StatManagerV2, storage::file_manager::FileManager,
+        table_manager_v2::TableManagerV2, record::table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
     };
 
     #[test]

@@ -4,9 +4,9 @@ use crate::{
     error::ValueNotFound,
     plan_v2::PlanV2,
     predicate::TableNameAndFieldName,
-    record_page::{Layout, TableSchema},
-    scan_v2::ScanV2,
-    table_scan_v2::TableScan,
+    record::record_page::{Layout, TableSchema},
+    record::scan_v2::ScanV2,
+    record::table_scan_v2::TableScan,
     tx::transaction_v2::TransactionV2,
 };
 

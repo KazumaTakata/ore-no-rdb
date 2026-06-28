@@ -1,8 +1,8 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    error::ValueNotFound, predicate::TableNameAndFieldName, record_page, scan_v2::ScanV2,
-    table_manager_v2::TableManagerV2, table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
+    error::ValueNotFound, predicate::TableNameAndFieldName, record::record_page, record::scan_v2::ScanV2,
+    table_manager_v2::TableManagerV2, record::table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
 };
 
 pub struct StatManagerV2 {
@@ -51,7 +51,7 @@ impl StatManagerV2 {
         &mut self,
         table_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
-        layout: record_page::Layout,
+        layout: crate::record::record_page::Layout,
     ) -> Result<StatInfoV2, ValueNotFound> {
         self.num_calls += 1;
 
@@ -118,7 +118,7 @@ impl StatManagerV2 {
         &mut self,
         table_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
-        layout: record_page::Layout,
+        layout: crate::record::record_page::Layout,
     ) -> Result<StatInfoV2, ValueNotFound> {
         let mut num_records = 0;
         let mut num_blocks = 0;
