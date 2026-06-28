@@ -4,7 +4,7 @@ use crate::{
     b_tree_index::BTreeIndex,
     hash_index::HashIndex,
     index_update_planner::IndexUpdatePlanner,
-    metadata_manager::MetadataManager,
+    metadata::metadata_manager::MetadataManager,
     parser::InsertData,
     predicate::{Constant, ConstantValue, TableNameAndFieldName},
     record::scan_v2::ScanV2,
@@ -16,7 +16,7 @@ use crate::{
 #[cfg(test)]
 use crate::{
     buffer::buffer_manager_v2::BufferManagerV2, tx::concurrency_manager::LockTable,
-    storage::log_manager_v2::LogManagerV2, record::record_page::TableSchema, table_manager_v2::TableManagerV2,
+    storage::log_manager_v2::LogManagerV2, record::record_page::TableSchema, metadata::table_manager_v2::TableManagerV2,
 };
 #[cfg(test)]
 use std::{

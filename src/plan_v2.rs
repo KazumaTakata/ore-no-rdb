@@ -3,16 +3,16 @@ use std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc};
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
     group_by::{AggregateFunction, AggregateFunctionType, AvgFunction, GroupByPlan, MaxFunction},
-    index_manager::IndexInfo,
+    metadata::index_manager::IndexInfo,
     index_select_plan::IndexSelectPlan,
-    metadata_manager::MetadataManager,
+    metadata::metadata_manager::MetadataManager,
     parser::{parse_sql, CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
     predicate::TableNameAndFieldName,
     predicate_v3::PredicateV2,
     record::record_page::{Layout, TableSchema},
     record::scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
     sort_plan::SortPlan,
-    stat_manager_v2::StatInfoV2,
+    metadata::stat_manager_v2::StatInfoV2,
     record::table_scan_v2::TableScan,
     tx::transaction_v2::TransactionV2,
 };
@@ -535,7 +535,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        database::Database, metadata_manager::MetadataManager, parser::parse_sql,
+        database::Database, metadata::metadata_manager::MetadataManager, parser::parse_sql,
         predicate::ConstantValue,
     };
     use std::path::Path;

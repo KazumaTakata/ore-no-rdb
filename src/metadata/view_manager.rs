@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     predicate::TableNameAndFieldName, record::record_page::TableSchema, record::scan_v2::ScanV2,
-    table_manager_v2::TableManagerV2, record::table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
+    metadata::table_manager_v2::TableManagerV2, record::table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
 };
 
 pub struct ViewManager {
@@ -94,9 +94,9 @@ mod tests {
         tx::concurrency_manager::LockTable,
         storage::file_manager::FileManager,
         storage::log_manager_v2::LogManagerV2,
-        table_manager_v2::TableManagerV2,
+        metadata::table_manager_v2::TableManagerV2,
         tx::transaction_v2::TransactionV2,
-        view_manager::ViewManager,
+        metadata::view_manager::ViewManager,
     };
 
     #[test]

@@ -7,7 +7,7 @@ use std::{
 use crate::{
     b_tree_index::BTreeIndex,
     error::ValueNotFound,
-    index_manager::IndexInfo,
+    metadata::index_manager::IndexInfo,
     plan_v2::{PlanTreeNodeForDebug, PlanV2},
     predicate::{Constant, ConstantValue, TableNameAndFieldName},
     record::record_page::{Layout, TableSchema},

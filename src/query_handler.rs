@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc, vec};
 use comfy_table::Table;
 
 use crate::{
-    metadata_manager::MetadataManager,
+    metadata::metadata_manager::MetadataManager,
     parser::QueryData,
     plan_v2::{create_query_plan, PlanV2},
     predicate::{ConstantValue, TableNameAndFieldName},

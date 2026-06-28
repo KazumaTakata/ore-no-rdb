@@ -477,7 +477,7 @@ mod tests {
 
     use crate::{
         database::Database,
-        metadata_manager::MetadataManager,
+        metadata::metadata_manager::MetadataManager,
         parser::parse_sql,
         plan_v2::{execute_create_table, execute_insert, TablePlanV2},
         predicate::ConstantValue,

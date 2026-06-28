@@ -2,7 +2,7 @@ use std::{cell::RefCell, f32::consts::E, rc::Rc};
 
 use crate::{
     error::{DatabaseError, UniqueConstraintError, ValueNotFound},
-    metadata_manager::MetadataManager,
+    metadata::metadata_manager::MetadataManager,
     parser::{DeleteData, InsertData, UpdateData},
     plan_v2::{PlanV2, SelectPlanV2, TablePlanV2},
     predicate::{Constant, TableNameAndFieldName},

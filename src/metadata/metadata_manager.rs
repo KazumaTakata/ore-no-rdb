@@ -2,13 +2,13 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
-    index_manager::{self, IndexInfo, IndexManager},
+    metadata::index_manager::{self, IndexInfo, IndexManager},
     parser::QueryData,
     record::record_page::{Layout, TableSchema},
-    stat_manager_v2::{StatInfoV2, StatManagerV2},
-    table_manager_v2::TableManagerV2,
+    metadata::stat_manager_v2::{StatInfoV2, StatManagerV2},
+    metadata::table_manager_v2::TableManagerV2,
     tx::transaction_v2,
-    view_manager::{self, ViewManager},
+    metadata::view_manager::{self, ViewManager},
 };
 
 pub struct MetadataManager {
@@ -25,7 +25,7 @@ impl MetadataManager {
         let table_manager = Rc::new(RefCell::new(TableManagerV2::new(transaction.clone(), true)));
         let stat_manager = Rc::new(RefCell::new(StatManagerV2::new(table_manager.clone())));
 
-        let _index_manager = index_manager::IndexManager::new(
+        let _index_manager = crate::metadata::index_manager::IndexManager::new(
             table_manager.clone(),
             stat_manager.clone(),
             transaction.clone(),
@@ -33,7 +33,7 @@ impl MetadataManager {
 
         let index_manager = Rc::new(RefCell::new(_index_manager));
 
-        let view_manager = Rc::new(RefCell::new(view_manager::ViewManager::new(
+        let view_manager = Rc::new(RefCell::new(crate::metadata::view_manager::ViewManager::new(
             true,
             table_manager.clone(),
             transaction.clone(),

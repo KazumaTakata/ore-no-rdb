@@ -315,10 +315,10 @@ mod tests {
         predicate_v3::{ExpressionV2, PredicateV2, TermV2},
         record::record_page::{Layout, TableSchema},
         record::scan_v2::{ScanV2, SelectScanV2},
-        table_manager_v2::TableManagerV2,
+        metadata::table_manager_v2::TableManagerV2,
         record::table_scan_v2::TableScan,
         tx::transaction_v2::TransactionV2,
-        view_manager::ViewManager,
+        metadata::view_manager::ViewManager,
     };
 
     #[test]
