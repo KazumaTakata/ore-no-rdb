@@ -2,16 +2,16 @@ use std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc};
 
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
-    group_by::{AggregateFunction, AggregateFunctionType, AvgFunction, GroupByPlan, MaxFunction},
+    query::group_by::{AggregateFunction, AggregateFunctionType, AvgFunction, GroupByPlan, MaxFunction},
     metadata::index_manager::IndexInfo,
-    index_select_plan::IndexSelectPlan,
+    query::index_select_plan::IndexSelectPlan,
     metadata::metadata_manager::MetadataManager,
-    parser::{parse_sql, CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
-    predicate::TableNameAndFieldName,
-    predicate_v3::PredicateV2,
+    query::parser::{parse_sql, CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
+    query::predicate::TableNameAndFieldName,
+    query::predicate_v3::PredicateV2,
     record::record_page::{Layout, TableSchema},
     record::scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
-    sort_plan::SortPlan,
+    query::sort_plan::SortPlan,
     metadata::stat_manager_v2::StatInfoV2,
     record::table_scan_v2::TableScan,
     tx::transaction_v2::TransactionV2,
@@ -351,7 +351,7 @@ pub fn create_query_plan(
             let parsed_sql = &parsed_sql_list[0];
 
             match parsed_sql {
-                crate::parser::ParsedSQL::Query(q) => {
+                crate::query::parser::ParsedSQL::Query(q) => {
                     let view_plan = create_query_plan(q, transaction.clone(), metadata_manager)?;
                     plans.push(view_plan);
                     continue;
@@ -424,7 +424,7 @@ pub fn create_query_plan(
                     Box::new(AvgFunction::new(f.field.clone())) as Box<dyn AggregateFunction>
                 }
                 AggregateFunctionType::Sum => {
-                    Box::new(crate::group_by::SumFunction::new(f.field.clone()))
+                    Box::new(crate::query::group_by::SumFunction::new(f.field.clone()))
                         as Box<dyn AggregateFunction>
                 }
             })
@@ -535,8 +535,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        database::Database, metadata::metadata_manager::MetadataManager, parser::parse_sql,
-        predicate::ConstantValue,
+        database::Database, metadata::metadata_manager::MetadataManager, query::parser::parse_sql,
+        query::predicate::ConstantValue,
     };
     use std::path::Path;
 
@@ -555,7 +555,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -575,7 +575,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -629,7 +629,7 @@ mod tests {
             let parsed_sql_list = parse_sql(insert_sql.clone());
 
             let insert_data = match &parsed_sql_list[0] {
-                crate::parser::ParsedSQL::Insert(q) => q,
+                crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),
             };
 
@@ -708,7 +708,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -728,7 +728,7 @@ mod tests {
         let parsed_sql_list = parse_sql(insert_sql.clone());
 
         let insert_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::Insert(q) => q,
+            crate::query::parser::ParsedSQL::Insert(q) => q,
             _ => panic!("Expected a Insert variant from parse_sql"),
         };
 
@@ -744,7 +744,7 @@ mod tests {
         let parsed_sql_list = parse_sql(insert_sql_2.clone());
 
         let insert_data_2 = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::Insert(q) => q,
+            crate::query::parser::ParsedSQL::Insert(q) => q,
             _ => panic!("Expected a Insert variant from parse_sql"),
         };
 
@@ -766,7 +766,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let select_query = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::Query(q) => q,
+            crate::query::parser::ParsedSQL::Query(q) => q,
             _ => panic!("Expected a Query  variant from parse_sql"),
         };
         let mut plan =
@@ -810,7 +810,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -854,7 +854,7 @@ mod tests {
         let parsed_sql_list = parse_sql(insert_sql.clone());
 
         let insert_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::Insert(q) => q,
+            crate::query::parser::ParsedSQL::Insert(q) => q,
             _ => panic!("Expected a Insert variant from parse_sql"),
         };
 
@@ -875,7 +875,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -925,7 +925,7 @@ mod tests {
             &parse_sql("select A_1, B_1, A_2, B_2 from test_table_1, test_table_2".to_string())[0];
 
         let query_data = match parsed_sql {
-            crate::parser::ParsedSQL::Query(q) => q,
+            crate::query::parser::ParsedSQL::Query(q) => q,
             _ => panic!("Expected a Query variant from parse_sql"),
         };
         struct TestValue {
@@ -1016,7 +1016,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -1101,7 +1101,7 @@ mod tests {
         let parsed_sql = &parse_sql("select A_1, B_1 from test_view where A_1 = 1".to_string())[0];
 
         let query_data = match parsed_sql {
-            crate::parser::ParsedSQL::Query(q) => q,
+            crate::query::parser::ParsedSQL::Query(q) => q,
             _ => panic!("Expected a Query variant from parse_sql"),
         };
 

@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     storage::block::BlockId,
     error::ValueNotFound,
-    predicate::TableNameAndFieldName,
+    query::predicate::TableNameAndFieldName,
     record::record_page::{Layout, TableFieldType},
     record::record_page_v2::RecordPage,
     record::scan_v2::ScanV2,
@@ -130,19 +130,19 @@ impl ScanV2 for TableScan {
             .set_string(field_name, self.current_slot, value)
     }
 
-    fn set_value(&mut self, field_name: String, value: crate::predicate::ConstantValue) {
+    fn set_value(&mut self, field_name: String, value: crate::query::predicate::ConstantValue) {
         if self.current_slot == -1 {
             panic!("No current record to set value");
         }
 
         match value {
-            crate::predicate::ConstantValue::Number(num) => {
+            crate::query::predicate::ConstantValue::Number(num) => {
                 self.set_integer(field_name, num);
             }
-            crate::predicate::ConstantValue::String(string) => {
+            crate::query::predicate::ConstantValue::String(string) => {
                 self.set_string(field_name, string);
             }
-            crate::predicate::ConstantValue::Null => {
+            crate::query::predicate::ConstantValue::Null => {
                 panic!("Null value cannot be set");
             }
         }
@@ -236,7 +236,7 @@ impl ScanV2 for TableScan {
     fn get_value(
         &mut self,
         field_name: TableNameAndFieldName,
-    ) -> Option<crate::predicate::ConstantValue> {
+    ) -> Option<crate::query::predicate::ConstantValue> {
         match field_name.table_name.clone() {
             Some(name) => {
                 if name != self.table_name {
@@ -257,17 +257,17 @@ impl ScanV2 for TableScan {
                 TableFieldType::INTEGER => {
                     let integer_value = self.get_integer(field_name);
                     if let Some(value) = integer_value {
-                        return Some(crate::predicate::ConstantValue::Number(value));
+                        return Some(crate::query::predicate::ConstantValue::Number(value));
                     } else {
-                        return Some(crate::predicate::ConstantValue::Null);
+                        return Some(crate::query::predicate::ConstantValue::Null);
                     }
                 }
                 TableFieldType::VARCHAR => {
                     let string_value = self.get_string(field_name);
                     if let Some(value) = string_value {
-                        return Some(crate::predicate::ConstantValue::String(value));
+                        return Some(crate::query::predicate::ConstantValue::String(value));
                     } else {
-                        return Some(crate::predicate::ConstantValue::Null);
+                        return Some(crate::query::predicate::ConstantValue::Null);
                     }
                 }
             },

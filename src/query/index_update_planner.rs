@@ -3,9 +3,9 @@ use std::{cell::RefCell, f32::consts::E, rc::Rc};
 use crate::{
     error::{DatabaseError, UniqueConstraintError, ValueNotFound},
     metadata::metadata_manager::MetadataManager,
-    parser::{DeleteData, InsertData, UpdateData},
-    plan_v2::{PlanV2, SelectPlanV2, TablePlanV2},
-    predicate::{Constant, TableNameAndFieldName},
+    query::parser::{DeleteData, InsertData, UpdateData},
+    query::plan_v2::{PlanV2, SelectPlanV2, TablePlanV2},
+    query::predicate::{Constant, TableNameAndFieldName},
     tx::transaction_v2::TransactionV2,
 };
 
@@ -182,7 +182,7 @@ impl IndexUpdatePlanner {
 mod tests {
     use std::path::Path;
 
-    use crate::{database::Database, parser::parse_sql, record::record_page::TableSchema};
+    use crate::{database::Database, query::parser::parse_sql, record::record_page::TableSchema};
 
     use super::*;
 
@@ -217,7 +217,7 @@ mod tests {
             ));
 
             let insert_data = match &parsed_sql[0] {
-                crate::parser::ParsedSQL::Insert(q) => q,
+                crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),
             };
             let index_update_planner = IndexUpdatePlanner::new();
@@ -248,7 +248,7 @@ mod tests {
             // 構築された B-tree を stdout に可視化する
             index.print_tree();
 
-            index.before_first(Constant::new(crate::predicate::ConstantValue::Number(55)));
+            index.before_first(Constant::new(crate::query::predicate::ConstantValue::Number(55)));
             index.next();
             let record_id = index.get_data_record_id();
             let record_id = record_id.unwrap();

@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     index::b_tree_index::BTreeIndex,
     error::ValueNotFound,
-    predicate::TableNameAndFieldName,
+    query::predicate::TableNameAndFieldName,
     record::record_page::{Layout, TableFieldType, TableSchema},
     record::scan_v2::ScanV2,
     metadata::stat_manager_v2::{StatInfoV2, StatManagerV2},

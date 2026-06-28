@@ -1,7 +1,7 @@
 use crate::{
     error::ValueNotFound,
-    predicate::{ConstantValue, TableNameAndFieldName},
-    predicate_v3::PredicateV2,
+    query::predicate::{ConstantValue, TableNameAndFieldName},
+    query::predicate_v3::PredicateV2,
     record::table_scan_v2::RecordID,
 };
 
@@ -311,8 +311,8 @@ mod tests {
         tx::concurrency_manager::LockTable,
         storage::file_manager::FileManager,
         storage::log_manager_v2::LogManagerV2,
-        predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
-        predicate_v3::{ExpressionV2, PredicateV2, TermV2},
+        query::predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
+        query::predicate_v3::{ExpressionV2, PredicateV2, TermV2},
         record::record_page::{Layout, TableSchema},
         record::scan_v2::{ScanV2, SelectScanV2},
         metadata::table_manager_v2::TableManagerV2,

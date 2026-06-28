@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
     metadata::index_manager::{self, IndexInfo, IndexManager},
-    parser::QueryData,
+    query::parser::QueryData,
     record::record_page::{Layout, TableSchema},
     metadata::stat_manager_v2::{StatInfoV2, StatManagerV2},
     metadata::table_manager_v2::TableManagerV2,

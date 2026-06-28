@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use crate::index::b_tree_page::BTreePage;
 use crate::storage::block::BlockId;
-use crate::predicate::Constant;
+use crate::query::predicate::Constant;
 use crate::record::record_page::Layout;
 use crate::record::table_scan_v2::RecordID;
 use crate::tx::transaction_v2::TransactionV2;

@@ -4,11 +4,11 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     error::ValueNotFound,
-    plan_v2::{PlanTreeNodeForDebug, PlanV2},
-    predicate::{Constant, ConstantValue, TableNameAndFieldName},
+    query::plan_v2::{PlanTreeNodeForDebug, PlanV2},
+    query::predicate::{Constant, ConstantValue, TableNameAndFieldName},
     record::record_page::{TableFieldType, TableSchema},
     record::scan_v2::ScanV2,
-    sort_plan::SortPlan,
+    query::sort_plan::SortPlan,
     tx::transaction_v2::TransactionV2,
 };
 
@@ -478,9 +478,9 @@ mod tests {
     use crate::{
         database::Database,
         metadata::metadata_manager::MetadataManager,
-        parser::parse_sql,
-        plan_v2::{execute_create_table, execute_insert, TablePlanV2},
-        predicate::ConstantValue,
+        query::parser::parse_sql,
+        query::plan_v2::{execute_create_table, execute_insert, TablePlanV2},
+        query::predicate::ConstantValue,
     };
 
     use super::*;
@@ -497,7 +497,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -517,7 +517,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -549,7 +549,7 @@ mod tests {
             let parsed_sql_list = parse_sql(insert_sql.clone());
 
             let insert_data = match &parsed_sql_list[0] {
-                crate::parser::ParsedSQL::Insert(q) => q,
+                crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),
             };
 

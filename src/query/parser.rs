@@ -4,9 +4,9 @@ use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 
 use crate::{
-    group_by::AggregateFunctionType,
-    predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
-    predicate_v3::{ExpressionV2, PredicateV2, TermV2},
+    query::group_by::AggregateFunctionType,
+    query::predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
+    query::predicate_v3::{ExpressionV2, PredicateV2, TermV2},
     record::record_page::{TableFieldInfo, TableFieldType, TableSchema},
 };
 

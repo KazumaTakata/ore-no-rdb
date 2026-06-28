@@ -4,9 +4,9 @@ use comfy_table::Table;
 
 use crate::{
     metadata::metadata_manager::MetadataManager,
-    parser::QueryData,
-    plan_v2::{create_query_plan, PlanV2},
-    predicate::{ConstantValue, TableNameAndFieldName},
+    query::parser::QueryData,
+    query::plan_v2::{create_query_plan, PlanV2},
+    query::predicate::{ConstantValue, TableNameAndFieldName},
     tx::transaction_v2::TransactionV2,
 };
 
@@ -135,10 +135,10 @@ mod tests {
 
     use crate::{
         database::Database,
-        group_by::AggregateFunctionType,
-        parser::AggregateFunctionInfo,
-        predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
-        predicate_v3::{ExpressionV2, PredicateV2, TermV2},
+        query::group_by::AggregateFunctionType,
+        query::parser::AggregateFunctionInfo,
+        query::predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
+        query::predicate_v3::{ExpressionV2, PredicateV2, TermV2},
     };
 
     use super::*;

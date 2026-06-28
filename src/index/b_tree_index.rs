@@ -5,7 +5,7 @@ use crate::index::b_tree_directory::BTreeDirectory;
 use crate::index::b_tree_leaf::{BTreeLeaf, DirectoryEntry};
 use crate::index::b_tree_page::BTreePage;
 use crate::storage::block::BlockId;
-use crate::predicate::{Constant, ConstantValue};
+use crate::query::predicate::{Constant, ConstantValue};
 use crate::record::record_page::{Layout, TableFieldType, TableSchema};
 use crate::record::table_scan_v2::RecordID;
 use crate::tx::transaction_v2::TransactionV2;

@@ -2,8 +2,8 @@ use std::{cell::RefCell, rc::Rc, sync::Mutex};
 
 use crate::{
     error::ValueNotFound,
-    plan_v2::PlanV2,
-    predicate::TableNameAndFieldName,
+    query::plan_v2::PlanV2,
+    query::predicate::TableNameAndFieldName,
     record::record_page::{Layout, TableSchema},
     record::scan_v2::ScanV2,
     record::table_scan_v2::TableScan,
@@ -114,8 +114,8 @@ impl PlanV2 for MaterializePlan {
         self.src_plan.get_schema()
     }
 
-    fn get_child_plans(&self) -> crate::plan_v2::PlanTreeNodeForDebug {
-        crate::plan_v2::PlanTreeNodeForDebug {
+    fn get_child_plans(&self) -> crate::query::plan_v2::PlanTreeNodeForDebug {
+        crate::query::plan_v2::PlanTreeNodeForDebug {
             current_node_type: "MaterializePlan".to_string(),
             child_nodes: vec![self.src_plan.get_child_plans()],
         }
@@ -130,9 +130,9 @@ mod tests {
     use crate::{
         database::Database,
         metadata::metadata_manager::MetadataManager,
-        parser::parse_sql,
-        plan_v2::{execute_create_table, execute_insert, TablePlanV2},
-        predicate::ConstantValue,
+        query::parser::parse_sql,
+        query::plan_v2::{execute_create_table, execute_insert, TablePlanV2},
+        query::predicate::ConstantValue,
     };
 
     use super::*;
@@ -149,7 +149,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -169,7 +169,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -201,7 +201,7 @@ mod tests {
             let parsed_sql_list = parse_sql(insert_sql.clone());
 
             let insert_data = match &parsed_sql_list[0] {
-                crate::parser::ParsedSQL::Insert(q) => q,
+                crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),
             };
 

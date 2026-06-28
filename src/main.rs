@@ -12,37 +12,27 @@ use std::vec;
 mod constant;
 mod database;
 mod error;
-mod group_by;
-mod index_join_scan;
-mod index_select_plan;
-mod index_update_planner;
-mod materialize;
-mod parser;
-mod plan_v2;
-mod predicate;
-mod predicate_v3;
-mod query_handler;
-mod sort_plan;
 mod storage;
 mod buffer;
 mod tx;
 mod record;
 mod metadata;
 mod index;
+mod query;
 
 use storage::block::BlockId;
 use clap::Parser;
 use storage::page::Page;
-use parser::parse_sql;
+use crate::query::parser::parse_sql;
 
 use crate::database::Database;
-use crate::index_update_planner::IndexUpdatePlanner;
+use crate::query::index_update_planner::IndexUpdatePlanner;
 use crate::metadata::metadata_manager::MetadataManager;
-use crate::parser::{ParsedSQL, QueryData};
-use crate::plan_v2::{create_query_plan, execute_create_table};
-use crate::predicate::{ConstantValue, TableNameAndFieldName};
-use crate::predicate_v3::PredicateV2;
-use crate::query_handler::handle_select_query;
+use crate::query::parser::{ParsedSQL, QueryData};
+use crate::query::plan_v2::{create_query_plan, execute_create_table};
+use crate::query::predicate::{ConstantValue, TableNameAndFieldName};
+use crate::query::predicate_v3::PredicateV2;
+use crate::query::query_handler::handle_select_query;
 use crate::tx::transaction_v2::TransactionV2;
 
 #[derive(Parser)]
@@ -204,7 +194,7 @@ fn main() -> std::io::Result<()> {
         MetadataManager::new(transaction.clone()).unwrap(),
     ));
 
-    let mut index_update_planner = index_update_planner::IndexUpdatePlanner::new();
+    let mut index_update_planner = crate::query::index_update_planner::IndexUpdatePlanner::new();
     let args = Args::parse();
 
     if let Some(file_path) = args.file {

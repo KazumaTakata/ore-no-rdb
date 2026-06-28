@@ -3,9 +3,9 @@ use std::{cell::RefCell, rc::Rc, vec};
 use crate::{
     storage::block::BlockId,
     error::ValueNotFound,
-    materialize::{MaterializePlan, TempTable},
-    plan_v2::{PlanTreeNodeForDebug, PlanV2},
-    predicate::{ConstantValue, TableNameAndFieldName},
+    query::materialize::{MaterializePlan, TempTable},
+    query::plan_v2::{PlanTreeNodeForDebug, PlanV2},
+    query::predicate::{ConstantValue, TableNameAndFieldName},
     record::record_page::{Layout, TableFieldType, TableSchema},
     record::record_page_v2::RecordPage,
     record::scan_v2::{ProductScanV2, ScanV2},
@@ -132,7 +132,7 @@ impl ScanV2 for ChunkScan {
         return Ok(true);
     }
 
-    fn get_integer(&mut self, field_name: crate::predicate::TableNameAndFieldName) -> Option<i32> {
+    fn get_integer(&mut self, field_name: crate::query::predicate::TableNameAndFieldName) -> Option<i32> {
         let current_slot_id = self.current_slot_id;
         let record_page = self.get_current_record_page();
         record_page.get_integer(field_name.field_name, current_slot_id)
@@ -140,7 +140,7 @@ impl ScanV2 for ChunkScan {
 
     fn get_string(
         &mut self,
-        field_name: crate::predicate::TableNameAndFieldName,
+        field_name: crate::query::predicate::TableNameAndFieldName,
     ) -> Option<String> {
         let current_slot_id = self.current_slot_id;
         let record_page = self.get_current_record_page();
@@ -161,7 +161,7 @@ impl ScanV2 for ChunkScan {
 
     fn get_value(
         &mut self,
-        field_name: crate::predicate::TableNameAndFieldName,
+        field_name: crate::query::predicate::TableNameAndFieldName,
     ) -> Option<ConstantValue> {
         if self
             .layout
@@ -177,7 +177,7 @@ impl ScanV2 for ChunkScan {
         }
     }
 
-    fn has_field(&self, field_name: crate::predicate::TableNameAndFieldName) -> bool {
+    fn has_field(&self, field_name: crate::query::predicate::TableNameAndFieldName) -> bool {
         self.layout.schema.has_field(field_name.field_name.clone())
     }
 
@@ -425,14 +425,14 @@ impl ScanV2 for MultiBufferProductScan {
         return Ok(true);
     }
 
-    fn get_integer(&mut self, field_name: crate::predicate::TableNameAndFieldName) -> Option<i32> {
+    fn get_integer(&mut self, field_name: crate::query::predicate::TableNameAndFieldName) -> Option<i32> {
         let product_scan = self.product_scan.as_mut().unwrap();
         product_scan.get_integer(field_name)
     }
 
     fn get_string(
         &mut self,
-        field_name: crate::predicate::TableNameAndFieldName,
+        field_name: crate::query::predicate::TableNameAndFieldName,
     ) -> Option<String> {
         let product_scan = self.product_scan.as_mut().unwrap();
         product_scan.get_string(field_name)
@@ -452,13 +452,13 @@ impl ScanV2 for MultiBufferProductScan {
 
     fn get_value(
         &mut self,
-        field_name: crate::predicate::TableNameAndFieldName,
+        field_name: crate::query::predicate::TableNameAndFieldName,
     ) -> Option<ConstantValue> {
         let product_scan = self.product_scan.as_mut().unwrap();
         product_scan.get_value(field_name)
     }
 
-    fn has_field(&self, field_name: crate::predicate::TableNameAndFieldName) -> bool {
+    fn has_field(&self, field_name: crate::query::predicate::TableNameAndFieldName) -> bool {
         if let Some(product_scan) = self.product_scan.as_ref() {
             return product_scan.has_field(field_name);
         } else if let Some(left_scan) = self.left_scan.as_ref() {
@@ -501,9 +501,9 @@ mod tests {
     use crate::{
         database::Database,
         metadata::metadata_manager::MetadataManager,
-        parser::parse_sql,
-        plan_v2::{execute_create_table, execute_insert, get_optimized_product_plan, TablePlanV2},
-        predicate::ConstantValue,
+        query::parser::parse_sql,
+        query::plan_v2::{execute_create_table, execute_insert, get_optimized_product_plan, TablePlanV2},
+        query::predicate::ConstantValue,
     };
     use std::path::Path;
 
@@ -522,7 +522,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -542,7 +542,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -579,7 +579,7 @@ mod tests {
             let parsed_sql_list = parse_sql(insert_sql.clone());
 
             let insert_data = match &parsed_sql_list[0] {
-                crate::parser::ParsedSQL::Insert(q) => q,
+                crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),
             };
 
@@ -594,7 +594,7 @@ mod tests {
             let parsed_sql_list = parse_sql(insert_sql.clone());
 
             let insert_data = match &parsed_sql_list[0] {
-                crate::parser::ParsedSQL::Insert(q) => q,
+                crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),
             };
 

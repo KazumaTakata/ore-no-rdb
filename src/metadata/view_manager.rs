@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    predicate::TableNameAndFieldName, record::record_page::TableSchema, record::scan_v2::ScanV2,
+    query::predicate::TableNameAndFieldName, record::record_page::TableSchema, record::scan_v2::ScanV2,
     metadata::table_manager_v2::TableManagerV2, record::table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
 };
 

@@ -5,7 +5,7 @@ use crate::{
     index::b_tree_leaf::DirectoryEntry,
     storage::block::BlockId,
     constant::INTEGER_BYTE_SIZE,
-    predicate::{Constant, ConstantValue},
+    query::predicate::{Constant, ConstantValue},
     record::record_page::{Layout, TableFieldType},
     record::table_scan_v2::RecordID,
     tx::transaction_v2::TransactionV2,

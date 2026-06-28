@@ -3,10 +3,10 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     index::b_tree_index::BTreeIndex,
     index::hash_index::HashIndex,
-    index_update_planner::IndexUpdatePlanner,
+    query::index_update_planner::IndexUpdatePlanner,
     metadata::metadata_manager::MetadataManager,
-    parser::InsertData,
-    predicate::{Constant, ConstantValue, TableNameAndFieldName},
+    query::parser::InsertData,
+    query::predicate::{Constant, ConstantValue, TableNameAndFieldName},
     record::scan_v2::ScanV2,
     storage::file_manager::FileManager,
     record::table_scan_v2::TableScan,
@@ -94,7 +94,7 @@ impl ScanV2 for IndexJoinScan {
     fn get_value(
         &mut self,
         field_name: TableNameAndFieldName,
-    ) -> Option<crate::predicate::ConstantValue> {
+    ) -> Option<crate::query::predicate::ConstantValue> {
         if self.right_scan.has_field(field_name.clone()) {
             return self.right_scan.get_value(field_name);
         }
@@ -136,7 +136,7 @@ impl ScanV2 for IndexJoinScan {
         panic!("IndexJoinScan does not support set_string operation");
     }
 
-    fn set_value(&mut self, field_name: String, value: crate::predicate::ConstantValue) {
+    fn set_value(&mut self, field_name: String, value: crate::query::predicate::ConstantValue) {
         panic!("IndexJoinScan does not support set_value operation");
     }
 }

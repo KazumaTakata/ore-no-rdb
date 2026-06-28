@@ -2,9 +2,9 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     error::ValueNotFound,
-    materialize::TempTable,
-    plan_v2::{PlanTreeNodeForDebug, PlanV2},
-    predicate::{Constant, TableNameAndFieldName},
+    query::materialize::TempTable,
+    query::plan_v2::{PlanTreeNodeForDebug, PlanV2},
+    query::predicate::{Constant, TableNameAndFieldName},
     record::record_page::TableSchema,
     record::scan_v2::ScanV2,
     record::table_scan_v2::RecordID,
@@ -377,7 +377,7 @@ impl ScanV2 for SortScan {
     fn get_value(
         &mut self,
         field_name: TableNameAndFieldName,
-    ) -> Option<crate::predicate::ConstantValue> {
+    ) -> Option<crate::query::predicate::ConstantValue> {
         if self.current_scan == CurrentScan::Scan1 {
             self.scan1.get_value(field_name)
         } else if self.current_scan == CurrentScan::Scan2 {
@@ -421,7 +421,7 @@ impl ScanV2 for SortScan {
         panic!("SortScan does not support set_string operation.");
     }
 
-    fn set_value(&mut self, field_name: String, value: crate::predicate::ConstantValue) {
+    fn set_value(&mut self, field_name: String, value: crate::query::predicate::ConstantValue) {
         panic!("SortScan does not support set_value operation.");
     }
 }
@@ -434,9 +434,9 @@ mod tests {
     use crate::{
         database::Database,
         metadata::metadata_manager::MetadataManager,
-        parser::parse_sql,
-        plan_v2::{execute_create_table, execute_insert, TablePlanV2},
-        predicate::ConstantValue,
+        query::parser::parse_sql,
+        query::plan_v2::{execute_create_table, execute_insert, TablePlanV2},
+        query::predicate::ConstantValue,
     };
 
     use super::*;
@@ -453,7 +453,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -473,7 +473,7 @@ mod tests {
         let parsed_sql_list = parse_sql(create_table_sql.clone());
 
         let create_table_data = match &parsed_sql_list[0] {
-            crate::parser::ParsedSQL::CreateTable(q) => q,
+            crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
 
@@ -505,7 +505,7 @@ mod tests {
             let parsed_sql_list = parse_sql(insert_sql.clone());
 
             let insert_data = match &parsed_sql_list[0] {
-                crate::parser::ParsedSQL::Insert(q) => q,
+                crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),
             };
 
