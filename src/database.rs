@@ -4,7 +4,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::storage::file_manager::FileManager;
 use crate::{
-    buffer_manager_v2::BufferManagerV2, concurrency_manager::LockTable,
+    buffer::buffer_manager_v2::BufferManagerV2, concurrency_manager::LockTable,
     storage::log_manager_v2::LogManagerV2, transaction_v2::TransactionV2,
 };
 

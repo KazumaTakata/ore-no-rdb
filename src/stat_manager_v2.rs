@@ -149,7 +149,7 @@ mod tests {
     };
 
     use crate::{
-        buffer_manager_v2::BufferManagerV2,
+        buffer::buffer_manager_v2::BufferManagerV2,
         concurrency_manager::LockTable,
         storage::file_manager::FileManager,
         storage::log_manager_v2::LogManagerV2,

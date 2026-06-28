@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::{
     storage::block::BlockId,
-    buffer_manager_v2::{BufferManagerV2, BufferV2},
+    buffer::buffer_manager_v2::{BufferManagerV2, BufferV2},
     storage::log_manager_v2::LogManagerV2,
     storage::page::Page,
     transaction_v2::InnerTransactionV2,

@@ -4,7 +4,7 @@ use crate::storage::block::BlockId;
 use crate::storage::log_manager_v2::LogManagerV2;
 use crate::recovery_manager::RecoveryManager;
 use crate::{
-    buffer_manager_v2::{BufferListV2, BufferManagerV2},
+    buffer::buffer_manager_v2::{BufferListV2, BufferManagerV2},
     concurrency_manager::LockTable,
 };
 use crate::{concurrency_manager::ConcurrencyManagerV2, storage::file_manager::FileManager};
