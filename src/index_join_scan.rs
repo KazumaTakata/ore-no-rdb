@@ -1,8 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    b_tree_index::BTreeIndex,
-    hash_index::HashIndex,
+    index::b_tree_index::BTreeIndex,
+    index::hash_index::HashIndex,
     index_update_planner::IndexUpdatePlanner,
     metadata::metadata_manager::MetadataManager,
     parser::InsertData,

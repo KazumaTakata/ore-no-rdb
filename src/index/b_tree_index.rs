@@ -1,9 +1,9 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::b_tree_directory::BTreeDirectory;
-use crate::b_tree_leaf::{BTreeLeaf, DirectoryEntry};
-use crate::b_tree_page::BTreePage;
+use crate::index::b_tree_directory::BTreeDirectory;
+use crate::index::b_tree_leaf::{BTreeLeaf, DirectoryEntry};
+use crate::index::b_tree_page::BTreePage;
 use crate::storage::block::BlockId;
 use crate::predicate::{Constant, ConstantValue};
 use crate::record::record_page::{Layout, TableFieldType, TableSchema};

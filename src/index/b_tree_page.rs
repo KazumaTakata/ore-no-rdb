@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{
-    b_tree_leaf::DirectoryEntry,
+    index::b_tree_leaf::DirectoryEntry,
     storage::block::BlockId,
     constant::INTEGER_BYTE_SIZE,
     predicate::{Constant, ConstantValue},

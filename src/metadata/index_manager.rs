@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    b_tree_index::BTreeIndex,
+    index::b_tree_index::BTreeIndex,
     error::ValueNotFound,
     predicate::TableNameAndFieldName,
     record::record_page::{Layout, TableFieldType, TableSchema},

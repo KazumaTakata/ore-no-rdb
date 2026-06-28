@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    b_tree_index::BTreeIndex,
+    index::b_tree_index::BTreeIndex,
     error::ValueNotFound,
     metadata::index_manager::IndexInfo,
     plan_v2::{PlanTreeNodeForDebug, PlanV2},

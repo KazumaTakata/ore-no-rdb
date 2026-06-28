@@ -9,15 +9,10 @@ use std::path::Path;
 use std::rc::Rc;
 use std::vec;
 
-mod b_tree_directory;
-mod b_tree_index;
-mod b_tree_leaf;
-mod b_tree_page;
 mod constant;
 mod database;
 mod error;
 mod group_by;
-mod hash_index;
 mod index_join_scan;
 mod index_select_plan;
 mod index_update_planner;
@@ -33,6 +28,7 @@ mod buffer;
 mod tx;
 mod record;
 mod metadata;
+mod index;
 
 use storage::block::BlockId;
 use clap::Parser;

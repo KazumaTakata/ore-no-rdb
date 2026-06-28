@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::b_tree_leaf::DirectoryEntry;
-use crate::b_tree_page::BTreePage;
+use crate::index::b_tree_leaf::DirectoryEntry;
+use crate::index::b_tree_page::BTreePage;
 use crate::storage::block::BlockId;
 use crate::predicate::Constant;
 use crate::record::record_page::Layout;
