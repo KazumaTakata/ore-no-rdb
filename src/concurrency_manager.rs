@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::block::BlockId;
+use crate::storage::block::BlockId;
 
 pub struct LockTable {
     locks: HashMap<BlockId, i32>,

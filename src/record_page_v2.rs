@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    block::BlockId,
+    storage::block::BlockId,
     record_page::{Layout, RecordType, TableFieldType},
     transaction_v2::TransactionV2,
 };
@@ -227,9 +227,9 @@ mod tests {
     use crate::{
         buffer_manager_v2::BufferManagerV2,
         concurrency_manager::LockTable,
-        file_manager::FileManager,
+        storage::file_manager::FileManager,
         log_manager_v2::LogManagerV2,
-        page::Page,
+        storage::page::Page,
         record_page::TableSchema,
     };
 

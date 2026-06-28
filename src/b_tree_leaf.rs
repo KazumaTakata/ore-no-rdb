@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::b_tree_page::BTreePage;
-use crate::block::BlockId;
+use crate::storage::block::BlockId;
 use crate::predicate::Constant;
 use crate::record_page::Layout;
 use crate::table_scan_v2::RecordID;

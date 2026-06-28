@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc, vec};
 
 use crate::{
-    block::BlockId,
+    storage::block::BlockId,
     error::ValueNotFound,
     materialize::{MaterializePlan, TempTable},
     plan_v2::{PlanTreeNodeForDebug, PlanV2},

@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use crate::{
-    block::BlockId,
+    storage::block::BlockId,
     buffer_manager_v2::{BufferManagerV2, BufferV2},
     log_manager_v2::LogManagerV2,
-    page::Page,
+    storage::page::Page,
     transaction_v2::InnerTransactionV2,
 };
 

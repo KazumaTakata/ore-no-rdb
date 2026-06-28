@@ -229,8 +229,8 @@ mod tests {
 
     use crate::{
         buffer_manager_v2::BufferManagerV2, concurrency_manager::LockTable,
-        file_manager::FileManager, index_manager::IndexManager, log_manager_v2::LogManagerV2,
-        record_page::TableSchema, scan_v2::ScanV2, stat_manager_v2::StatManagerV2,
+        index_manager::IndexManager, log_manager_v2::LogManagerV2, record_page::TableSchema,
+        scan_v2::ScanV2, stat_manager_v2::StatManagerV2, storage::file_manager::FileManager,
         table_manager_v2::TableManagerV2, table_scan_v2::TableScan, transaction_v2::TransactionV2,
     };
 

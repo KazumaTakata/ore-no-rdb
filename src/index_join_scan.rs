@@ -8,13 +8,14 @@ use crate::{
     parser::InsertData,
     predicate::{Constant, ConstantValue, TableNameAndFieldName},
     scan_v2::ScanV2,
+    storage::file_manager::FileManager,
     table_scan_v2::TableScan,
     transaction_v2::TransactionV2,
 };
 
 #[cfg(test)]
 use crate::{
-    buffer_manager_v2::BufferManagerV2, concurrency_manager::LockTable, file_manager::FileManager,
+    buffer_manager_v2::BufferManagerV2, concurrency_manager::LockTable,
     log_manager_v2::LogManagerV2, record_page::TableSchema, table_manager_v2::TableManagerV2,
 };
 #[cfg(test)]

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::file_manager::FileManager;
-use crate::page::Page;
-use crate::{block::BlockId, log_manager_v2::LogManagerV2};
+use crate::storage::page::Page;
+use crate::storage::file_manager::FileManager;
+use crate::{storage::block::BlockId, log_manager_v2::LogManagerV2};
 
 pub struct BufferV2 {
     page: Page,

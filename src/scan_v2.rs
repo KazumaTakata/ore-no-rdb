@@ -309,7 +309,7 @@ mod tests {
     use crate::{
         buffer_manager_v2::BufferManagerV2,
         concurrency_manager::LockTable,
-        file_manager::FileManager,
+        storage::file_manager::FileManager,
         log_manager_v2::LogManagerV2,
         predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
         predicate_v3::{ExpressionV2, PredicateV2, TermV2},

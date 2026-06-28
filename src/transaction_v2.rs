@@ -1,13 +1,13 @@
 use std::sync::{Arc, Mutex};
 
-use crate::block::BlockId;
+use crate::storage::block::BlockId;
 use crate::log_manager_v2::LogManagerV2;
 use crate::recovery_manager::RecoveryManager;
 use crate::{
     buffer_manager_v2::{BufferListV2, BufferManagerV2},
     concurrency_manager::LockTable,
 };
-use crate::{concurrency_manager::ConcurrencyManagerV2, file_manager::FileManager};
+use crate::{concurrency_manager::ConcurrencyManagerV2, storage::file_manager::FileManager};
 
 pub struct InnerTransactionV2 {
     tx_num: i32,
