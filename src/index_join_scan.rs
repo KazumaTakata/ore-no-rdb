@@ -16,7 +16,7 @@ use crate::{
 #[cfg(test)]
 use crate::{
     buffer_manager_v2::BufferManagerV2, concurrency_manager::LockTable,
-    log_manager_v2::LogManagerV2, record_page::TableSchema, table_manager_v2::TableManagerV2,
+    storage::log_manager_v2::LogManagerV2, record_page::TableSchema, table_manager_v2::TableManagerV2,
 };
 #[cfg(test)]
 use std::{

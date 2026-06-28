@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::storage::block::BlockId;
-use crate::log_manager_v2::LogManagerV2;
+use crate::storage::log_manager_v2::LogManagerV2;
 use crate::recovery_manager::RecoveryManager;
 use crate::{
     buffer_manager_v2::{BufferListV2, BufferManagerV2},
@@ -224,7 +224,7 @@ impl TransactionV2 {
 mod tests {
     use std::{fs::remove_file, path::Path};
 
-    use crate::log_manager_v2::LogManagerV2;
+    use crate::storage::log_manager_v2::LogManagerV2;
 
     use super::*;
 

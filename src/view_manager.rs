@@ -93,7 +93,7 @@ mod tests {
         buffer_manager_v2::BufferManagerV2,
         concurrency_manager::LockTable,
         storage::file_manager::FileManager,
-        log_manager_v2::LogManagerV2,
+        storage::log_manager_v2::LogManagerV2,
         table_manager_v2::TableManagerV2,
         transaction_v2::TransactionV2,
         view_manager::ViewManager,

@@ -228,7 +228,7 @@ mod tests {
         buffer_manager_v2::BufferManagerV2,
         concurrency_manager::LockTable,
         storage::file_manager::FileManager,
-        log_manager_v2::LogManagerV2,
+        storage::log_manager_v2::LogManagerV2,
         storage::page::Page,
         record_page::TableSchema,
     };

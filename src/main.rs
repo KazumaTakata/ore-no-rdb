@@ -24,7 +24,6 @@ mod index_join_scan;
 mod index_manager;
 mod index_select_plan;
 mod index_update_planner;
-mod log_manager_v2;
 mod materialize;
 mod metadata_manager;
 mod multi_buffer;
