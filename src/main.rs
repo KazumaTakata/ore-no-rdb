@@ -88,7 +88,7 @@ fn handle_parsed_sql(
                 return;
             }
 
-            let mut plan =
+            let plan =
                 create_query_plan(&query_data, transaction.clone(), metadata_manager).unwrap();
 
             let plan_tree = plan.get_child_plans();
