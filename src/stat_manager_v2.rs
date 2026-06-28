@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     error::ValueNotFound, predicate::TableNameAndFieldName, record_page, scan_v2::ScanV2,
-    table_manager_v2::TableManagerV2, table_scan_v2::TableScan, transaction_v2::TransactionV2,
+    table_manager_v2::TableManagerV2, table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
 };
 
 pub struct StatManagerV2 {
@@ -150,7 +150,7 @@ mod tests {
 
     use crate::{
         buffer::buffer_manager_v2::BufferManagerV2,
-        concurrency_manager::LockTable,
+        tx::concurrency_manager::LockTable,
         storage::file_manager::FileManager,
         storage::log_manager_v2::LogManagerV2,
     };

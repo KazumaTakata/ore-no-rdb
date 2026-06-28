@@ -13,7 +13,7 @@ use crate::{
     record_page::{Layout, TableSchema},
     scan_v2::ScanV2,
     table_scan_v2::{RecordID, TableScan},
-    transaction_v2::TransactionV2,
+    tx::transaction_v2::TransactionV2,
 };
 
 pub struct HashIndex {

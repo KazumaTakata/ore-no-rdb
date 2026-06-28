@@ -7,7 +7,7 @@ use crate::{
     parser::QueryData,
     plan_v2::{create_query_plan, PlanV2},
     predicate::{ConstantValue, TableNameAndFieldName},
-    transaction_v2::TransactionV2,
+    tx::transaction_v2::TransactionV2,
 };
 
 pub fn handle_select_query(

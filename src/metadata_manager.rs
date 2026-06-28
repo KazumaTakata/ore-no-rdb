@@ -7,7 +7,7 @@ use crate::{
     record_page::{Layout, TableSchema},
     stat_manager_v2::{StatInfoV2, StatManagerV2},
     table_manager_v2::TableManagerV2,
-    transaction_v2,
+    tx::transaction_v2,
     view_manager::{self, ViewManager},
 };
 
@@ -20,7 +20,7 @@ pub struct MetadataManager {
 
 impl MetadataManager {
     pub fn new(
-        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+        transaction: Rc<RefCell<crate::tx::transaction_v2::TransactionV2>>,
     ) -> Result<Self, ValueNotFound> {
         let table_manager = Rc::new(RefCell::new(TableManagerV2::new(transaction.clone(), true)));
         let stat_manager = Rc::new(RefCell::new(StatManagerV2::new(table_manager.clone())));
@@ -69,7 +69,7 @@ impl MetadataManager {
         &mut self,
         table_name: String,
         schema: &TableSchema,
-        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+        transaction: Rc<RefCell<crate::tx::transaction_v2::TransactionV2>>,
     ) -> Result<(), TableAlreadyExists> {
         self.table_manager
             .borrow_mut()
@@ -79,7 +79,7 @@ impl MetadataManager {
     pub fn validate_select_sql(
         &self,
         query_data: &QueryData,
-        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+        transaction: Rc<RefCell<crate::tx::transaction_v2::TransactionV2>>,
     ) -> bool {
         self.table_manager
             .borrow()
@@ -107,7 +107,7 @@ impl MetadataManager {
         &mut self,
         view_name: String,
         view_definition: String,
-        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+        transaction: Rc<RefCell<crate::tx::transaction_v2::TransactionV2>>,
     ) {
         self.view_manager
             .borrow_mut()
@@ -117,7 +117,7 @@ impl MetadataManager {
     pub fn get_view_definition(
         &self,
         view_name: String,
-        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+        transaction: Rc<RefCell<crate::tx::transaction_v2::TransactionV2>>,
     ) -> Option<String> {
         self.view_manager
             .borrow()
@@ -127,7 +127,7 @@ impl MetadataManager {
     pub fn get_layout(
         &self,
         table_name: String,
-        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+        transaction: Rc<RefCell<crate::tx::transaction_v2::TransactionV2>>,
     ) -> Result<Layout, ValueNotFound> {
         self.table_manager
             .borrow()
@@ -137,7 +137,7 @@ impl MetadataManager {
     pub fn get_table_stats(
         &mut self,
         table_name: String,
-        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+        transaction: Rc<RefCell<crate::tx::transaction_v2::TransactionV2>>,
         layout: Layout,
     ) -> Result<StatInfoV2, ValueNotFound> {
         self.stat_manager
@@ -150,7 +150,7 @@ impl MetadataManager {
         index_name: String,
         table_name: String,
         field_name: String,
-        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+        transaction: Rc<RefCell<crate::tx::transaction_v2::TransactionV2>>,
     ) {
         self.index_manager.borrow_mut().create_index(
             index_name,
@@ -163,7 +163,7 @@ impl MetadataManager {
     pub fn get_index_info(
         &self,
         table_name: String,
-        transaction: Rc<RefCell<transaction_v2::TransactionV2>>,
+        transaction: Rc<RefCell<crate::tx::transaction_v2::TransactionV2>>,
     ) -> Result<HashMap<String, IndexInfo>, ValueNotFound> {
         self.index_manager
             .borrow()

@@ -13,7 +13,6 @@ mod b_tree_directory;
 mod b_tree_index;
 mod b_tree_leaf;
 mod b_tree_page;
-mod concurrency_manager;
 mod constant;
 mod database;
 mod error;
@@ -32,16 +31,15 @@ mod predicate_v3;
 mod query_handler;
 mod record_page;
 mod record_page_v2;
-mod recovery_manager;
 mod scan_v2;
 mod sort_plan;
 mod stat_manager_v2;
 mod storage;
 mod table_manager_v2;
 mod table_scan_v2;
-mod transaction_v2;
 mod view_manager;
 mod buffer;
+mod tx;
 
 use storage::block::BlockId;
 use clap::Parser;
@@ -56,7 +54,7 @@ use crate::plan_v2::{create_query_plan, execute_create_table};
 use crate::predicate::{ConstantValue, TableNameAndFieldName};
 use crate::predicate_v3::PredicateV2;
 use crate::query_handler::handle_select_query;
-use crate::transaction_v2::TransactionV2;
+use crate::tx::transaction_v2::TransactionV2;
 
 #[derive(Parser)]
 struct Args {

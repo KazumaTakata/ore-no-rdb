@@ -308,7 +308,7 @@ mod tests {
 
     use crate::{
         buffer::buffer_manager_v2::BufferManagerV2,
-        concurrency_manager::LockTable,
+        tx::concurrency_manager::LockTable,
         storage::file_manager::FileManager,
         storage::log_manager_v2::LogManagerV2,
         predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
@@ -317,7 +317,7 @@ mod tests {
         scan_v2::{ScanV2, SelectScanV2},
         table_manager_v2::TableManagerV2,
         table_scan_v2::TableScan,
-        transaction_v2::TransactionV2,
+        tx::transaction_v2::TransactionV2,
         view_manager::ViewManager,
     };
 

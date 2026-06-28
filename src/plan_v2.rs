@@ -14,7 +14,7 @@ use crate::{
     sort_plan::SortPlan,
     stat_manager_v2::StatInfoV2,
     table_scan_v2::TableScan,
-    transaction_v2::TransactionV2,
+    tx::transaction_v2::TransactionV2,
 };
 
 pub struct PlanTreeNodeForDebug {

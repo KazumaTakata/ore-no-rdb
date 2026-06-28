@@ -7,7 +7,7 @@ use crate::{
     record_page::{Layout, TableFieldType},
     record_page_v2::RecordPage,
     scan_v2::ScanV2,
-    transaction_v2::TransactionV2,
+    tx::transaction_v2::TransactionV2,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -321,7 +321,7 @@ mod tests {
     use rand::Rng;
 
     use crate::{
-        buffer::buffer_manager_v2::BufferManagerV2, concurrency_manager::LockTable,
+        buffer::buffer_manager_v2::BufferManagerV2, tx::concurrency_manager::LockTable,
         storage::file_manager::FileManager, storage::log_manager_v2::LogManagerV2, record_page::TableSchema,
     };
 

@@ -8,7 +8,7 @@ use crate::{
     record_page::TableSchema,
     scan_v2::ScanV2,
     table_scan_v2::RecordID,
-    transaction_v2::TransactionV2,
+    tx::transaction_v2::TransactionV2,
 };
 
 pub struct SortPlan {

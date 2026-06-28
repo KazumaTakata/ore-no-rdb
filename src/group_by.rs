@@ -9,7 +9,7 @@ use crate::{
     record_page::{TableFieldType, TableSchema},
     scan_v2::ScanV2,
     sort_plan::SortPlan,
-    transaction_v2::TransactionV2,
+    tx::transaction_v2::TransactionV2,
 };
 
 pub struct GroupByPlan {

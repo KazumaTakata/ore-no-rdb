@@ -6,7 +6,7 @@ use crate::{
     parser::{DeleteData, InsertData, UpdateData},
     plan_v2::{PlanV2, SelectPlanV2, TablePlanV2},
     predicate::{Constant, TableNameAndFieldName},
-    transaction_v2::TransactionV2,
+    tx::transaction_v2::TransactionV2,
 };
 
 pub struct IndexUpdatePlanner {}

@@ -8,7 +8,7 @@ use crate::{
     predicate::{Constant, ConstantValue},
     record_page::{Layout, TableFieldType},
     table_scan_v2::RecordID,
-    transaction_v2::TransactionV2,
+    tx::transaction_v2::TransactionV2,
 };
 
 pub struct BTreePage {

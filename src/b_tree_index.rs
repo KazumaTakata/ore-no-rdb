@@ -8,7 +8,7 @@ use crate::storage::block::BlockId;
 use crate::predicate::{Constant, ConstantValue};
 use crate::record_page::{Layout, TableFieldType, TableSchema};
 use crate::table_scan_v2::RecordID;
-use crate::transaction_v2::TransactionV2;
+use crate::tx::transaction_v2::TransactionV2;
 
 pub struct BTreeIndex {
     leaf_table_name: String,

@@ -7,7 +7,7 @@ use crate::{
     record_page::{Layout, TableSchema},
     scan_v2::ScanV2,
     table_scan_v2::TableScan,
-    transaction_v2::TransactionV2,
+    tx::transaction_v2::TransactionV2,
 };
 
 static INDEX_COUNTER: Mutex<i32> = Mutex::new(0);

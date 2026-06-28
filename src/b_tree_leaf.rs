@@ -6,7 +6,7 @@ use crate::storage::block::BlockId;
 use crate::predicate::Constant;
 use crate::record_page::Layout;
 use crate::table_scan_v2::RecordID;
-use crate::transaction_v2::TransactionV2;
+use crate::tx::transaction_v2::TransactionV2;
 
 pub struct DirectoryEntry {
     pub block_number: u64,

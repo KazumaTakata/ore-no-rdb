@@ -6,7 +6,7 @@ use crate::b_tree_page::BTreePage;
 use crate::storage::block::BlockId;
 use crate::predicate::Constant;
 use crate::record_page::Layout;
-use crate::transaction_v2::TransactionV2;
+use crate::tx::transaction_v2::TransactionV2;
 
 pub struct BTreeDirectory {
     transaction: Rc<RefCell<TransactionV2>>,

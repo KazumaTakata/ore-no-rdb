@@ -9,7 +9,7 @@ use crate::{
     record_page::{Layout, TableFieldType, TableSchema},
     record_page_v2::RecordPage,
     scan_v2::{ProductScanV2, ScanV2},
-    transaction_v2::TransactionV2,
+    tx::transaction_v2::TransactionV2,
 };
 
 fn get_buffer_size_for_sorting(available_buffer_size: usize, table_size: usize) -> usize {

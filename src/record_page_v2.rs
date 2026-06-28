@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     storage::block::BlockId,
     record_page::{Layout, RecordType, TableFieldType},
-    transaction_v2::TransactionV2,
+    tx::transaction_v2::TransactionV2,
 };
 
 pub struct RecordPage {
@@ -226,7 +226,7 @@ mod tests {
 
     use crate::{
         buffer::buffer_manager_v2::BufferManagerV2,
-        concurrency_manager::LockTable,
+        tx::concurrency_manager::LockTable,
         storage::file_manager::FileManager,
         storage::log_manager_v2::LogManagerV2,
         storage::page::Page,

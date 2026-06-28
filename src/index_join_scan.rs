@@ -10,12 +10,12 @@ use crate::{
     scan_v2::ScanV2,
     storage::file_manager::FileManager,
     table_scan_v2::TableScan,
-    transaction_v2::TransactionV2,
+    tx::transaction_v2::TransactionV2,
 };
 
 #[cfg(test)]
 use crate::{
-    buffer::buffer_manager_v2::BufferManagerV2, concurrency_manager::LockTable,
+    buffer::buffer_manager_v2::BufferManagerV2, tx::concurrency_manager::LockTable,
     storage::log_manager_v2::LogManagerV2, record_page::TableSchema, table_manager_v2::TableManagerV2,
 };
 #[cfg(test)]

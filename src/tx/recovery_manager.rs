@@ -5,7 +5,7 @@ use crate::{
     buffer::buffer_manager_v2::{BufferManagerV2, BufferV2},
     storage::log_manager_v2::LogManagerV2,
     storage::page::Page,
-    transaction_v2::InnerTransactionV2,
+    tx::transaction_v2::InnerTransactionV2,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
