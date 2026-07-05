@@ -1,13 +1,15 @@
 use std::sync::{Arc, Mutex};
 
+use crate::buffer::error::BufferError;
 use crate::storage::block::BlockId;
+use crate::storage::error::LogError;
 use crate::storage::log_manager_v2::LogManagerV2;
 use crate::tx::recovery_manager::RecoveryManager;
 use crate::{
     buffer::buffer_manager_v2::{BufferListV2, BufferManagerV2},
     tx::concurrency_manager::LockTable,
 };
-use crate::{tx::concurrency_manager::ConcurrencyManagerV2, storage::file_manager::FileManager};
+use crate::{storage::file_manager::FileManager, tx::concurrency_manager::ConcurrencyManagerV2};
 
 pub struct InnerTransactionV2 {
     tx_num: i32,
@@ -47,8 +49,8 @@ impl InnerTransactionV2 {
         self.file_manager.lock().unwrap().get_block_size()
     }
 
-    pub fn pin(&mut self, block_id: BlockId) {
-        self.buffer_list.pin(block_id);
+    pub fn pin(&mut self, block_id: BlockId) -> Result<(), BufferError> {
+        self.buffer_list.pin(block_id)
     }
 
     pub fn unpin(&mut self, block_id: BlockId) {
@@ -74,21 +76,25 @@ impl InnerTransactionV2 {
         value: i32,
         set_to_log: bool,
         recovery_manager: &mut RecoveryManager,
-    ) {
+    ) -> Result<(), LogError> {
         self.concurrency_manager.x_lock(block_id.clone());
 
-        let buffer = self.buffer_list.get_buffer(block_id).unwrap();
+        let buffer = self
+            .buffer_list
+            .get_buffer(block_id)
+            .expect("buffer must be pinned before set_integer");
         let mut buffer = buffer.lock().unwrap();
 
         let mut lsn = -1;
 
         if set_to_log {
-            lsn = recovery_manager.set_integer(offset, &mut buffer);
+            lsn = recovery_manager.set_integer(offset, &mut buffer)?;
         }
 
         let page = buffer.content();
         page.set_integer(offset, value);
         buffer.set_modified(self.tx_num, lsn);
+        Ok(())
     }
 
     pub fn set_string(
@@ -98,24 +104,31 @@ impl InnerTransactionV2 {
         value: &str,
         set_to_log: bool,
         recovery_manager: &mut RecoveryManager,
-    ) {
+    ) -> Result<(), LogError> {
         self.concurrency_manager.x_lock(block_id.clone());
 
-        let buffer = self.buffer_list.get_buffer(block_id).unwrap();
+        let buffer = self
+            .buffer_list
+            .get_buffer(block_id)
+            .expect("buffer must be pinned before set_string");
         let mut buffer = buffer.lock().unwrap();
 
         if set_to_log {
-            recovery_manager.set_string(offset, &mut buffer);
+            recovery_manager.set_string(offset, &mut buffer)?;
         }
 
         let page = buffer.content();
         page.set_string(offset, value);
         buffer.set_modified(self.tx_num, -1);
+        Ok(())
     }
 
     fn get_integer(&mut self, block_id: BlockId, offset: usize) -> i32 {
         self.concurrency_manager.s_lock(block_id.clone());
-        let buffer = self.buffer_list.get_buffer(block_id).unwrap();
+        let buffer = self
+            .buffer_list
+            .get_buffer(block_id)
+            .expect("buffer must be pinned before get_integer");
         let mut buffer = buffer.lock().unwrap();
         let page = buffer.content();
         page.get_integer(offset)
@@ -127,18 +140,24 @@ impl InnerTransactionV2 {
 
     fn get_string(&mut self, block_id: BlockId, offset: usize) -> String {
         self.concurrency_manager.s_lock(block_id.clone());
-        let buffer = self.buffer_list.get_buffer(block_id).unwrap();
+        let buffer = self
+            .buffer_list
+            .get_buffer(block_id)
+            .expect("buffer must be pinned before get_string");
         let mut buffer = buffer.lock().unwrap();
         let page = buffer.content();
         page.get_string(offset)
     }
 
-    fn append(&mut self, file_name: &str) -> BlockId {
+    fn append(&mut self, file_name: &str) -> std::io::Result<BlockId> {
         self.file_manager.lock().unwrap().append(file_name)
     }
 
     fn get_available_buffer_size(&self) -> i32 {
-        self.buffer_manager.lock().unwrap().get_available_buffer_size()
+        self.buffer_manager
+            .lock()
+            .unwrap()
+            .get_available_buffer_size()
     }
 }
 
@@ -211,7 +230,7 @@ impl TransactionV2 {
         self.inner.get_string(block_id, offset)
     }
 
-    pub fn append(&mut self, file_name: &str) -> BlockId {
+    pub fn append(&mut self, file_name: &str) -> std::io::Result<BlockId> {
         self.inner.append(file_name)
     }
 
@@ -230,7 +249,7 @@ mod tests {
 
     // FileManagerのテスト
     #[test]
-    fn test_transaction_v2() {
+    fn test_transaction_v2() -> Result<(), LogError> {
         let test_dir = Path::new("test_data");
 
         let test_file_name = format!("test_file_{}.txt", uuid::Uuid::new_v4());
@@ -241,7 +260,7 @@ mod tests {
         let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
             file_manager.clone(),
             log_file_name.clone(),
-        )));
+        )?));
         let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             10,
             file_manager.clone(),
@@ -324,5 +343,7 @@ mod tests {
         // file cleanup
         remove_file(test_dir.join(test_file_name)).unwrap();
         remove_file(test_dir.join(log_file_name)).unwrap();
+
+        Ok(())
     }
 }

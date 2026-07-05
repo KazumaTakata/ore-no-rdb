@@ -60,7 +60,10 @@ impl TableScan {
         let block_size = transaction.borrow_mut().get_size(file_name.clone());
 
         if block_size == 0 {
-            let block_id = transaction.borrow_mut().append(&file_name);
+            let block_id = transaction
+                .borrow_mut()
+                .append(&file_name)
+                .expect("failed to append block to table file");
             let mut record_page = RecordPage::new(transaction.clone(), layout.clone(), block_id);
             record_page.format();
             return TableScan {
@@ -93,7 +96,11 @@ impl TableScan {
 
     pub fn move_to_new_block(&mut self) {
         self.close();
-        let block_id = self.transaction.borrow_mut().append(&self.file_name);
+        let block_id = self
+            .transaction
+            .borrow_mut()
+            .append(&self.file_name)
+            .expect("failed to append new block to table file");
         self.record_page = RecordPage::new(self.transaction.clone(), self.layout.clone(), block_id);
         self.record_page.format();
         self.current_slot = -1;
@@ -337,7 +344,7 @@ mod tests {
         let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
             file_manager.clone(),
             log_file_name.clone(),
-        )));
+        ).expect("failed to initialize log manager")));
 
         let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             3,

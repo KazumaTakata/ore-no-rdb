@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use crate::storage::error::LogError;
 use crate::storage::file_manager::FileManager;
 use crate::storage::page::Page;
 use crate::{constant::INTEGER_BYTE_SIZE, storage::block::BlockId};
@@ -16,7 +17,7 @@ impl LogManagerV2 {
     pub fn new(
         file_manager: Arc<Mutex<FileManager>>,
         log_file_name: String,
-    ) -> std::io::Result<LogManagerV2> {
+    ) -> Result<LogManagerV2, LogError> {
         let file_manager_mut_ref = file_manager.lock().unwrap();
         let log_size = file_manager_mut_ref.length(&log_file_name);
 
@@ -27,10 +28,10 @@ impl LogManagerV2 {
         if log_size == 0 {
             block_id = file_manager_mut_ref.append(&log_file_name)?;
             log_page.set_integer(0, file_manager_mut_ref.block_size as i32);
-            file_manager_mut_ref.write(&block_id, &mut log_page);
+            file_manager_mut_ref.write(&block_id, &mut log_page)?;
         } else {
             block_id = BlockId::new(log_file_name.to_string(), log_size as u64 - 1);
-            file_manager_mut_ref.read(&block_id, &mut log_page);
+            file_manager_mut_ref.read(&block_id, &mut log_page)?;
         }
 
         Ok(LogManagerV2 {
@@ -43,7 +44,7 @@ impl LogManagerV2 {
         })
     }
 
-    pub fn append_new_block(&mut self) -> std::io::Result<BlockId> {
+    pub fn append_new_block(&mut self) -> Result<BlockId, LogError> {
         let block_id = self
             .file_manager
             .lock()
@@ -74,7 +75,7 @@ impl LogManagerV2 {
         }
     }
 
-    pub fn append_record(&mut self, record: &[u8]) -> std::io::Result<i32> {
+    pub fn append_record(&mut self, record: &[u8]) -> Result<i32, LogError> {
         let record_length = record.len();
         let mut boundary = self.log_page.get_integer(0);
 
@@ -154,7 +155,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_log_manager() -> std::io::Result<()> {
+    fn test_log_manager() -> Result<(), LogError> {
         let test_dir = std::path::Path::new("test_data");
 
         let block_size = 400;

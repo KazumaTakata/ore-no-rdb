@@ -18,10 +18,10 @@ pub struct Database {
 impl Database {
     pub fn new(directory_path: &Path) -> Self {
         let file_manager = Arc::new(Mutex::new(FileManager::new(directory_path, 400)));
-        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
-            file_manager.clone(),
-            "log.txt".to_string(),
-        )));
+        let log_manager = Arc::new(Mutex::new(
+            LogManagerV2::new(file_manager.clone(), "log.txt".to_string())
+                .expect("failed to initialize log manager"),
+        ));
 
         let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             1000,

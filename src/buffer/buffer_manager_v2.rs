@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::storage::page::Page;
+use crate::buffer::error::BufferError;
 use crate::storage::file_manager::FileManager;
+use crate::storage::page::Page;
 use crate::{storage::block::BlockId, storage::log_manager_v2::LogManagerV2};
 
 pub struct BufferV2 {
@@ -147,7 +148,7 @@ impl BufferManagerV2 {
                         buffer.lock().unwrap().assign_to_block(block_id);
                         Some(buffer)
                     }
-                    None => panic!("All buffers are pinned"),
+                    None => None,
                 }
             }
         };
@@ -191,8 +192,10 @@ impl BufferManagerV2 {
         }
     }
 
-    pub fn pin(&mut self, block_id: BlockId) -> Option<Arc<Mutex<BufferV2>>> {
-        return self.try_to_pin(block_id);
+    pub fn pin(&mut self, block_id: BlockId) -> Result<Arc<Mutex<BufferV2>>, BufferError> {
+        return self
+            .try_to_pin(block_id)
+            .ok_or(BufferError::NoAvailableBuffer);
     }
 
     pub fn get_available_buffer_size(&self) -> i32 {
@@ -215,14 +218,13 @@ impl BufferListV2 {
         }
     }
 
-    pub fn pin(&mut self, block_id: BlockId) {
+    pub fn pin(&mut self, block_id: BlockId) -> Result<(), BufferError> {
         let mut buffer_manager = self.buffer_manager.lock().unwrap();
-        if let Some(buffer) = buffer_manager.pin(block_id.clone()) {
-            drop(buffer_manager);
-
-            self.buffers.insert(block_id.clone(), Arc::clone(&buffer));
-            self.pins.push(block_id);
-        }
+        let buffer = buffer_manager.pin(block_id.clone())?;
+        drop(buffer_manager);
+        self.buffers.insert(block_id.clone(), Arc::clone(&buffer));
+        self.pins.push(block_id);
+        Ok(())
     }
 
     pub fn unpin(&mut self, block_id: BlockId) {
@@ -266,19 +268,19 @@ mod tests {
 
     use std::fs::remove_file;
 
+    use crate::storage::error::LogError;
+
     use super::*;
 
     #[test]
-    fn test_buffer_manager() {
+    fn test_buffer_manager() -> Result<(), LogError> {
         let test_dir = std::path::Path::new("test_data");
 
         let block_size = 400;
         let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
 
-        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
-            file_manager.clone(),
-            "log.txt".to_string(),
-        )));
+        let log_manager = LogManagerV2::new(file_manager.clone(), "log.txt".to_string())?;
+        let log_manager = Arc::new(Mutex::new(log_manager));
 
         let number_of_buffers = 3;
 
@@ -348,5 +350,6 @@ mod tests {
         assert!(string_value == "hello buffer manager");
 
         remove_file(test_dir.join("test_buffer_manager.txt")).unwrap();
+        Ok(())
     }
 }
