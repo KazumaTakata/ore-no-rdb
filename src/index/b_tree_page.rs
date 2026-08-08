@@ -186,7 +186,8 @@ impl BTreePage {
         let block_id = self
             .transaction
             .borrow_mut()
-            .append(self.current_block.clone().get_file_name());
+            .append(self.current_block.clone().get_file_name())
+            .expect("failed to append new block to b-tree file");
 
         self.transaction.borrow_mut().pin(block_id.clone());
         self.format(block_id.clone(), flag);

@@ -246,7 +246,7 @@ mod tests {
         let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
             file_manager.clone(),
             log_file_name.clone(),
-        )));
+        ).expect("failed to initialize log manager")));
 
         let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             100,

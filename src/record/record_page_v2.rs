@@ -246,7 +246,7 @@ mod tests {
         let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
             file_manager.clone(),
             log_file_name.clone(),
-        )));
+        ).expect("failed to initialize log manager")));
 
         let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             3,
@@ -302,7 +302,10 @@ mod tests {
 
         let test_file_name = format!("test_file_{}.txt", uuid::Uuid::new_v4());
 
-        let block = transaction.borrow_mut().append(&test_file_name);
+        let block = transaction
+            .borrow_mut()
+            .append(&test_file_name)
+            .expect("failed to append block to test file");
 
         transaction.borrow_mut().pin(block.clone());
 

@@ -31,7 +31,10 @@ impl BTreeIndex {
         let leaf_table_size = transaction.borrow_mut().get_size(leaf_table_name.clone());
 
         if leaf_table_size == 0 {
-            let block_id = transaction.borrow_mut().append(&leaf_table_name);
+            let block_id = transaction
+                .borrow_mut()
+                .append(&leaf_table_name)
+                .expect("failed to append leaf block to b-tree file");
             let node = BTreePage::new(transaction.clone(), block_id.clone(), leaf_layout.clone());
             node.format(block_id.clone(), -1);
         }
@@ -53,7 +56,10 @@ impl BTreeIndex {
             .get_size(directory_table_name.clone())
             == 0
         {
-            transaction.borrow_mut().append(&directory_table_name);
+            transaction
+                .borrow_mut()
+                .append(&directory_table_name)
+                .expect("failed to append directory block to b-tree file");
             let mut node = BTreePage::new(
                 transaction.clone(),
                 root_block_id.clone(),

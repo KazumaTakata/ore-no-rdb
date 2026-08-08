@@ -1,10 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use crate::{
-    storage::block::BlockId,
     buffer::buffer_manager_v2::{BufferManagerV2, BufferV2},
-    storage::log_manager_v2::LogManagerV2,
-    storage::page::Page,
+    storage::{block::BlockId, error::LogError, log_manager_v2::LogManagerV2, page::Page},
     tx::transaction_v2::InnerTransactionV2,
 };
 
@@ -114,7 +112,7 @@ impl SetStringRecord {
         block_id: &BlockId,
         offset: usize,
         value: &str,
-    ) -> i32 {
+    ) -> Result<i32, LogError> {
         let transaction_id_offset: usize = Page::get_integer_byte_size();
         let filename_offset = transaction_id_offset + Page::get_integer_byte_size();
         let block_number_offset =
@@ -197,7 +195,7 @@ impl SetIntegerRecord {
         block_id: &BlockId,
         offset: usize,
         value: i32,
-    ) -> i32 {
+    ) -> Result<i32, LogError> {
         let transaction_id_offset = Page::get_integer_byte_size();
         let filename_offset = transaction_id_offset + Page::get_integer_byte_size();
         let block_number_offset =
@@ -248,7 +246,7 @@ impl CheckpointRecord {
         CheckpointRecord {}
     }
 
-    fn write_to_log(log_manager: &mut LogManagerV2) -> i32 {
+    fn write_to_log(log_manager: &mut LogManagerV2) -> Result<i32, LogError> {
         let mut page = Page::new(Page::get_integer_byte_size());
         page.set_integer(0, LogRecordType::CHECKPOINT as i32);
         let lsn = log_manager.append_record(page.get_data());
@@ -280,7 +278,7 @@ impl StartRecord {
         StartRecord { transaction_id }
     }
 
-    fn write_to_log(log_manager: &mut LogManagerV2, transaction_id: i32) -> i32 {
+    fn write_to_log(log_manager: &mut LogManagerV2, transaction_id: i32) -> Result<i32, LogError> {
         let mut page = Page::new(Page::get_integer_byte_size() * 2);
         page.set_integer(0, LogRecordType::START as i32);
         page.set_integer(Page::get_integer_byte_size(), transaction_id);
@@ -314,7 +312,7 @@ impl CommitRecord {
         CommitRecord { transaction_id }
     }
 
-    fn write_to_log(log_manager: &mut LogManagerV2, transaction_id: i32) -> i32 {
+    fn write_to_log(log_manager: &mut LogManagerV2, transaction_id: i32) -> Result<i32, LogError> {
         let mut page = Page::new(Page::get_integer_byte_size() * 2);
         page.set_integer(0, LogRecordType::COMMIT as i32);
         page.set_integer(Page::get_integer_byte_size(), transaction_id);
@@ -346,12 +344,11 @@ impl RollbackRecord {
         RollbackRecord { transaction_id }
     }
 
-    fn write_to_log(log_manager: &mut LogManagerV2, transaction_id: i32) -> i32 {
+    fn write_to_log(log_manager: &mut LogManagerV2, transaction_id: i32) -> Result<i32, LogError> {
         let mut page = Page::new(Page::get_integer_byte_size() * 2);
         page.set_integer(0, LogRecordType::ROLLBACK as i32);
         page.set_integer(Page::get_integer_byte_size(), transaction_id);
         let lsn = log_manager.append_record(page.get_data());
-
         return lsn;
     }
 }
@@ -390,7 +387,7 @@ impl RecoveryManager {
         }
     }
 
-    pub fn commit(&self) {
+    pub fn commit(&self) -> Result<(), LogError> {
         self.buffer_manager
             .lock()
             .unwrap()
@@ -398,11 +395,12 @@ impl RecoveryManager {
         let lsn = CommitRecord::write_to_log(
             &mut self.log_manager.lock().unwrap(),
             self.transaction_number,
-        );
+        )?;
         self.log_manager.lock().unwrap().flush_with_lsn(lsn);
+        Ok(())
     }
 
-    pub fn rollback(&mut self, transaction: &mut InnerTransactionV2) {
+    pub fn rollback(&mut self, transaction: &mut InnerTransactionV2) -> Result<(), LogError> {
         self.do_rollback(transaction);
         self.buffer_manager
             .lock()
@@ -411,8 +409,9 @@ impl RecoveryManager {
         let lsn = RollbackRecord::write_to_log(
             &mut self.log_manager.lock().unwrap(),
             self.transaction_number,
-        );
+        )?;
         self.log_manager.lock().unwrap().flush_with_lsn(lsn);
+        Ok(())
     }
 
     fn do_rollback(&mut self, transaction: &mut InnerTransactionV2) {
@@ -451,17 +450,18 @@ impl RecoveryManager {
         }
     }
 
-    fn recover(&mut self, transaction: &mut InnerTransactionV2) {
+    fn recover(&mut self, transaction: &mut InnerTransactionV2) -> Result<(), LogError> {
         self.do_recover(transaction);
         self.buffer_manager
             .lock()
             .unwrap()
             .flush_all(self.transaction_number);
-        let lsn = CheckpointRecord::write_to_log(&mut self.log_manager.lock().unwrap());
+        let lsn = CheckpointRecord::write_to_log(&mut self.log_manager.lock().unwrap())?;
         self.log_manager.lock().unwrap().flush_with_lsn(lsn);
+        Ok(())
     }
 
-    pub fn set_integer(&self, offset: usize, buffer: &mut BufferV2) -> i32 {
+    pub fn set_integer(&self, offset: usize, buffer: &mut BufferV2) -> Result<i32, LogError> {
         let old_value = buffer.content().get_integer(offset);
         let block = buffer.block_id().as_ref().unwrap().clone();
         let lsn = SetIntegerRecord::write_to_log(
@@ -470,11 +470,11 @@ impl RecoveryManager {
             &block,
             offset,
             old_value,
-        );
-        return lsn;
+        )?;
+        Ok(lsn)
     }
 
-    pub fn set_string(&self, offset: usize, buffer: &mut BufferV2) -> i32 {
+    pub fn set_string(&self, offset: usize, buffer: &mut BufferV2) -> Result<i32, LogError> {
         let old_value = buffer.content().get_string(offset);
         let block = buffer.block_id().as_ref().unwrap().clone();
 
@@ -484,8 +484,8 @@ impl RecoveryManager {
             &block,
             offset,
             &old_value,
-        );
+        )?;
 
-        return lsn;
+        Ok(lsn)
     }
 }

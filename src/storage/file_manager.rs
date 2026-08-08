@@ -58,33 +58,32 @@ impl FileManager {
         file_length / self.block_size
     }
 
-    pub fn read(&self, block_id: &BlockId, page: &mut Page) {
+    pub fn read(&self, block_id: &BlockId, page: &mut Page) -> std::io::Result<()> {
         let block_size = self.block_size;
         let file = self.get_file(block_id.get_file_name());
         let file = file.lock().unwrap();
         let offset = block_id.get_block_number() as usize * block_size;
-        file.read_at(page.get_data().as_mut_slice(), offset as u64)
-            .unwrap();
+        file.read_at(page.get_data().as_mut_slice(), offset as u64)?;
+        Ok(())
     }
 
-    pub fn write(&self, block_id: &BlockId, page: &mut Page) {
+    pub fn write(&self, block_id: &BlockId, page: &mut Page) -> std::io::Result<()> {
         let block_size = self.block_size;
         let file = self.get_file(block_id.get_file_name());
         let file = file.lock().unwrap();
         let offset = block_id.get_block_number() as usize * block_size;
-        file.write_at(page.get_data().as_slice(), offset as u64)
-            .unwrap();
+        file.write_at(page.get_data().as_slice(), offset as u64)?;
+        Ok(())
     }
-    pub fn append(&self, file_name: &str) -> BlockId {
+    pub fn append(&self, file_name: &str) -> std::io::Result<BlockId> {
         let block_size = self.block_size;
         let file = self.get_file(file_name);
         let file = file.lock().unwrap();
-        let offset = file.metadata().unwrap().len() as usize;
+        let offset = file.metadata()?.len() as usize;
         let block_number = offset / block_size;
         let byte_array = vec![0; block_size];
-        file.write_at(&byte_array, offset as u64).unwrap();
-
-        return BlockId::new(file_name.to_string(), block_number as u64);
+        file.write_at(&byte_array, offset as u64)?;
+        Ok(BlockId::new(file_name.to_string(), block_number as u64))
     }
 }
 

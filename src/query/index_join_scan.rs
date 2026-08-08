@@ -150,10 +150,10 @@ fn test_view_mgr() {
     let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
 
     let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
-    let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
-        file_manager.clone(),
-        log_file_name.clone(),
-    )));
+    let log_manager = Arc::new(Mutex::new(
+        LogManagerV2::new(file_manager.clone(), log_file_name.clone())
+            .expect("failed to initialize log manager"),
+    ));
 
     let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
         100,
