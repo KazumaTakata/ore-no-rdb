@@ -9,25 +9,26 @@ use std::path::Path;
 use std::rc::Rc;
 use std::vec;
 
+mod buffer;
 mod constant;
 mod database;
 mod error;
-mod storage;
-mod buffer;
-mod tx;
-mod record;
-mod metadata;
 mod index;
+mod metadata;
+mod parser;
 mod query;
+mod record;
+mod storage;
+mod tx;
 
-use storage::block::BlockId;
-use clap::Parser;
-use storage::page::Page;
 use crate::query::parser::parse_sql;
+use clap::Parser;
+use storage::block::BlockId;
+use storage::page::Page;
 
 use crate::database::Database;
-use crate::query::index_update_planner::IndexUpdatePlanner;
 use crate::metadata::metadata_manager::MetadataManager;
+use crate::query::index_update_planner::IndexUpdatePlanner;
 use crate::query::parser::{ParsedSQL, QueryData};
 use crate::query::plan_v2::{create_query_plan, execute_create_table};
 use crate::query::predicate::{ConstantValue, TableNameAndFieldName};
