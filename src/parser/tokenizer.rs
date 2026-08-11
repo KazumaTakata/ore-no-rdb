@@ -3,8 +3,8 @@ use std::error;
 use std::fmt;
 use std::sync::LazyLock;
 
-#[derive(Debug, PartialEq, Eq)]
-enum Token {
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Token {
     Select,
     From,
     Insert,
@@ -22,6 +22,47 @@ enum Token {
     RightParen,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum TokenKind {
+    Select,
+    From,
+    Insert,
+    Into,
+    Values,
+    Update,
+    Delete,
+    Equal,
+    IDENT,
+    Number,
+    String,
+    Where,
+    COMMA,
+    LeftParen,
+    RightParen,
+}
+
+impl Token {
+    fn kind(&self) -> TokenKind {
+        match self {
+            Token::Select => TokenKind::Select,
+            Token::From => TokenKind::From,
+            Token::Insert => TokenKind::Insert,
+            Token::Into => TokenKind::Into,
+            Token::Values => TokenKind::Values,
+            Token::Delete => TokenKind::Delete,
+            Token::Update => TokenKind::Update,
+            Token::Equal => TokenKind::Equal,
+            Token::IDENT(_) => TokenKind::IDENT,
+            Token::Number(_) => TokenKind::Number,
+            Token::String(_) => TokenKind::String,
+            Token::Where => TokenKind::Where,
+            Token::COMMA => TokenKind::COMMA,
+            Token::LeftParen => TokenKind::LeftParen,
+            Token::RightParen => TokenKind::RightParen,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct TokenResponse {
     token: Token,
@@ -34,7 +75,7 @@ struct InvalidCharacterError {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum TokenizationError {
+pub enum TokenizationError {
     InvalidCharacter(InvalidCharacterError),
 }
 
@@ -185,7 +226,7 @@ fn get_token(input_text: &str) -> Result<TokenResponse, TokenizationError> {
     }));
 }
 
-fn tokenize(input_text: &str) -> Result<Vec<Token>, TokenizationError> {
+pub fn tokenize(input_text: &str) -> Result<Vec<Token>, TokenizationError> {
     let mut input_data = input_text;
     let mut result: Vec<Token> = vec![];
     while input_data.len() > 0 {
