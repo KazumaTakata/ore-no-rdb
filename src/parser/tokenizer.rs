@@ -18,6 +18,7 @@ pub enum Token {
     String(String),
     Where,
     COMMA,
+    AND,
     LeftParen,
     RightParen,
 }
@@ -39,10 +40,11 @@ pub enum TokenKind {
     COMMA,
     LeftParen,
     RightParen,
+    AND,
 }
 
 impl Token {
-    fn kind(&self) -> TokenKind {
+    pub fn kind(&self) -> TokenKind {
         match self {
             Token::Select => TokenKind::Select,
             Token::From => TokenKind::From,
@@ -59,6 +61,7 @@ impl Token {
             Token::COMMA => TokenKind::COMMA,
             Token::LeftParen => TokenKind::LeftParen,
             Token::RightParen => TokenKind::RightParen,
+            Token::AND => TokenKind::AND,
         }
     }
 }
@@ -101,6 +104,7 @@ static SELECT_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)select
 static INSERT_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)insert\s+").unwrap());
 static FROM_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)from\s+").unwrap());
 static INTO_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)into\s+").unwrap());
+static AND_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)and\s+").unwrap());
 static VALUES_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)values\s+").unwrap());
 static UPDATE_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)updates\s+").unwrap());
 static WHERE_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)where\s+").unwrap());
@@ -135,6 +139,13 @@ fn get_token(input_text: &str) -> Result<TokenResponse, TokenizationError> {
     if let Some(value) = INTO_REGEX.find(input_text) {
         return Ok(TokenResponse {
             token: Token::Into,
+            position: value.end(),
+        });
+    }
+
+    if let Some(value) = AND_REGEX.find(input_text) {
+        return Ok(TokenResponse {
+            token: Token::AND,
             position: value.end(),
         });
     }
