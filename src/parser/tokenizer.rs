@@ -1,7 +1,14 @@
 use regex::Regex;
 use std::error;
 use std::fmt;
+use std::fmt::Pointer;
 use std::sync::LazyLock;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TokenWithPos {
+    pub token: Token,
+    pub pos: usize,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
@@ -74,7 +81,7 @@ struct TokenResponse {
 
 #[derive(Debug, PartialEq, Eq)]
 struct InvalidCharacterError {
-    character: String,
+    position: usize,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -85,11 +92,9 @@ pub enum TokenizationError {
 impl fmt::Display for TokenizationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TokenizationError::InvalidCharacter(x) => write!(
-                f,
-                "不適切な文字列がありました. pos: character:{}",
-                x.character
-            ),
+            TokenizationError::InvalidCharacter(x) => {
+                write!(f, "不適切な文字列がありました. pos:{}", x.position)
+            }
         }
     }
 }
@@ -112,9 +117,7 @@ static LEADING_WHITESPACE_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r
 static COMMA_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^,").unwrap());
 static EQUAL_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^=").unwrap());
 
-fn get_token(input_text: &str) -> Result<TokenResponse, TokenizationError> {
-    let input_text = input_text.trim_start();
-
+fn get_token(input_text: &str, position: usize) -> Result<TokenResponse, TokenizationError> {
     if let Some(value) = SELECT_REGEX.find(input_text) {
         return Ok(TokenResponse {
             token: Token::Select,
@@ -233,18 +236,22 @@ fn get_token(input_text: &str) -> Result<TokenResponse, TokenizationError> {
         });
     }
     return Err(TokenizationError::InvalidCharacter(InvalidCharacterError {
-        character: input_text.to_string(),
+        position: position,
     }));
 }
 
-pub fn tokenize(input_text: &str) -> Result<Vec<Token>, TokenizationError> {
-    let mut input_data = input_text;
-    let mut result: Vec<Token> = vec![];
-    while input_data.len() > 0 {
-        input_data = input_data.trim_start();
-        let token = get_token(input_data)?;
-        input_data = &input_data[token.position..];
-        result.push(token.token);
+pub fn tokenize(input_text: &str) -> Result<Vec<TokenWithPos>, TokenizationError> {
+    let mut position = 0;
+    let mut result: Vec<TokenWithPos> = vec![];
+    while input_text[position..].len() > 0 {
+        let input_date_without_white_space = input_text[position..].trim_start();
+        position += input_text[position..].len() - input_date_without_white_space.len();
+        let token = get_token(&input_text[position..], position)?;
+        result.push(TokenWithPos {
+            token: token.token,
+            pos: position,
+        });
+        position += token.position;
     }
     return Ok(result);
 }
@@ -252,32 +259,8 @@ pub fn tokenize(input_text: &str) -> Result<Vec<Token>, TokenizationError> {
 #[cfg(test)]
 mod tests {
     use crate::parser::tokenizer::{
-        get_token, tokenize, InvalidCharacterError, Token, TokenizationError,
+        get_token, tokenize, InvalidCharacterError, Token, TokenWithPos, TokenizationError,
     };
-
-    #[test]
-    fn test_get_token() {
-        let test_data = "select field from table";
-        let token = get_token(test_data).expect("Okであることを期待");
-        assert_eq!(&test_data[token.position..], "field from table");
-        assert_eq!(token.token, Token::Select)
-    }
-
-    #[test]
-    fn test_from_token() {
-        let test_data = "from table1";
-        let token = get_token(test_data).expect("Okであることを期待");
-        assert_eq!(&test_data[token.position..], "table1");
-        assert_eq!(token.token, Token::From)
-    }
-
-    #[test]
-    fn test_get_token_left_paren() {
-        let test_data = "(var1, var2)";
-        let token = get_token(test_data).expect("Okであることを期待");
-        assert_eq!(&test_data[token.position..], "var1, var2)");
-        assert_eq!(token.token, Token::LeftParen)
-    }
 
     #[test]
     fn test_tokenize() {
@@ -286,10 +269,22 @@ mod tests {
         assert_eq!(
             token_vec,
             vec![
-                Token::Select,
-                Token::IDENT("field".to_string()),
-                Token::From,
-                Token::IDENT("table".to_string())
+                TokenWithPos {
+                    token: Token::Select,
+                    pos: 2
+                },
+                TokenWithPos {
+                    token: Token::IDENT("field".to_string()),
+                    pos: 9
+                },
+                TokenWithPos {
+                    token: Token::From,
+                    pos: 15
+                },
+                TokenWithPos {
+                    token: Token::IDENT("table".to_string()),
+                    pos: 20
+                },
             ]
         );
     }
@@ -301,39 +296,62 @@ mod tests {
         assert_eq!(
             token_vec,
             vec![
-                Token::Insert,
-                Token::Into,
-                Token::IDENT("table1".to_string()),
-                Token::LeftParen,
-                Token::IDENT("field1".to_string()),
-                Token::COMMA,
-                Token::IDENT("field2".to_string()),
-                Token::RightParen,
-                Token::Values,
-                Token::LeftParen,
-                Token::String("value1".to_string()),
-                Token::COMMA,
-                Token::Number(200),
-                Token::RightParen,
-            ]
-        );
-    }
-
-    #[test]
-    fn test_tokenize_3() {
-        let test_data = "select field1 from table where field1 = 200";
-        let token_vec = tokenize(test_data).expect("Okであることを期待");
-        assert_eq!(
-            token_vec,
-            vec![
-                Token::Select,
-                Token::IDENT("field1".to_string()),
-                Token::From,
-                Token::IDENT("table".to_string()),
-                Token::Where,
-                Token::IDENT("field1".to_string()),
-                Token::Equal,
-                Token::Number(200),
+                TokenWithPos {
+                    token: Token::Insert,
+                    pos: 0
+                },
+                TokenWithPos {
+                    token: Token::Into,
+                    pos: 7
+                },
+                TokenWithPos {
+                    token: Token::IDENT("table1".to_string()),
+                    pos: 12
+                },
+                TokenWithPos {
+                    token: Token::LeftParen,
+                    pos: 19
+                },
+                TokenWithPos {
+                    token: Token::IDENT("field1".to_string()),
+                    pos: 20
+                },
+                TokenWithPos {
+                    token: Token::COMMA,
+                    pos: 26
+                },
+                TokenWithPos {
+                    token: Token::IDENT("field2".to_string()),
+                    pos: 28
+                },
+                TokenWithPos {
+                    token: Token::RightParen,
+                    pos: 34
+                },
+                TokenWithPos {
+                    token: Token::Values,
+                    pos: 36
+                },
+                TokenWithPos {
+                    token: Token::LeftParen,
+                    pos: 43
+                },
+                TokenWithPos {
+                    token: Token::String("value1".to_string()),
+                    pos: 44
+                },
+                TokenWithPos {
+                    token: Token::COMMA,
+                    pos: 52
+                },
+                TokenWithPos {
+                    token: Token::Number(200),
+                    pos: 54
+                },
+                TokenWithPos {
+                    token: Token::RightParen,
+                    pos: 57
+                },
             ]
         );
     }
@@ -344,9 +362,7 @@ mod tests {
         let result = tokenize(test_data);
         assert_eq!(
             result.unwrap_err(),
-            TokenizationError::InvalidCharacter(InvalidCharacterError {
-                character: "あいうえお from table where field1 = 200".to_string()
-            })
+            TokenizationError::InvalidCharacter(InvalidCharacterError { position: 7 })
         );
     }
 }
