@@ -1,4 +1,5 @@
 use regex::Regex;
+use std::collections::HashMap;
 use std::error;
 use std::fmt;
 use std::fmt::Pointer;
@@ -18,17 +19,53 @@ pub enum Token {
     Into,
     Values,
     Update,
+    Create,
+    Table,
+    View,
+    Index,
+    On,
+    As,
     Delete,
     Equal,
-    IDENT(String),
-    Number(i32),
-    String(String),
     Where,
+    Set,
+    INT,
+    VARCHAR,
     COMMA,
     AND,
     LeftParen,
     RightParen,
+
+    IDENT(String),
+    Number(i32),
+    PositiveInteger(usize),
+    String(String),
 }
+
+static KEYWORD_MAP: LazyLock<HashMap<&str, Token>> = LazyLock::new(|| {
+    HashMap::from([
+        ("select", Token::Select),
+        ("from", Token::From),
+        ("insert", Token::Insert),
+        ("into", Token::Into),
+        ("values", Token::Values),
+        ("and", Token::AND),
+        ("update", Token::Update),
+        ("where", Token::Where),
+        ("create", Token::Create),
+        ("table", Token::Table),
+        ("view", Token::View),
+        ("index", Token::Index),
+        ("on", Token::On),
+        ("as", Token::As),
+        ("delete", Token::Delete),
+        ("equal", Token::Equal),
+        ("where", Token::Where),
+        ("set", Token::Set),
+        ("int", Token::INT),
+        ("varchar", Token::VARCHAR),
+    ])
+});
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenKind {
@@ -39,9 +76,19 @@ pub enum TokenKind {
     Values,
     Update,
     Delete,
+    Create,
+    Table,
+    View,
+    Index,
+    INT,
+    VARCHAR,
+    PositiveInteger,
+    On,
+    As,
     Equal,
     IDENT,
     Number,
+    Set,
     String,
     Where,
     COMMA,
@@ -58,6 +105,15 @@ impl Token {
             Token::Insert => TokenKind::Insert,
             Token::Into => TokenKind::Into,
             Token::Values => TokenKind::Values,
+            Token::Create => TokenKind::Create,
+            Token::Table => TokenKind::Table,
+            Token::View => TokenKind::View,
+            Token::Index => TokenKind::Index,
+            Token::PositiveInteger(_) => TokenKind::PositiveInteger,
+            Token::INT => TokenKind::INT,
+            Token::VARCHAR => TokenKind::VARCHAR,
+            Token::On => TokenKind::On,
+            Token::As => TokenKind::As,
             Token::Delete => TokenKind::Delete,
             Token::Update => TokenKind::Update,
             Token::Equal => TokenKind::Equal,
@@ -69,6 +125,7 @@ impl Token {
             Token::LeftParen => TokenKind::LeftParen,
             Token::RightParen => TokenKind::RightParen,
             Token::AND => TokenKind::AND,
+            Token::Set => TokenKind::Set,
         }
     }
 }
@@ -105,85 +162,21 @@ impl error::Error for TokenizationError {
     }
 }
 
-static SELECT_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)select\s+").unwrap());
-static INSERT_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)insert\s+").unwrap());
-static FROM_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)from\s+").unwrap());
-static INTO_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)into\s+").unwrap());
-static AND_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)and\s+").unwrap());
-static VALUES_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)values\s+").unwrap());
-static UPDATE_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)updates\s+").unwrap());
-static WHERE_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?i)where\s+").unwrap());
-static LEADING_WHITESPACE_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s+").unwrap());
 static COMMA_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^,").unwrap());
 static EQUAL_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^=").unwrap());
 
 fn get_token(input_text: &str, position: usize) -> Result<TokenResponse, TokenizationError> {
-    if let Some(value) = SELECT_REGEX.find(input_text) {
-        return Ok(TokenResponse {
-            token: Token::Select,
-            position: value.end(),
-        });
-    }
+    let ident_regex = Regex::new(r"^[A-Za-z_][A-Za-z0-9_]{0,62}\s*").unwrap();
+    if let Some(value) = ident_regex.find(input_text) {
+        let keyword = KEYWORD_MAP.get(value.as_str().trim().to_lowercase().as_str());
 
-    if let Some(value) = INSERT_REGEX.find(input_text) {
-        return Ok(TokenResponse {
-            token: Token::Insert,
-            position: value.end(),
-        });
-    }
+        if let Some(keyword) = keyword {
+            return Ok(TokenResponse {
+                token: keyword.clone(),
+                position: value.end(),
+            });
+        }
 
-    if let Some(value) = FROM_REGEX.find(input_text) {
-        return Ok(TokenResponse {
-            token: Token::From,
-            position: value.end(),
-        });
-    }
-
-    if let Some(value) = INTO_REGEX.find(input_text) {
-        return Ok(TokenResponse {
-            token: Token::Into,
-            position: value.end(),
-        });
-    }
-
-    if let Some(value) = AND_REGEX.find(input_text) {
-        return Ok(TokenResponse {
-            token: Token::AND,
-            position: value.end(),
-        });
-    }
-
-    if let Some(value) = VALUES_REGEX.find(input_text) {
-        return Ok(TokenResponse {
-            token: Token::Values,
-            position: value.end(),
-        });
-    }
-
-    if let Some(value) = UPDATE_REGEX.find(input_text) {
-        return Ok(TokenResponse {
-            token: Token::Update,
-            position: value.end(),
-        });
-    }
-
-    let delete_regex = Regex::new(r"^(?i)delete\s+").unwrap();
-    if let Some(value) = delete_regex.find(input_text) {
-        return Ok(TokenResponse {
-            token: Token::Delete,
-            position: value.end(),
-        });
-    }
-
-    if let Some(value) = WHERE_REGEX.find(input_text) {
-        return Ok(TokenResponse {
-            token: Token::Where,
-            position: value.end(),
-        });
-    }
-
-    let indent_regex = Regex::new(r"^[A-Za-z_][A-Za-z0-9_]{0,62}\s*").unwrap();
-    if let Some(value) = indent_regex.find(input_text) {
         return Ok(TokenResponse {
             token: Token::IDENT(value.as_str().trim().to_string()),
             position: value.end(),
@@ -206,14 +199,6 @@ fn get_token(input_text: &str, position: usize) -> Result<TokenResponse, Tokeniz
         });
     }
 
-    let left_paren_regex = Regex::new(r"^\(").unwrap();
-    if let Some(value) = left_paren_regex.find(input_text) {
-        return Ok(TokenResponse {
-            token: Token::LeftParen,
-            position: value.end(),
-        });
-    }
-
     if let Some(value) = COMMA_REGEX.find(input_text) {
         return Ok(TokenResponse {
             token: Token::COMMA,
@@ -228,6 +213,14 @@ fn get_token(input_text: &str, position: usize) -> Result<TokenResponse, Tokeniz
         });
     }
 
+    let left_paren_regex = Regex::new(r"^\(").unwrap();
+    if let Some(value) = left_paren_regex.find(input_text) {
+        return Ok(TokenResponse {
+            token: Token::LeftParen,
+            position: value.end(),
+        });
+    }
+
     let right_paren_regex = Regex::new(r"^\)").unwrap();
     if let Some(value) = right_paren_regex.find(input_text) {
         return Ok(TokenResponse {
@@ -235,6 +228,7 @@ fn get_token(input_text: &str, position: usize) -> Result<TokenResponse, Tokeniz
             position: value.end(),
         });
     }
+
     return Err(TokenizationError::InvalidCharacter(InvalidCharacterError {
         position: position,
     }));
@@ -287,7 +281,7 @@ mod tests {
                     pos: 15
                 },
                 TokenWithPos {
-                    token: Token::IDENT("table".to_string()),
+                    token: Token::Table,
                     pos: 20
                 },
             ]
