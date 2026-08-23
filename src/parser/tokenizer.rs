@@ -243,15 +243,20 @@ fn get_token(input_text: &str, position: usize) -> Result<TokenResponse, Tokeniz
 pub fn tokenize(input_text: &str) -> Result<Vec<TokenWithPos>, TokenizationError> {
     let mut position = 0;
     let mut result: Vec<TokenWithPos> = vec![];
+    let input_date_without_white_space = input_text[position..].trim_start();
+    position += input_text[position..].len() - input_date_without_white_space.len();
+
     while input_text[position..].len() > 0 {
-        let input_date_without_white_space = input_text[position..].trim_start();
-        position += input_text[position..].len() - input_date_without_white_space.len();
         let token = get_token(&input_text[position..], position)?;
         result.push(TokenWithPos {
             token: token.token,
             pos: position,
         });
+
         position += token.position;
+
+        let input_date_without_white_space = input_text[position..].trim_start();
+        position += input_text[position..].len() - input_date_without_white_space.len();
     }
     return Ok(result);
 }

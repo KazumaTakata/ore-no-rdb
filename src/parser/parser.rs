@@ -157,7 +157,7 @@ fn parse_select(tokens: &[TokenWithPos]) -> Result<SelectNode, ParserError> {
     }
 
     let (table_vec, mut index_2) = parse_idents(&tokens[index + 1..])?;
-    index_2 += 1;
+    index_2 += index;
 
     let where_token = tokens.get(index_2 + 1);
 
@@ -259,19 +259,23 @@ fn parse_expression(token: &Token) -> Result<Expression, ParserError> {
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::parser::{
-        parse, Constant, ErrorResport, Expression, Predicate, SQLNode, SelectNode, Term,
+    use crate::parser::{
+        parser::{
+            parse, Constant, ErrorResport, Expression, ParseError, Predicate, SQLNode, SelectNode,
+            Term,
+        },
+        tokenizer::{Token, TokenKind},
     };
 
     #[test]
     fn test_select_sql_parse() {
-        let test_data = "select field from table where a = 1 and b = 3";
+        let test_data = "select field, field2 from table, table2 where a = 1 and b = 3";
         let parsed_select = parse(test_data).expect("");
         assert_eq!(
             parsed_select,
             SQLNode::SELECT(SelectNode {
-                fields: vec!["field".to_string()],
-                tables: vec!["table".to_string()],
+                fields: vec!["field".to_string(), "field2".to_string()],
+                tables: vec!["table".to_string(), "table2".to_string()],
                 predicate: Some(Predicate {
                     term: Term {
                         left_expression: Expression::Field("a".to_string()),
@@ -293,12 +297,24 @@ mod tests {
     fn test_select_sql_parse_error() {
         let test_data = "select field   field2 from table where a = 1 and b = 3";
         let parsed_select = parse(test_data);
-        if let Err(err) = parsed_select {
-            let err = ErrorResport {
-                err: &err,
-                src: test_data,
-            };
-            println!("{}", err)
-        }
+        assert_eq!(
+            parsed_select,
+            Err(crate::parser::parser::ParserError::ParseError(ParseError {
+                invalid_token: Token::IDENT("field2".to_string()),
+                expected_token: vec![TokenKind::From],
+                position: 15
+            }))
+        )
+    }
+
+    #[test]
+    fn test_select_sql_parse_error_2() {
+        let test_data = "select field, field2 from table where a = ";
+        let parsed_select = parse(test_data);
+        println!("{:?}", parsed_select);
+        assert_eq!(
+            parsed_select,
+            Err(crate::parser::parser::ParserError::UnexpectedEOL)
+        )
     }
 }
