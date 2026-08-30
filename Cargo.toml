@@ -14,3 +14,4 @@ glob = "0.3.2"
 uuid = { version = "1.19.0", features = ["v4"] }
 reedline = "0.47.0"
 nu-ansi-term = "0.50"
+regex = "1.13.1"
