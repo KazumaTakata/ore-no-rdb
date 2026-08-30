@@ -16,12 +16,18 @@ mod error;
 mod index;
 mod metadata;
 mod parser;
+mod parser_mapping;
 mod query;
 mod record;
 mod storage;
 mod tx;
 
-use crate::query::parser::parse_sql;
+use crate::parser::parser::{
+    parse, CreateIndexNode, CreateViewNode, ErrorResport, Expression, FieldDefNode, FieldType,
+    Predicate, SQLNode, Term,
+};
+use crate::parser_mapping::sql_node_to_parsed_sql;
+use crate::record::record_page::{TableFieldInfo, TableSchema};
 use clap::Parser;
 use storage::block::BlockId;
 use storage::page::Page;
@@ -29,10 +35,13 @@ use storage::page::Page;
 use crate::database::Database;
 use crate::metadata::metadata_manager::MetadataManager;
 use crate::query::index_update_planner::IndexUpdatePlanner;
-use crate::query::parser::{ParsedSQL, QueryData};
+use crate::query::parser::{
+    CreateIndexData, CreateTableData, DeleteData, InsertData, ParsedSQL, QueryData, UpdateData,
+    ViewData,
+};
 use crate::query::plan_v2::{create_query_plan, execute_create_table};
-use crate::query::predicate::{ConstantValue, TableNameAndFieldName};
-use crate::query::predicate_v3::PredicateV2;
+use crate::query::predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName};
+use crate::query::predicate_v3::{ExpressionV2, PredicateV2, TermV2};
 use crate::query::query_handler::handle_select_query;
 use crate::tx::transaction_v2::TransactionV2;
 
@@ -141,7 +150,7 @@ fn handle_parsed_sql(
             let select_query = QueryData::new(
                 vec!["table_catalog".to_string()],
                 vec![TableNameAndFieldName::new(None, "table_name".to_string())],
-                PredicateV2::new(vec![]),
+                Some(PredicateV2::new(vec![])),
                 vec![],
                 vec![],
                 vec![],
@@ -200,15 +209,14 @@ fn main() -> std::io::Result<()> {
 
     if let Some(file_path) = args.file {
         let sql = std::fs::read_to_string(file_path).expect("Failed to read SQL file");
-        let parsed_sql_list = parse_sql(sql);
-        for parsed_sql in &parsed_sql_list {
-            handle_parsed_sql(
-                parsed_sql,
-                &mut metadata_manager.borrow_mut(),
-                transaction.clone(),
-                &mut index_update_planner,
-            );
-        }
+        let sql_node = parse(&sql).unwrap();
+        let parsed_sql = sql_node_to_parsed_sql(sql_node);
+        handle_parsed_sql(
+            &parsed_sql,
+            &mut metadata_manager.borrow_mut(),
+            transaction.clone(),
+            &mut index_update_planner,
+        );
         return Ok(());
     }
 
@@ -312,13 +320,26 @@ fn main() -> std::io::Result<()> {
                     continue;
                 }
 
-                let parsed_sql = parse_sql(buffer.to_string());
-                handle_parsed_sql(
-                    &parsed_sql[0],
-                    &mut metadata_manager.borrow_mut(),
-                    transaction.clone(),
-                    &mut index_update_planner,
-                );
+                let parsed_sql = parse(buffer);
+
+                match parsed_sql {
+                    Ok(sql) => {
+                        let parsed_sql = sql_node_to_parsed_sql(sql);
+                        handle_parsed_sql(
+                            &parsed_sql,
+                            &mut metadata_manager.borrow_mut(),
+                            transaction.clone(),
+                            &mut index_update_planner,
+                        );
+                    }
+                    Err(err) => {
+                        let error_report = ErrorResport {
+                            err: &err,
+                            src: buffer,
+                        };
+                        println!("{}", error_report);
+                    }
+                }
             }
             Ok(Signal::CtrlC) => {
                 // 入力中の文字列は reedline が破棄して空のバッファで戻ってくるので、
