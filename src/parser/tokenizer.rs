@@ -191,7 +191,7 @@ fn get_token(input_text: &str, position: usize) -> Result<TokenResponse, Tokeniz
         });
     }
 
-    let number_regex = Regex::new(r"^[0-9]+").unwrap();
+    let number_regex = Regex::new(r"^-?[0-9]+").unwrap();
     if let Some(value) = number_regex.find(input_text) {
         return Ok(TokenResponse {
             token: Token::Number(value.as_str().to_string().parse().unwrap()),
