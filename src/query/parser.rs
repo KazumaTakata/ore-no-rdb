@@ -1,21 +1,14 @@
-use std::{collections::HashMap, str::FromStr, vec};
-
-use pest::{iterators::Pair, Parser};
-use pest_derive::Parser;
-
 use crate::{
     query::group_by::AggregateFunctionType,
-    query::predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
-    query::predicate_v3::{ExpressionV2, PredicateV2, TermV2},
-    record::record_page::{TableFieldInfo, TableFieldType, TableSchema},
+    query::predicate::{Constant, TableNameAndFieldName},
+    query::predicate_v3::{ExpressionV2, PredicateV2},
+    record::record_page::TableSchema,
 };
 
 // #[derive(Parser)]
 // #[grammar = "pest/csv.pest"]
 // pub struct CSVParser;
 
-#[derive(Parser)]
-#[grammar = "pest/sql.pest"]
 pub struct SQLParser;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,8 +45,8 @@ impl UpdateData {
     pub fn new(
         table_name: String,
         field_name: String,
-        new_value: Constant,
-        predicate: PredicateV2,
+        new_value: ExpressionV2,
+        predicate: Option<PredicateV2>,
     ) -> Self {
         UpdateData {
             table_name,
@@ -130,22 +123,35 @@ impl ParsedSQL {
                     create_table_data.to_string()
                 );
             }
-            ParsedSQL::Delete(delete_data) => {
-                println!(
-                    "Parsed Delete Data: \nTable: {}\nPredicate: {}",
-                    delete_data.table_name,
-                    delete_data.predicate.to_string()
-                );
-            }
-            ParsedSQL::Update(update_data) => {
-                println!(
-                    "Parsed Update Data: \nTable: {}\nField: {}\nNew Value: {:?}\nPredicate: {}",
-                    update_data.table_name,
-                    update_data.field_name,
-                    update_data.new_value,
-                    update_data.predicate.to_string()
-                );
-            }
+            ParsedSQL::Delete(delete_data) => match delete_data.predicate.as_ref() {
+                Some(predicate) => {
+                    println!(
+                        "Parsed Delete Data: \nTable: {}\nPredicate: {}",
+                        delete_data.table_name,
+                        predicate.to_string()
+                    );
+                }
+                None => {
+                    println!("Parsed Delete Data: \nTable: {}", delete_data.table_name,);
+                }
+            },
+            ParsedSQL::Update(update_data) => match update_data.predicate.as_ref() {
+                Some(predicate) => {
+                    println!(
+                                "Parsed Update Data: \nTable: {}\nField: {}\nNew Value: {:?}\nPredicate: {}",
+                                update_data.table_name,
+                                update_data.field_name,
+                                update_data.new_value,
+                                predicate.to_string()
+                            );
+                }
+                None => {
+                    println!(
+                        "Parsed Update Data: \nTable: {}\nField: {}\nNew Value: {:?}",
+                        update_data.table_name, update_data.field_name, update_data.new_value,
+                    );
+                }
+            },
             ParsedSQL::ShowTables => {
                 println!("Parsed Show Tables Command");
             }
@@ -263,8 +269,11 @@ impl QueryData {
                 field.field_name
             ));
         }
-        result.push_str("\nPredicate: ");
-        result.push_str(&self.predicate.to_string());
+        if let Some(predicate) = self.predicate.as_ref() {
+            result.push_str("\nPredicate: ");
+            result.push_str(&predicate.to_string());
+        }
+
         result.push_str("\nOrder By: ");
         for order_by in &self.order_by_list {
             result.push_str(&format!(

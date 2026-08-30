@@ -2,18 +2,26 @@ use std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc};
 
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
-    query::group_by::{AggregateFunction, AggregateFunctionType, AvgFunction, GroupByPlan, MaxFunction},
-    metadata::index_manager::IndexInfo,
-    query::index_select_plan::IndexSelectPlan,
-    metadata::metadata_manager::MetadataManager,
-    query::parser::{parse_sql, CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
-    query::predicate::TableNameAndFieldName,
-    query::predicate_v3::PredicateV2,
-    record::record_page::{Layout, TableSchema},
-    record::scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
-    query::sort_plan::SortPlan,
-    metadata::stat_manager_v2::StatInfoV2,
-    record::table_scan_v2::TableScan,
+    metadata::{
+        index_manager::IndexInfo, metadata_manager::MetadataManager, stat_manager_v2::StatInfoV2,
+    },
+    parser::parser::{parse, ParseError, ParserError},
+    parser_mapping::sql_node_to_parsed_sql,
+    query::{
+        group_by::{
+            AggregateFunction, AggregateFunctionType, AvgFunction, GroupByPlan, MaxFunction,
+        },
+        index_select_plan::IndexSelectPlan,
+        parser::{parse_sql, CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
+        predicate::TableNameAndFieldName,
+        predicate_v3::PredicateV2,
+        sort_plan::SortPlan,
+    },
+    record::{
+        record_page::{Layout, TableSchema},
+        scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
+        table_scan_v2::TableScan,
+    },
     tx::transaction_v2::TransactionV2,
 };
 
@@ -118,11 +126,11 @@ impl PlanV2 for TablePlanV2 {
 pub struct SelectPlanV2 {
     // Fields for the plan
     table_plan: Box<dyn PlanV2>,
-    predicate: PredicateV2,
+    predicate: Option<PredicateV2>,
 }
 
 impl SelectPlanV2 {
-    pub fn new(table_plan: Box<dyn PlanV2>, predicate: PredicateV2) -> Self {
+    pub fn new(table_plan: Box<dyn PlanV2>, predicate: Option<PredicateV2>) -> Self {
         SelectPlanV2 {
             table_plan,
             predicate,
@@ -335,11 +343,16 @@ pub fn get_optimized_product_plan(plans: &mut Vec<Box<dyn PlanV2>>) -> Box<dyn P
     return plan;
 }
 
+pub enum CreateQueryPlanError {
+    ValueNotFound(ValueNotFound),
+    ParserError(ParserError),
+}
+
 pub fn create_query_plan(
     query_data: &QueryData,
     transaction: Rc<RefCell<TransactionV2>>,
     metadata_manager: &mut MetadataManager,
-) -> Result<Box<dyn PlanV2>, ValueNotFound> {
+) -> Result<Box<dyn PlanV2>, CreateQueryPlanError> {
     let mut plans: Vec<Box<dyn PlanV2>> = Vec::new();
 
     for table_name in query_data.table_name_list.iter() {
@@ -347,12 +360,13 @@ pub fn create_query_plan(
             metadata_manager.get_view_definition(table_name.clone(), transaction.clone());
 
         if let Some(view_def) = view_definition {
-            let parsed_sql_list = parse_sql(view_def.clone());
-            let parsed_sql = &parsed_sql_list[0];
+            let parsed_sql =
+                parse(&view_def.clone()).map_err(|err| CreateQueryPlanError::ParserError(err))?;
+            let parsed_sql = sql_node_to_parsed_sql(parsed_sql);
 
             match parsed_sql {
                 crate::query::parser::ParsedSQL::Query(q) => {
-                    let view_plan = create_query_plan(q, transaction.clone(), metadata_manager)?;
+                    let view_plan = create_query_plan(&q, transaction.clone(), metadata_manager)?;
                     plans.push(view_plan);
                     continue;
                 }
@@ -535,7 +549,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        database::Database, metadata::metadata_manager::MetadataManager, query::parser::parse_sql,
+        database::Database, metadata::metadata_manager::MetadataManager,
         query::predicate::ConstantValue,
     };
     use std::path::Path;
