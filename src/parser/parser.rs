@@ -6,90 +6,90 @@ use pest::pratt_parser::Op;
 use crate::parser::tokenizer::{self, Token, TokenKind, TokenWithPos, TokenizationError};
 
 #[derive(Debug, PartialEq)]
-enum Constant {
+pub enum Constant {
     String(String),
     Integer(i32),
 }
 
 #[derive(Debug, PartialEq)]
-enum Expression {
+pub enum Expression {
     Field(String),
     Constant(Constant),
 }
 
 #[derive(Debug, PartialEq)]
-struct Term {
-    left_expression: Expression,
-    right_expression: Expression,
+pub struct Term {
+    pub left_expression: Expression,
+    pub right_expression: Expression,
 }
 
 #[derive(Debug, PartialEq)]
-struct Predicate {
-    term: Term,
-    next_predicate: Option<Box<Predicate>>,
+pub struct Predicate {
+    pub term: Term,
+    pub next_predicate: Option<Box<Predicate>>,
 }
 
 #[derive(Debug, PartialEq)]
-struct SelectNode {
-    fields: Vec<String>,
-    tables: Vec<String>,
-    predicate: Option<Predicate>,
+pub struct SelectNode {
+    pub fields: Vec<String>,
+    pub tables: Vec<String>,
+    pub predicate: Option<Predicate>,
 }
 
 #[derive(Debug, PartialEq)]
 struct InsertNode {
-    fields: Vec<String>,
-    table: String,
-    constants: Vec<Constant>,
+    pub fields: Vec<String>,
+    pub table: String,
+    pub constants: Vec<Constant>,
 }
 
 #[derive(Debug, PartialEq)]
-struct DeleteNode {
-    table: String,
-    predicate: Option<Predicate>,
+pub struct DeleteNode {
+    pub table: String,
+    pub predicate: Option<Predicate>,
 }
 
 #[derive(Debug, PartialEq)]
-struct UpdateNode {
-    table: String,
-    field: String,
-    value: Expression,
-    predicate: Option<Predicate>,
+pub struct UpdateNode {
+    pub table: String,
+    pub field: String,
+    pub value: Expression,
+    pub predicate: Option<Predicate>,
 }
 
 #[derive(Debug, PartialEq)]
-struct FieldDefNode {
-    field_type: FieldType,
-    field_name: String,
+pub struct FieldDefNode {
+    pub field_type: FieldType,
+    pub field_name: String,
 }
 
 #[derive(Debug, PartialEq)]
-struct CreateTableNode {
-    table_name: String,
-    field_defs: Vec<FieldDefNode>,
+pub struct CreateTableNode {
+    pub table_name: String,
+    pub field_defs: Vec<FieldDefNode>,
 }
 
 #[derive(Debug, PartialEq)]
-struct CreateIndexNode {
-    table_name: String,
-    field_name: String,
-    index_name: String,
+pub struct CreateIndexNode {
+    pub table_name: String,
+    pub field_name: String,
+    pub index_name: String,
 }
 
 #[derive(Debug, PartialEq)]
-struct CreateViewNode {
-    view_name: String,
-    query: SelectNode,
+pub struct CreateViewNode {
+    pub view_name: String,
+    pub query: SelectNode,
 }
 
 #[derive(Debug, PartialEq)]
-enum FieldType {
+pub enum FieldType {
     INTEGER,
     VARCHAR(usize),
 }
 
 #[derive(Debug, PartialEq)]
-enum SQLNode {
+pub enum SQLNode {
     SELECT(SelectNode),
     INSERT(InsertNode),
     DELETE(DeleteNode),
@@ -109,8 +109,8 @@ pub enum ParserError {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ErrorResport<'a> {
-    err: &'a ParserError,
-    src: &'a str,
+    pub err: &'a ParserError,
+    pub src: &'a str,
 }
 
 impl fmt::Display for ErrorResport<'_> {
@@ -146,7 +146,7 @@ impl From<TokenizationError> for ParserError {
     }
 }
 
-fn parse(input_text: &str) -> Result<SQLNode, ParserError> {
+pub fn parse(input_text: &str) -> Result<SQLNode, ParserError> {
     let tokens = tokenizer::tokenize(input_text)?;
     let token = tokens.get(0).ok_or(ParserError::UnexpectedEOL)?;
     match token.token {

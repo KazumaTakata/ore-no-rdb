@@ -128,7 +128,7 @@ impl TermV2 {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PredicateV2 {
-    terms: Vec<TermV2>,
+    pub terms: Vec<TermV2>,
 }
 
 impl PredicateV2 {
