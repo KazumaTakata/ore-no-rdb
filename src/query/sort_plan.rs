@@ -42,12 +42,12 @@ impl SortPlan {
     ) -> Result<bool, ValueNotFound> {
         dest.insert();
 
-        for field in self.table_schema.fields.iter() {
-            let value = src_scan.get_value(TableNameAndFieldName::new(None, field.0.clone()));
+        for field in self.table_schema.fields_name_vec.iter() {
+            let value = src_scan.get_value(TableNameAndFieldName::new(None, field.clone()));
             if let Some(inner_value) = value {
-                dest.set_value(field.0.clone(), inner_value);
+                dest.set_value(field.clone(), inner_value);
             } else {
-                return Err(ValueNotFound::new(field.0.clone(), None));
+                return Err(ValueNotFound::new(field.clone(), None));
             }
         }
 
@@ -450,8 +450,7 @@ mod tests {
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let create_table_sql =
-            "create table test_table_1 (A_1 integer, B_1 varchar(10))".to_string();
+        let create_table_sql = "create table test_table_1 (A_1 INT, B_1 varchar(10))".to_string();
 
         let parsed_sql_list = parse(&create_table_sql)
             .map(|n| sql_node_to_parsed_sql(n))
@@ -472,8 +471,7 @@ mod tests {
             println!("Table already exists");
         }
 
-        let create_table_sql =
-            "create table test_table_2 (A_2 integer, B_2 varchar(10))".to_string();
+        let create_table_sql = "create table test_table_2 (A_2 INT, B_2 varchar(10))".to_string();
 
         let parsed_sql_list = parse(&create_table_sql)
             .map(|n| sql_node_to_parsed_sql(n))

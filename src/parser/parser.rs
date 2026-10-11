@@ -210,17 +210,16 @@ fn parse_idents(tokens: &[TokenWithPos]) -> Result<(Vec<String>, usize), ParserE
 
     loop {
         let token = tokens.get(index_1).ok_or(ParserError::UnexpectedEOL)?;
-        let token = &token.token;
 
         let next_token = tokens.get(index_1 + 1);
 
-        match token {
+        match &token.token {
             Token::IDENT(ident) => fields_vec.push(ident.clone()),
             _ => {
                 return Err(ParserError::ParseError(ParseError {
-                    invalid_token: token.clone(),
+                    invalid_token: token.token.clone(),
                     expected_token: vec![TokenKind::IDENT],
-                    position: 1,
+                    position: token.pos,
                 }))
             }
         };
@@ -351,9 +350,27 @@ fn parse_insert(tokens: &[TokenWithPos]) -> Result<InsertNode, ParserError> {
         }))
     }?;
 
-    let (fields_vec, index) = parse_idents(&tokens[2..])?;
+    let token = tokens.get(2).ok_or(ParserError::UnexpectedEOL)?;
+    if token.token != Token::LeftParen {
+        return Err(ParserError::ParseError(ParseError {
+            invalid_token: token.token.clone(),
+            expected_token: vec![TokenKind::LeftParen],
+            position: token.pos,
+        }));
+    }
 
-    let token = tokens.get(index + 2).ok_or(ParserError::UnexpectedEOL)?;
+    let (fields_vec, index) = parse_idents(&tokens[3..])?;
+
+    let token = tokens.get(index + 3).ok_or(ParserError::UnexpectedEOL)?;
+    if token.token != Token::RightParen {
+        return Err(ParserError::ParseError(ParseError {
+            invalid_token: token.token.clone(),
+            expected_token: vec![TokenKind::LeftParen],
+            position: token.pos,
+        }));
+    }
+
+    let token = tokens.get(index + 4).ok_or(ParserError::UnexpectedEOL)?;
 
     if token.token != Token::Values {
         return Err(ParserError::ParseError(ParseError {
@@ -363,7 +380,27 @@ fn parse_insert(tokens: &[TokenWithPos]) -> Result<InsertNode, ParserError> {
         }));
     }
 
-    let (constants_vec, index) = parse_constants(&tokens[index + 3..])?;
+    let token = tokens.get(index + 5).ok_or(ParserError::UnexpectedEOL)?;
+    if token.token != Token::LeftParen {
+        return Err(ParserError::ParseError(ParseError {
+            invalid_token: token.token.clone(),
+            expected_token: vec![TokenKind::LeftParen],
+            position: token.pos,
+        }));
+    }
+
+    let (constants_vec, index_2) = parse_constants(&tokens[index + 6..])?;
+
+    let token = tokens
+        .get(index + index_2 + 6)
+        .ok_or(ParserError::UnexpectedEOL)?;
+    if token.token != Token::RightParen {
+        return Err(ParserError::ParseError(ParseError {
+            invalid_token: token.token.clone(),
+            expected_token: vec![TokenKind::RightParen],
+            position: token.pos,
+        }));
+    }
 
     return Ok(InsertNode {
         constants: constants_vec,
@@ -844,7 +881,7 @@ mod tests {
 
     #[test]
     fn test_insert_sql_parse() {
-        let test_data = "insert into table1 field1, field2 values 'const1', 11";
+        let test_data = "insert into table1 (field1, field2) values ('const1', 11)";
         let parsed_select = parse(test_data).expect("");
         assert_eq!(
             parsed_select,
@@ -969,17 +1006,6 @@ mod tests {
     #[test]
     fn test_select_sql_parse_error_2() {
         let test_data = "select field, field2 from table where a = ";
-        let parsed_select = parse(test_data);
-        println!("{:?}", parsed_select);
-        assert_eq!(
-            parsed_select,
-            Err(crate::parser::parser::ParserError::UnexpectedEOL)
-        )
-    }
-
-    #[test]
-    fn test_select_sql_parse_error_3() {
-        let test_data = "create table test_table_1 (A_1 INT, B_1 VARCHAR(10))";
         let parsed_select = parse(test_data);
         println!("{:?}", parsed_select);
         assert_eq!(

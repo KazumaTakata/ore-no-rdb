@@ -48,8 +48,8 @@ impl TableSchema {
     }
 
     pub fn add_all(&mut self, schema: TableSchema) {
-        for field in schema.clone().fields {
-            self.add(field.0.clone(), schema.clone());
+        for field in schema.clone().fields_name_vec {
+            self.add(field.clone(), schema.clone());
         }
     }
 
@@ -63,8 +63,9 @@ impl TableSchema {
     }
 
     fn add_all_from_schema(&mut self, schema: TableSchema) {
-        for field in schema.fields {
-            self.add_field(field.0, field.1);
+        for field in schema.fields_name_vec {
+            let field_info = schema.fields.get(&field).unwrap();
+            self.add_field(field, field_info.clone());
         }
     }
 

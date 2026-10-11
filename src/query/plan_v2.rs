@@ -567,7 +567,7 @@ mod tests {
     use super::*;
     use crate::{
         database::Database, metadata::metadata_manager::MetadataManager,
-        query::predicate::ConstantValue,
+        parser::parser::ErrorResport, query::predicate::ConstantValue,
     };
     use std::path::Path;
 
@@ -662,7 +662,6 @@ mod tests {
             let parsed_sql_list = parse(&insert_sql)
                 .map(|n| sql_node_to_parsed_sql(n))
                 .unwrap();
-
             let insert_data = match &parsed_sql_list {
                 crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),

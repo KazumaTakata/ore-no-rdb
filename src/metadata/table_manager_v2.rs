@@ -167,14 +167,14 @@ impl TableManagerV2 {
         );
 
         // schemaのfieldsをループして、各フィールドの情報を挿入
-        for (_, field) in schema.fields.iter().enumerate() {
-            let field_type = schema.get_field_type(field.0.to_string()).unwrap();
-            let field_length = schema.get_field_length(field.0.to_string()).unwrap();
-            let field_offset = layout.get_offset(&field.0).unwrap();
+        for (_, field) in schema.fields_name_vec.iter().enumerate() {
+            let field_type = schema.get_field_type(field.to_string()).unwrap();
+            let field_length = schema.get_field_length(field.to_string()).unwrap();
+            let field_offset = layout.get_offset(&field).unwrap();
             let field_type_value: i32 = field_type.into();
             field_scan.insert();
             field_scan.set_string("table_name".to_string(), table_name.clone());
-            field_scan.set_string("field_name".to_string(), field.0.clone());
+            field_scan.set_string("field_name".to_string(), field.clone());
             field_scan.set_integer("field_type".to_string(), field_type_value);
             field_scan.set_integer("field_length".to_string(), field_length);
             field_scan.set_integer("field_offset".to_string(), field_offset);

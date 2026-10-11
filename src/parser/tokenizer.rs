@@ -183,7 +183,7 @@ fn get_token(input_text: &str, position: usize) -> Result<TokenResponse, Tokeniz
         });
     }
 
-    let string_regex = Regex::new(r"^'[A-Za-z_][A-Za-z0-9_]{0,62}'").unwrap();
+    let string_regex = Regex::new(r"^'[A-Za-z_][A-Za-z0-9_! ]{0,62}'").unwrap();
     if let Some(value) = string_regex.find(input_text) {
         return Ok(TokenResponse {
             token: Token::String(value.as_str()[1..value.len() - 1].to_string()),
