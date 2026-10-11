@@ -173,6 +173,12 @@ pub fn sql_node_to_parsed_sql(sql_node: SQLNode) -> ParsedSQL {
                         )
                     })
                     .collect(),
+                fields_name_vec: create_table
+                    .field_defs
+                    .iter()
+                    .into_iter()
+                    .map(|field_def| field_def.field_name.clone())
+                    .collect(),
             },
         }),
         SQLNode::CreateIndexNode(create_index) => ParsedSQL::CreateIndex(CreateIndexData {

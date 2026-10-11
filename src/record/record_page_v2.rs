@@ -1,8 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
+    record::record_page::{Layout, RecordType, TableFieldInfo},
     storage::block::BlockId,
-    record::record_page::{Layout, RecordType, TableFieldType},
     tx::transaction_v2::TransactionV2,
 };
 
@@ -35,7 +35,7 @@ impl RecordPage {
         let record_offset = self.get_offset_of_record(slot_id);
         let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
 
-        if field_type != TableFieldType::INTEGER {
+        if *field_type != TableFieldInfo::INTEGER {
             return None;
         }
 
@@ -60,7 +60,7 @@ impl RecordPage {
         let record_offset = self.get_offset_of_record(slot_id);
         let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
 
-        if field_type != TableFieldType::INTEGER {
+        if *field_type != TableFieldInfo::INTEGER {
             return;
         }
 
@@ -90,10 +90,6 @@ impl RecordPage {
         let offset = self.layout.get_offset(&field_name).unwrap();
         let record_offset = self.get_offset_of_record(slot_id);
         let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
-
-        if field_type != TableFieldType::VARCHAR {
-            return;
-        }
 
         self.transaction.borrow_mut().set_string(
             self.block_id.clone(),
@@ -130,10 +126,6 @@ impl RecordPage {
         let offset = self.layout.get_offset(&field_name).unwrap();
         let record_offset = self.get_offset_of_record(slot_id);
         let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
-
-        if field_type != TableFieldType::VARCHAR {
-            return None;
-        }
 
         let result = self
             .transaction
@@ -188,7 +180,7 @@ impl RecordPage {
                 let offset = self.layout.get_offset(&field).unwrap();
 
                 match field_type {
-                    TableFieldType::INTEGER => {
+                    TableFieldInfo::INTEGER => {
                         self.transaction.borrow_mut().set_integer(
                             self.block_id.clone(),
                             offset as usize,
@@ -196,7 +188,7 @@ impl RecordPage {
                             true,
                         );
                     }
-                    TableFieldType::VARCHAR => {
+                    TableFieldInfo::VARCHAR(_size) => {
                         self.transaction.borrow_mut().set_string(
                             self.block_id.clone(),
                             offset as usize,
@@ -225,12 +217,9 @@ mod tests {
     use rand::Rng;
 
     use crate::{
-        buffer::buffer_manager_v2::BufferManagerV2,
-        tx::concurrency_manager::LockTable,
-        storage::file_manager::FileManager,
-        storage::log_manager_v2::LogManagerV2,
-        storage::page::Page,
-        record::record_page::TableSchema,
+        buffer::buffer_manager_v2::BufferManagerV2, record::record_page::TableSchema,
+        storage::file_manager::FileManager, storage::log_manager_v2::LogManagerV2,
+        storage::page::Page, tx::concurrency_manager::LockTable,
     };
 
     use super::*;
@@ -243,10 +232,10 @@ mod tests {
         let block_size = 400;
 
         let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
-        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
-            file_manager.clone(),
-            log_file_name.clone(),
-        ).expect("failed to initialize log manager")));
+        let log_manager = Arc::new(Mutex::new(
+            LogManagerV2::new(file_manager.clone(), log_file_name.clone())
+                .expect("failed to initialize log manager"),
+        ));
 
         let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             3,

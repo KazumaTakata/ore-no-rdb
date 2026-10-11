@@ -26,11 +26,11 @@ pub trait ScanV2 {
 
 pub struct SelectScanV2 {
     scan: Box<dyn ScanV2>,
-    predicate: PredicateV2,
+    predicate: Option<PredicateV2>,
 }
 
 impl SelectScanV2 {
-    pub fn new(scan: Box<dyn ScanV2>, predicate: PredicateV2) -> Self {
+    pub fn new(scan: Box<dyn ScanV2>, predicate: Option<PredicateV2>) -> Self {
         SelectScanV2 { scan, predicate }
     }
 }
@@ -43,12 +43,18 @@ impl ScanV2 for SelectScanV2 {
 
     fn next(&mut self) -> Result<bool, ValueNotFound> {
         while self.scan.next()? {
-            let is_satisfied = self.predicate.is_satisfied(&mut *self.scan);
-            match is_satisfied {
-                Some(true) => return Ok(true),
-                Some(false) => continue,
-                // TODO: 適切なエラー処理
-                None => return Err(ValueNotFound::new("predicate evaluation".to_string(), None)),
+            if let Some(predicate) = self.predicate.as_ref() {
+                let is_satisfied = predicate.is_satisfied(&mut *self.scan);
+                match is_satisfied {
+                    Some(true) => return Ok(true),
+                    Some(false) => continue,
+                    // TODO: 適切なエラー処理
+                    None => {
+                        return Err(ValueNotFound::new("predicate evaluation".to_string(), None))
+                    }
+                }
+            } else {
+                return Ok(true);
             }
         }
         return Ok(false);
@@ -308,17 +314,17 @@ mod tests {
 
     use crate::{
         buffer::buffer_manager_v2::BufferManagerV2,
-        tx::concurrency_manager::LockTable,
-        storage::file_manager::FileManager,
-        storage::log_manager_v2::LogManagerV2,
+        metadata::table_manager_v2::TableManagerV2,
+        metadata::view_manager::ViewManager,
         query::predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
         query::predicate_v3::{ExpressionV2, PredicateV2, TermV2},
         record::record_page::{Layout, TableSchema},
         record::scan_v2::{ScanV2, SelectScanV2},
-        metadata::table_manager_v2::TableManagerV2,
         record::table_scan_v2::TableScan,
+        storage::file_manager::FileManager,
+        storage::log_manager_v2::LogManagerV2,
+        tx::concurrency_manager::LockTable,
         tx::transaction_v2::TransactionV2,
-        metadata::view_manager::ViewManager,
     };
 
     #[test]
@@ -330,10 +336,10 @@ mod tests {
         let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
 
         let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
-        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
-            file_manager.clone(),
-            log_file_name.clone(),
-        ).expect("failed to initialize log manager")));
+        let log_manager = Arc::new(Mutex::new(
+            LogManagerV2::new(file_manager.clone(), log_file_name.clone())
+                .expect("failed to initialize log manager"),
+        ));
 
         let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             100,
@@ -397,7 +403,7 @@ mod tests {
         let predicate = PredicateV2::new(terms);
 
         let mut student_table_select_scan =
-            SelectScanV2::new(Box::new(student_table_scan), predicate);
+            SelectScanV2::new(Box::new(student_table_scan), Some(predicate));
 
         assert_eq!(student_table_select_scan.next().unwrap(), true);
         let name = student_table_select_scan

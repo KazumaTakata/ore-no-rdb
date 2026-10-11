@@ -1,14 +1,18 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    index::b_tree_index::BTreeIndex,
     error::ValueNotFound,
+    index::b_tree_index::BTreeIndex,
+    metadata::{
+        stat_manager_v2::{StatInfoV2, StatManagerV2},
+        table_manager_v2::TableManagerV2,
+    },
     query::predicate::TableNameAndFieldName,
-    record::record_page::{Layout, TableFieldType, TableSchema},
-    record::scan_v2::ScanV2,
-    metadata::stat_manager_v2::{StatInfoV2, StatManagerV2},
-    metadata::table_manager_v2::TableManagerV2,
-    record::table_scan_v2::TableScan,
+    record::{
+        record_page::{Layout, TableFieldInfo, TableSchema},
+        scan_v2::ScanV2,
+        table_scan_v2::TableScan,
+    },
     tx::transaction_v2::TransactionV2,
 };
 
@@ -204,10 +208,10 @@ impl IndexInfo {
 
         match field_type {
             Some(ft) => match ft {
-                TableFieldType::INTEGER => {
+                TableFieldInfo::INTEGER => {
                     schema.add_integer_field("data_value".to_string());
                 }
-                TableFieldType::VARCHAR => {
+                TableFieldInfo::VARCHAR(_) => {
                     schema.add_string_field("data_value".to_string(), 20);
                 }
             },
@@ -228,10 +232,12 @@ mod tests {
     };
 
     use crate::{
-        buffer::buffer_manager_v2::BufferManagerV2, tx::concurrency_manager::LockTable,
-        metadata::index_manager::IndexManager, storage::log_manager_v2::LogManagerV2, record::record_page::TableSchema,
-        record::scan_v2::ScanV2, metadata::stat_manager_v2::StatManagerV2, storage::file_manager::FileManager,
-        metadata::table_manager_v2::TableManagerV2, record::table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
+        buffer::buffer_manager_v2::BufferManagerV2, metadata::index_manager::IndexManager,
+        metadata::stat_manager_v2::StatManagerV2, metadata::table_manager_v2::TableManagerV2,
+        record::record_page::TableSchema, record::scan_v2::ScanV2,
+        record::table_scan_v2::TableScan, storage::file_manager::FileManager,
+        storage::log_manager_v2::LogManagerV2, tx::concurrency_manager::LockTable,
+        tx::transaction_v2::TransactionV2,
     };
 
     #[test]
@@ -243,10 +249,10 @@ mod tests {
         let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
 
         let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
-        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
-            file_manager.clone(),
-            log_file_name.clone(),
-        ).expect("failed to initialize log manager")));
+        let log_manager = Arc::new(Mutex::new(
+            LogManagerV2::new(file_manager.clone(), log_file_name.clone())
+                .expect("failed to initialize log manager"),
+        ));
 
         let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             100,

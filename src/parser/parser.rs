@@ -37,7 +37,7 @@ pub struct SelectNode {
 }
 
 #[derive(Debug, PartialEq)]
-struct InsertNode {
+pub struct InsertNode {
     pub fields: Vec<String>,
     pub table: String,
     pub constants: Vec<Constant>,
@@ -969,6 +969,17 @@ mod tests {
     #[test]
     fn test_select_sql_parse_error_2() {
         let test_data = "select field, field2 from table where a = ";
+        let parsed_select = parse(test_data);
+        println!("{:?}", parsed_select);
+        assert_eq!(
+            parsed_select,
+            Err(crate::parser::parser::ParserError::UnexpectedEOL)
+        )
+    }
+
+    #[test]
+    fn test_select_sql_parse_error_3() {
+        let test_data = "create table test_table_1 (A_1 INT, B_1 VARCHAR(10))";
         let parsed_select = parse(test_data);
         println!("{:?}", parsed_select);
         assert_eq!(

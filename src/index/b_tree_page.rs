@@ -2,12 +2,14 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{
-    index::b_tree_leaf::DirectoryEntry,
-    storage::block::BlockId,
     constant::INTEGER_BYTE_SIZE,
+    index::b_tree_leaf::DirectoryEntry,
     query::predicate::{Constant, ConstantValue},
-    record::record_page::{Layout, TableFieldType},
-    record::table_scan_v2::RecordID,
+    record::{
+        record_page::{Layout, TableFieldInfo},
+        table_scan_v2::RecordID,
+    },
+    storage::block::BlockId,
     tx::transaction_v2::TransactionV2,
 };
 
@@ -82,9 +84,9 @@ impl BTreePage {
         while slot < self.get_number_of_records() as usize {
             dest.insert(dest_slot);
             let schema = self.layout.schema.clone();
-            for field_name in schema.fields() {
-                let value = self.get_value(slot, field_name);
-                dest.set_value(field_name, dest_slot as usize, value);
+            for field in schema.fields() {
+                let value = self.get_value(slot, &field);
+                dest.set_value(&field, dest_slot as usize, value);
             }
             self.delete(slot);
             dest_slot += 1;
@@ -119,9 +121,9 @@ impl BTreePage {
 
     fn copy_record(&mut self, from_slot: usize, to_slot: usize) {
         let schema = self.layout.schema.clone();
-        for field_name in schema.fields() {
-            let value = self.get_value(from_slot, field_name);
-            self.set_value(field_name, to_slot, value);
+        for field in schema.fields() {
+            let value = self.get_value(from_slot, &field);
+            self.set_value(&field, to_slot, value);
         }
     }
 
@@ -133,14 +135,14 @@ impl BTreePage {
             .unwrap_or_else(|| panic!("field '{}' not found in schema", field_name));
 
         match value_type {
-            TableFieldType::INTEGER => {
+            TableFieldInfo::INTEGER => {
                 let integer_value = match value.value {
                     ConstantValue::Number(num) => num,
                     _ => panic!("Expected a number for INTEGER field"),
                 };
                 self.set_integer(slot, field_name, integer_value);
             }
-            TableFieldType::VARCHAR => {
+            TableFieldInfo::VARCHAR(_) => {
                 let string_value = match value.value {
                     ConstantValue::String(s) => s,
                     _ => panic!("Expected a string for VARCHAR field"),
@@ -233,7 +235,7 @@ impl BTreePage {
             // field_name は schema.fields() 由来なので offset / type は必ず存在する
             let offset = self
                 .layout
-                .get_offset(field_name)
+                .get_offset(&field_name)
                 .expect("offset must exist for a field listed by the schema")
                 as usize;
             let field_type = self
@@ -242,7 +244,7 @@ impl BTreePage {
                 .get_field_type(field_name.to_string())
                 .expect("type must exist for a field listed by the schema");
             match field_type {
-                crate::record::record_page::TableFieldType::INTEGER => {
+                TableFieldInfo::INTEGER => {
                     self.transaction.borrow_mut().set_integer(
                         block_id.clone(),
                         position as usize + offset,
@@ -250,7 +252,7 @@ impl BTreePage {
                         false,
                     );
                 }
-                crate::record::record_page::TableFieldType::VARCHAR => {
+                TableFieldInfo::VARCHAR(_) => {
                     self.transaction.borrow_mut().set_string(
                         block_id.clone(),
                         position as usize + offset,
@@ -293,11 +295,11 @@ impl BTreePage {
         let value_type = self.layout.schema.get_field_type(field_name.to_string());
         match value_type {
             Some(field_type) => match field_type {
-                crate::record::record_page::TableFieldType::INTEGER => {
+                TableFieldInfo::INTEGER => {
                     let value = self.get_integer(slot, field_name);
                     Constant::new(ConstantValue::Number(value))
                 }
-                crate::record::record_page::TableFieldType::VARCHAR => {
+                TableFieldInfo::VARCHAR(_) => {
                     let value = self.get_string(slot, field_name);
                     Constant::new(ConstantValue::String(value))
                 }

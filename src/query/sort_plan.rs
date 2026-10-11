@@ -43,11 +43,11 @@ impl SortPlan {
         dest.insert();
 
         for field in self.table_schema.fields.iter() {
-            let value = src_scan.get_value(TableNameAndFieldName::new(None, field.clone()));
+            let value = src_scan.get_value(TableNameAndFieldName::new(None, field.0.clone()));
             if let Some(inner_value) = value {
-                dest.set_value(field.clone(), inner_value);
+                dest.set_value(field.0.clone(), inner_value);
             } else {
-                return Err(ValueNotFound::new(field.clone(), None));
+                return Err(ValueNotFound::new(field.0.clone(), None));
             }
         }
 
@@ -434,9 +434,12 @@ mod tests {
     use crate::{
         database::Database,
         metadata::metadata_manager::MetadataManager,
-        query::parser::parse_sql,
-        query::plan_v2::{execute_create_table, execute_insert, TablePlanV2},
-        query::predicate::ConstantValue,
+        parser::parser::parse,
+        parser_mapping::sql_node_to_parsed_sql,
+        query::{
+            plan_v2::{execute_create_table, execute_insert, TablePlanV2},
+            predicate::ConstantValue,
+        },
     };
 
     use super::*;
@@ -450,9 +453,11 @@ mod tests {
         let create_table_sql =
             "create table test_table_1 (A_1 integer, B_1 varchar(10))".to_string();
 
-        let parsed_sql_list = parse_sql(create_table_sql.clone());
+        let parsed_sql_list = parse(&create_table_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let create_table_data = match &parsed_sql_list[0] {
+        let create_table_data = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
@@ -470,9 +475,11 @@ mod tests {
         let create_table_sql =
             "create table test_table_2 (A_2 integer, B_2 varchar(10))".to_string();
 
-        let parsed_sql_list = parse_sql(create_table_sql.clone());
+        let parsed_sql_list = parse(&create_table_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let create_table_data = match &parsed_sql_list[0] {
+        let create_table_data = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
@@ -502,9 +509,11 @@ mod tests {
         ];
 
         for insert_sql in insert_sql_list.iter() {
-            let parsed_sql_list = parse_sql(insert_sql.clone());
+            let parsed_sql_list = parse(&insert_sql)
+                .map(|n| sql_node_to_parsed_sql(n))
+                .unwrap();
 
-            let insert_data = match &parsed_sql_list[0] {
+            let insert_data = match &parsed_sql_list {
                 crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),
             };

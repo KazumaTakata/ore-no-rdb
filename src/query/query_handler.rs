@@ -5,7 +5,7 @@ use comfy_table::Table;
 use crate::{
     metadata::metadata_manager::MetadataManager,
     query::parser::QueryData,
-    query::plan_v2::{create_query_plan, PlanV2},
+    query::plan_v2::create_query_plan,
     query::predicate::{ConstantValue, TableNameAndFieldName},
     tx::transaction_v2::TransactionV2,
 };
@@ -167,7 +167,7 @@ mod tests {
         let select_query = QueryData {
             field_name_list: vec![TableNameAndFieldName::new(None, "table_name".to_string())],
             table_name_list: vec!["table_catalog".to_string()],
-            predicate: PredicateV2::new(vec![term]),
+            predicate: Some(PredicateV2::new(vec![term])),
             order_by_list: vec![],
             group_by_list: vec![],
             aggregate_functions: vec![],
@@ -198,7 +198,7 @@ mod tests {
         let select_query = QueryData {
             field_name_list: vec![TableNameAndFieldName::new(None, "table_name".to_string())],
             table_name_list: vec!["field_catalog".to_string(), "table_catalog".to_string()],
-            predicate: PredicateV2::new(vec![term]),
+            predicate: Some(PredicateV2::new(vec![term])),
             order_by_list: vec![],
             group_by_list: vec![],
             aggregate_functions: vec![],
@@ -233,7 +233,7 @@ mod tests {
                 "table_name".to_string(),
             )],
             table_name_list: vec!["field_catalog".to_string(), "table_catalog".to_string()],
-            predicate: PredicateV2::new(vec![]),
+            predicate: Some(PredicateV2::new(vec![])),
             order_by_list: vec![],
             group_by_list: vec![],
             aggregate_functions: vec![],
@@ -264,7 +264,7 @@ mod tests {
         let select_query = QueryData {
             field_name_list: vec![TableNameAndFieldName::new(None, "content".to_string())],
             table_name_list: vec!["posts".to_string()],
-            predicate: PredicateV2::new(vec![term]),
+            predicate: Some(PredicateV2::new(vec![term])),
             order_by_list: vec![],
             group_by_list: vec![],
             aggregate_functions: vec![],
@@ -318,7 +318,7 @@ mod tests {
         let select_query = QueryData {
             field_name_list: vec![TableNameAndFieldName::new(None, "content".to_string())],
             table_name_list: vec!["posts".to_string()],
-            predicate: PredicateV2::new(vec![]),
+            predicate: Some(PredicateV2::new(vec![])),
             order_by_list: vec![TableNameAndFieldName::new(None, "content".to_string())],
             group_by_list: vec![],
             aggregate_functions: vec![],
@@ -360,7 +360,7 @@ mod tests {
                 TableNameAndFieldName::new(None, "title".to_string()),
             ],
             table_name_list: vec!["posts".to_string()],
-            predicate: PredicateV2::new(vec![]),
+            predicate: Some(PredicateV2::new(vec![])),
             order_by_list: vec![],
             group_by_list: vec![TableNameAndFieldName::new(None, "content".to_string())],
             aggregate_functions: vec![AggregateFunctionInfo {

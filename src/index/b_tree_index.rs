@@ -4,10 +4,10 @@ use std::rc::Rc;
 use crate::index::b_tree_directory::BTreeDirectory;
 use crate::index::b_tree_leaf::{BTreeLeaf, DirectoryEntry};
 use crate::index::b_tree_page::BTreePage;
-use crate::storage::block::BlockId;
 use crate::query::predicate::{Constant, ConstantValue};
-use crate::record::record_page::{Layout, TableFieldType, TableSchema};
+use crate::record::record_page::{Layout, TableFieldInfo, TableSchema};
 use crate::record::table_scan_v2::RecordID;
+use crate::storage::block::BlockId;
 use crate::tx::transaction_v2::TransactionV2;
 
 pub struct BTreeIndex {
@@ -71,8 +71,8 @@ impl BTreeIndex {
                 .expect("directory schema must contain a 'data_value' field");
 
             let min_value = match field_type {
-                TableFieldType::INTEGER => Constant::new(ConstantValue::Number(i32::MIN)),
-                TableFieldType::VARCHAR => Constant::new(ConstantValue::String(String::new())),
+                TableFieldInfo::INTEGER => Constant::new(ConstantValue::Number(i32::MIN)),
+                TableFieldInfo::VARCHAR(_) => Constant::new(ConstantValue::String(String::new())),
             };
 
             let directory_entry = DirectoryEntry {
