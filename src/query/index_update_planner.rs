@@ -1,7 +1,7 @@
-use std::{cell::RefCell, f32::consts::E, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    error::{DatabaseError, UniqueConstraintError, ValueNotFound},
+    error::{DatabaseError, ValueNotFound},
     metadata::metadata_manager::MetadataManager,
     query::{
         parser::{DeleteData, InsertData, UpdateData},

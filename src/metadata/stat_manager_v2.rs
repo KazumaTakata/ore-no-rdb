@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    error::ValueNotFound, query::predicate::TableNameAndFieldName, record::record_page, record::scan_v2::ScanV2,
+    error::ValueNotFound, query::predicate::TableNameAndFieldName, record::scan_v2::ScanV2,
     metadata::table_manager_v2::TableManagerV2, record::table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
 };
 
@@ -32,7 +32,7 @@ impl StatInfoV2 {
         self.num_blocks
     }
 
-    pub fn distinct_value(&self, field_name: String) -> u32 {
+    pub fn distinct_value(&self, _field_name: String) -> u32 {
         // this is wildly inaccurate
         return 1 + self.num_records / 3;
     }

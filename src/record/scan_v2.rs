@@ -162,15 +162,15 @@ impl ScanV2 for ProjectScanV2 {
         })
     }
 
-    fn set_integer(&mut self, field_name: String, value: i32) {
+    fn set_integer(&mut self, _field_name: String, _value: i32) {
         panic!("set_integer not implemented for ProjectScan");
     }
 
-    fn set_string(&mut self, field_name: String, value: String) {
+    fn set_string(&mut self, _field_name: String, _value: String) {
         panic!("set_string not implemented for ProjectScan");
     }
 
-    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+    fn set_value(&mut self, _field_name: String, _value: ConstantValue) {
         panic!("set_value not implemented for ProjectScan");
     }
 
@@ -186,7 +186,7 @@ impl ScanV2 for ProjectScanV2 {
         panic!("get_record_id not implemented for ProjectScan");
     }
 
-    fn move_to_record_id(&mut self, record_id: RecordID) {
+    fn move_to_record_id(&mut self, _record_id: RecordID) {
         panic!("move_to_record_id not implemented for ProjectScan");
     }
 }
@@ -286,19 +286,19 @@ impl ScanV2 for ProductScanV2 {
         panic!("insert not implemented for ProductScan");
     }
 
-    fn move_to_record_id(&mut self, record_id: RecordID) {
+    fn move_to_record_id(&mut self, _record_id: RecordID) {
         panic!("move_to_record_id not implemented for ProductScan");
     }
 
-    fn set_integer(&mut self, field_name: String, value: i32) {
+    fn set_integer(&mut self, _field_name: String, _value: i32) {
         panic!("set_integer not implemented for ProductScan");
     }
 
-    fn set_string(&mut self, field_name: String, value: String) {
+    fn set_string(&mut self, _field_name: String, _value: String) {
         panic!("set_string not implemented for ProductScan");
     }
 
-    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+    fn set_value(&mut self, _field_name: String, _value: ConstantValue) {
         panic!("set_value not implemented for ProductScan");
     }
 }

@@ -1,6 +1,5 @@
 use std::{
     cell::RefCell,
-    hash::{DefaultHasher, Hash, Hasher},
     rc::Rc,
 };
 
@@ -10,10 +9,9 @@ use crate::{
     metadata::index_manager::IndexInfo,
     query::plan_v2::{PlanTreeNodeForDebug, PlanV2},
     query::predicate::{Constant, ConstantValue, TableNameAndFieldName},
-    record::record_page::{Layout, TableSchema},
+    record::record_page::TableSchema,
     record::scan_v2::ScanV2,
-    record::table_scan_v2::{RecordID, TableScan},
-    tx::transaction_v2::TransactionV2,
+    record::table_scan_v2::RecordID,
 };
 
 pub struct IndexSelectPlan {
@@ -139,19 +137,19 @@ impl ScanV2 for IndexSelectScan {
         panic!("IndexSelectScan does not support insert operation");
     }
 
-    fn move_to_record_id(&mut self, record_id: RecordID) {
+    fn move_to_record_id(&mut self, _record_id: RecordID) {
         panic!("IndexSelectScan does not support move_to_record_id operation");
     }
 
-    fn set_integer(&mut self, field_name: String, value: i32) {
+    fn set_integer(&mut self, _field_name: String, _value: i32) {
         panic!("IndexSelectScan does not support set_integer operation");
     }
 
-    fn set_string(&mut self, field_name: String, value: String) {
+    fn set_string(&mut self, _field_name: String, _value: String) {
         panic!("IndexSelectScan does not support set_string operation");
     }
 
-    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+    fn set_value(&mut self, _field_name: String, _value: ConstantValue) {
         panic!("IndexSelectScan does not support set_value operation");
     }
 }

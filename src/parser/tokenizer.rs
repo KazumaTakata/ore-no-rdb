@@ -2,7 +2,6 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::error;
 use std::fmt;
-use std::fmt::Pointer;
 use std::sync::LazyLock;
 
 #[derive(Debug, PartialEq, Eq, Clone)]

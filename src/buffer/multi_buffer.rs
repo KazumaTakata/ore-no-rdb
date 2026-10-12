@@ -200,19 +200,19 @@ impl ScanV2 for ChunkScan {
         panic!("not implemented");
     }
 
-    fn move_to_record_id(&mut self, record_id: crate::record::table_scan_v2::RecordID) {
+    fn move_to_record_id(&mut self, _record_id: crate::record::table_scan_v2::RecordID) {
         panic!("not implemented");
     }
 
-    fn set_integer(&mut self, field_name: String, value: i32) {
+    fn set_integer(&mut self, _field_name: String, _value: i32) {
         panic!("not implemented");
     }
 
-    fn set_string(&mut self, field_name: String, value: String) {
+    fn set_string(&mut self, _field_name: String, _value: String) {
         panic!("not implemented");
     }
 
-    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+    fn set_value(&mut self, _field_name: String, _value: ConstantValue) {
         panic!("not implemented");
     }
 }
@@ -490,16 +490,16 @@ impl ScanV2 for MultiBufferProductScan {
         panic!("not implemented");
     }
 
-    fn move_to_record_id(&mut self, record_id: crate::record::table_scan_v2::RecordID) {
+    fn move_to_record_id(&mut self, _record_id: crate::record::table_scan_v2::RecordID) {
         panic!("not implemented");
     }
-    fn set_integer(&mut self, field_name: String, value: i32) {
+    fn set_integer(&mut self, _field_name: String, _value: i32) {
         panic!("not implemented");
     }
-    fn set_string(&mut self, field_name: String, value: String) {
+    fn set_string(&mut self, _field_name: String, _value: String) {
         panic!("not implemented");
     }
-    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+    fn set_value(&mut self, _field_name: String, _value: ConstantValue) {
         panic!("not implemented");
     }
 }

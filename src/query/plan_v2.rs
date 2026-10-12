@@ -5,7 +5,7 @@ use crate::{
     metadata::{
         index_manager::IndexInfo, metadata_manager::MetadataManager, stat_manager_v2::StatInfoV2,
     },
-    parser::parser::{parse, ParseError, ParserError},
+    parser::parser::{parse, ParserError},
     parser_mapping::sql_node_to_parsed_sql,
     query::{
         group_by::{
@@ -162,7 +162,7 @@ impl PlanV2 for SelectPlanV2 {
             } else {
                 let field_name2 = predicate.equate_with_field(field_name.clone());
 
-                if (field_name2.is_some()) {
+                if field_name2.is_some()  {
                     return min(
                         self.table_plan
                             .get_distinct_value(field_name2.clone().unwrap()),
@@ -523,7 +523,7 @@ pub fn execute_update(
     metadata_manager: &mut MetadataManager,
     update_data: UpdateData,
 ) -> Result<u32, ValueNotFound> {
-    let mut plan = TablePlanV2::new(
+    let plan = TablePlanV2::new(
         update_data.table_name.clone(),
         transaction.clone(),
         metadata_manager,
@@ -531,7 +531,7 @@ pub fn execute_update(
     let mut select_plan = SelectPlanV2::new(Box::new(plan), update_data.predicate.clone());
     let mut scan = select_plan.open()?;
 
-    let mut count = 0;
+    let count = 0;
 
     while scan.next()? {
         let field = update_data.field_name.clone();

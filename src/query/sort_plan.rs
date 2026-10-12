@@ -409,19 +409,19 @@ impl ScanV2 for SortScan {
         panic!("SortScan does not support insert operation.");
     }
 
-    fn move_to_record_id(&mut self, record_id: RecordID) {
+    fn move_to_record_id(&mut self, _record_id: RecordID) {
         panic!("SortScan does not support move_to_record_id operation.");
     }
 
-    fn set_integer(&mut self, field_name: String, value: i32) {
+    fn set_integer(&mut self, _field_name: String, _value: i32) {
         panic!("SortScan does not support set_integer operation.");
     }
 
-    fn set_string(&mut self, field_name: String, value: String) {
+    fn set_string(&mut self, _field_name: String, _value: String) {
         panic!("SortScan does not support set_string operation.");
     }
 
-    fn set_value(&mut self, field_name: String, value: crate::query::predicate::ConstantValue) {
+    fn set_value(&mut self, _field_name: String, _value: crate::query::predicate::ConstantValue) {
         panic!("SortScan does not support set_value operation.");
     }
 }

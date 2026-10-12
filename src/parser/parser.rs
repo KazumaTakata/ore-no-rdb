@@ -1,7 +1,5 @@
 use std::fmt;
-use std::path::Display;
 
-use pest::pratt_parser::Op;
 
 use crate::parser::tokenizer::{self, Token, TokenKind, TokenWithPos, TokenizationError};
 

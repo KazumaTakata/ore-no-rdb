@@ -361,7 +361,7 @@ impl LogRecord for RollbackRecord {
         self.transaction_id
     }
 
-    fn undo(&self, transaction: &mut InnerTransactionV2, _recovery_manager: &mut RecoveryManager) {
+    fn undo(&self, _transaction: &mut InnerTransactionV2, _recovery_manager: &mut RecoveryManager) {
         // No action needed for ROLLBACK record
     }
 }

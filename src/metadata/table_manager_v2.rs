@@ -4,7 +4,7 @@ use crate::{
     error::{TableAlreadyExists, ValueNotFound},
     query::predicate::TableNameAndFieldName,
     record::{
-        record_page::{self, TableFieldInfo, TableSchema},
+        record_page::{TableFieldInfo, TableSchema},
         scan_v2::ScanV2,
         table_scan_v2::TableScan,
     },
