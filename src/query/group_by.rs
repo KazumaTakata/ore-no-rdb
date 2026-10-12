@@ -2,11 +2,12 @@ use std::fmt;
 use std::str::FromStr;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use crate::parser::parser::TableNameAndFieldName;
 use crate::record::record_page::TableFieldInfo;
 use crate::{
     error::ValueNotFound,
     query::plan_v2::{PlanTreeNodeForDebug, PlanV2},
-    query::predicate::{Constant, ConstantValue, TableNameAndFieldName},
+    query::predicate::{Constant, ConstantValue},
     query::sort_plan::SortPlan,
     record::record_page::TableSchema,
     record::scan_v2::ScanV2,
@@ -72,7 +73,7 @@ impl PlanV2 for GroupByPlan {
     }
 
     fn get_distinct_value(&self, field_name: String) -> u32 {
-        if (self.get_schema().has_field(field_name.clone())) {
+        if self.get_schema().has_field(field_name.clone()) {
             return self.plan.get_distinct_value(field_name);
         } else {
             return self.records_output();
@@ -297,15 +298,15 @@ impl ScanV2 for GroupByScan {
         panic!("Cannot insert into GroupByScan")
     }
 
-    fn set_integer(&mut self, field_name: String, value: i32) {
+    fn set_integer(&mut self, _field_name: String, _value: i32) {
         panic!("Cannot set value in GroupByScan")
     }
 
-    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+    fn set_value(&mut self, _field_name: String, _value: ConstantValue) {
         panic!("Cannot set value in GroupByScan")
     }
 
-    fn set_string(&mut self, field_name: String, value: String) {
+    fn set_string(&mut self, _field_name: String, _value: String) {
         panic!("Cannot set value in GroupByScan")
     }
 
@@ -313,7 +314,7 @@ impl ScanV2 for GroupByScan {
         panic!("Cannot get RecordID from GroupByScan")
     }
 
-    fn move_to_record_id(&mut self, record_id: crate::record::table_scan_v2::RecordID) {
+    fn move_to_record_id(&mut self, _record_id: crate::record::table_scan_v2::RecordID) {
         panic!("Cannot move to RecordID in GroupByScan")
     }
 }

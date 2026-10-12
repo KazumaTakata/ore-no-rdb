@@ -2,10 +2,11 @@ use std::{cell::RefCell, rc::Rc, vec};
 
 use crate::{
     error::ValueNotFound,
+    parser::parser::TableNameAndFieldName,
     query::{
         materialize::TempTable,
         plan_v2::{PlanTreeNodeForDebug, PlanV2},
-        predicate::{ConstantValue, TableNameAndFieldName},
+        predicate::ConstantValue,
     },
     record::{
         record_page::{Layout, TableFieldInfo, TableSchema},
@@ -136,19 +137,13 @@ impl ScanV2 for ChunkScan {
         return Ok(true);
     }
 
-    fn get_integer(
-        &mut self,
-        field_name: crate::query::predicate::TableNameAndFieldName,
-    ) -> Option<i32> {
+    fn get_integer(&mut self, field_name: TableNameAndFieldName) -> Option<i32> {
         let current_slot_id = self.current_slot_id;
         let record_page = self.get_current_record_page();
         record_page.get_integer(field_name.field_name, current_slot_id)
     }
 
-    fn get_string(
-        &mut self,
-        field_name: crate::query::predicate::TableNameAndFieldName,
-    ) -> Option<String> {
+    fn get_string(&mut self, field_name: TableNameAndFieldName) -> Option<String> {
         let current_slot_id = self.current_slot_id;
         let record_page = self.get_current_record_page();
         record_page.get_string(field_name.field_name, current_slot_id)
@@ -166,10 +161,7 @@ impl ScanV2 for ChunkScan {
         }
     }
 
-    fn get_value(
-        &mut self,
-        field_name: crate::query::predicate::TableNameAndFieldName,
-    ) -> Option<ConstantValue> {
+    fn get_value(&mut self, field_name: TableNameAndFieldName) -> Option<ConstantValue> {
         if self
             .layout
             .schema
@@ -184,7 +176,7 @@ impl ScanV2 for ChunkScan {
         }
     }
 
-    fn has_field(&self, field_name: crate::query::predicate::TableNameAndFieldName) -> bool {
+    fn has_field(&self, field_name: TableNameAndFieldName) -> bool {
         self.layout.schema.has_field(field_name.field_name.clone())
     }
 
@@ -200,19 +192,19 @@ impl ScanV2 for ChunkScan {
         panic!("not implemented");
     }
 
-    fn move_to_record_id(&mut self, record_id: crate::record::table_scan_v2::RecordID) {
+    fn move_to_record_id(&mut self, _record_id: crate::record::table_scan_v2::RecordID) {
         panic!("not implemented");
     }
 
-    fn set_integer(&mut self, field_name: String, value: i32) {
+    fn set_integer(&mut self, _field_name: String, _value: i32) {
         panic!("not implemented");
     }
 
-    fn set_string(&mut self, field_name: String, value: String) {
+    fn set_string(&mut self, _field_name: String, _value: String) {
         panic!("not implemented");
     }
 
-    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+    fn set_value(&mut self, _field_name: String, _value: ConstantValue) {
         panic!("not implemented");
     }
 }
@@ -432,18 +424,12 @@ impl ScanV2 for MultiBufferProductScan {
         return Ok(true);
     }
 
-    fn get_integer(
-        &mut self,
-        field_name: crate::query::predicate::TableNameAndFieldName,
-    ) -> Option<i32> {
+    fn get_integer(&mut self, field_name: TableNameAndFieldName) -> Option<i32> {
         let product_scan = self.product_scan.as_mut().unwrap();
         product_scan.get_integer(field_name)
     }
 
-    fn get_string(
-        &mut self,
-        field_name: crate::query::predicate::TableNameAndFieldName,
-    ) -> Option<String> {
+    fn get_string(&mut self, field_name: TableNameAndFieldName) -> Option<String> {
         let product_scan = self.product_scan.as_mut().unwrap();
         product_scan.get_string(field_name)
     }
@@ -460,15 +446,12 @@ impl ScanV2 for MultiBufferProductScan {
         }
     }
 
-    fn get_value(
-        &mut self,
-        field_name: crate::query::predicate::TableNameAndFieldName,
-    ) -> Option<ConstantValue> {
+    fn get_value(&mut self, field_name: TableNameAndFieldName) -> Option<ConstantValue> {
         let product_scan = self.product_scan.as_mut().unwrap();
         product_scan.get_value(field_name)
     }
 
-    fn has_field(&self, field_name: crate::query::predicate::TableNameAndFieldName) -> bool {
+    fn has_field(&self, field_name: TableNameAndFieldName) -> bool {
         if let Some(product_scan) = self.product_scan.as_ref() {
             return product_scan.has_field(field_name);
         } else if let Some(left_scan) = self.left_scan.as_ref() {
@@ -490,16 +473,16 @@ impl ScanV2 for MultiBufferProductScan {
         panic!("not implemented");
     }
 
-    fn move_to_record_id(&mut self, record_id: crate::record::table_scan_v2::RecordID) {
+    fn move_to_record_id(&mut self, _record_id: crate::record::table_scan_v2::RecordID) {
         panic!("not implemented");
     }
-    fn set_integer(&mut self, field_name: String, value: i32) {
+    fn set_integer(&mut self, _field_name: String, _value: i32) {
         panic!("not implemented");
     }
-    fn set_string(&mut self, field_name: String, value: String) {
+    fn set_string(&mut self, _field_name: String, _value: String) {
         panic!("not implemented");
     }
-    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+    fn set_value(&mut self, _field_name: String, _value: ConstantValue) {
         panic!("not implemented");
     }
 }

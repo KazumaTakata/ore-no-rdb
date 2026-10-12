@@ -1,7 +1,7 @@
 use crate::{
     error::ValueNotFound,
-    query::predicate::{ConstantValue, TableNameAndFieldName},
-    query::predicate_v3::PredicateV2,
+    parser::parser::TableNameAndFieldName,
+    query::{predicate::ConstantValue, predicate_v3::PredicateV2},
     record::table_scan_v2::RecordID,
 };
 
@@ -162,15 +162,15 @@ impl ScanV2 for ProjectScanV2 {
         })
     }
 
-    fn set_integer(&mut self, field_name: String, value: i32) {
+    fn set_integer(&mut self, _field_name: String, _value: i32) {
         panic!("set_integer not implemented for ProjectScan");
     }
 
-    fn set_string(&mut self, field_name: String, value: String) {
+    fn set_string(&mut self, _field_name: String, _value: String) {
         panic!("set_string not implemented for ProjectScan");
     }
 
-    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+    fn set_value(&mut self, _field_name: String, _value: ConstantValue) {
         panic!("set_value not implemented for ProjectScan");
     }
 
@@ -186,7 +186,7 @@ impl ScanV2 for ProjectScanV2 {
         panic!("get_record_id not implemented for ProjectScan");
     }
 
-    fn move_to_record_id(&mut self, record_id: RecordID) {
+    fn move_to_record_id(&mut self, _record_id: RecordID) {
         panic!("move_to_record_id not implemented for ProjectScan");
     }
 }
@@ -286,19 +286,19 @@ impl ScanV2 for ProductScanV2 {
         panic!("insert not implemented for ProductScan");
     }
 
-    fn move_to_record_id(&mut self, record_id: RecordID) {
+    fn move_to_record_id(&mut self, _record_id: RecordID) {
         panic!("move_to_record_id not implemented for ProductScan");
     }
 
-    fn set_integer(&mut self, field_name: String, value: i32) {
+    fn set_integer(&mut self, _field_name: String, _value: i32) {
         panic!("set_integer not implemented for ProductScan");
     }
 
-    fn set_string(&mut self, field_name: String, value: String) {
+    fn set_string(&mut self, _field_name: String, _value: String) {
         panic!("set_string not implemented for ProductScan");
     }
 
-    fn set_value(&mut self, field_name: String, value: ConstantValue) {
+    fn set_value(&mut self, _field_name: String, _value: ConstantValue) {
         panic!("set_value not implemented for ProductScan");
     }
 }
@@ -314,17 +314,19 @@ mod tests {
 
     use crate::{
         buffer::buffer_manager_v2::BufferManagerV2,
-        metadata::table_manager_v2::TableManagerV2,
-        metadata::view_manager::ViewManager,
-        query::predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
-        query::predicate_v3::{ExpressionV2, PredicateV2, TermV2},
-        record::record_page::{Layout, TableSchema},
-        record::scan_v2::{ScanV2, SelectScanV2},
-        record::table_scan_v2::TableScan,
-        storage::file_manager::FileManager,
-        storage::log_manager_v2::LogManagerV2,
-        tx::concurrency_manager::LockTable,
-        tx::transaction_v2::TransactionV2,
+        metadata::{table_manager_v2::TableManagerV2, view_manager::ViewManager},
+        parser::parser::TableNameAndFieldName,
+        query::{
+            predicate::{Constant, ConstantValue, ExpressionValue},
+            predicate_v3::{ExpressionV2, PredicateV2, TermV2},
+        },
+        record::{
+            record_page::{Layout, TableSchema},
+            scan_v2::{ScanV2, SelectScanV2},
+            table_scan_v2::TableScan,
+        },
+        storage::{file_manager::FileManager, log_manager_v2::LogManagerV2},
+        tx::{concurrency_manager::LockTable, transaction_v2::TransactionV2},
     };
 
     #[test]

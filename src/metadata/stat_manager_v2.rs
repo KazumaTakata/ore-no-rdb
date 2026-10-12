@@ -1,8 +1,11 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    error::ValueNotFound, query::predicate::TableNameAndFieldName, record::record_page, record::scan_v2::ScanV2,
-    metadata::table_manager_v2::TableManagerV2, record::table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
+    error::ValueNotFound,
+    metadata::table_manager_v2::TableManagerV2,
+    parser::parser::TableNameAndFieldName,
+    record::{scan_v2::ScanV2, table_scan_v2::TableScan},
+    tx::transaction_v2::TransactionV2,
 };
 
 pub struct StatManagerV2 {
@@ -32,7 +35,7 @@ impl StatInfoV2 {
         self.num_blocks
     }
 
-    pub fn distinct_value(&self, field_name: String) -> u32 {
+    pub fn distinct_value(&self, _field_name: String) -> u32 {
         // this is wildly inaccurate
         return 1 + self.num_records / 3;
     }
@@ -149,10 +152,8 @@ mod tests {
     };
 
     use crate::{
-        buffer::buffer_manager_v2::BufferManagerV2,
-        tx::concurrency_manager::LockTable,
-        storage::file_manager::FileManager,
-        storage::log_manager_v2::LogManagerV2,
+        buffer::buffer_manager_v2::BufferManagerV2, storage::file_manager::FileManager,
+        storage::log_manager_v2::LogManagerV2, tx::concurrency_manager::LockTable,
     };
 
     use super::*;
@@ -166,10 +167,10 @@ mod tests {
         let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
 
         let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
-        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
-            file_manager.clone(),
-            log_file_name.clone(),
-        ).expect("failed to initialize log manager")));
+        let log_manager = Arc::new(Mutex::new(
+            LogManagerV2::new(file_manager.clone(), log_file_name.clone())
+                .expect("failed to initialize log manager"),
+        ));
 
         let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             100,

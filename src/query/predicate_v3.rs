@@ -181,7 +181,7 @@ impl PredicateV2 {
         return result;
     }
 
-    pub fn reduction_factor(&self, plan: &dyn PlanV2) -> u32 {
+    pub fn reduction_factor(&self, _plan: &dyn PlanV2) -> u32 {
         return 1;
     }
 }

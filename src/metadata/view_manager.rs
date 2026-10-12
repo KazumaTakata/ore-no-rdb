@@ -1,8 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    query::predicate::TableNameAndFieldName, record::record_page::TableSchema, record::scan_v2::ScanV2,
-    metadata::table_manager_v2::TableManagerV2, record::table_scan_v2::TableScan, tx::transaction_v2::TransactionV2,
+    metadata::table_manager_v2::TableManagerV2,
+    parser::parser::TableNameAndFieldName,
+    record::{record_page::TableSchema, scan_v2::ScanV2, table_scan_v2::TableScan},
+    tx::transaction_v2::TransactionV2,
 };
 
 pub struct ViewManager {
@@ -90,13 +92,10 @@ mod tests {
     };
 
     use crate::{
-        buffer::buffer_manager_v2::BufferManagerV2,
-        tx::concurrency_manager::LockTable,
-        storage::file_manager::FileManager,
-        storage::log_manager_v2::LogManagerV2,
-        metadata::table_manager_v2::TableManagerV2,
+        buffer::buffer_manager_v2::BufferManagerV2, metadata::table_manager_v2::TableManagerV2,
+        metadata::view_manager::ViewManager, storage::file_manager::FileManager,
+        storage::log_manager_v2::LogManagerV2, tx::concurrency_manager::LockTable,
         tx::transaction_v2::TransactionV2,
-        metadata::view_manager::ViewManager,
     };
 
     #[test]
@@ -107,10 +106,10 @@ mod tests {
         let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
 
         let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
-        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
-            file_manager.clone(),
-            log_file_name.clone(),
-        ).expect("failed to initialize log manager")));
+        let log_manager = Arc::new(Mutex::new(
+            LogManagerV2::new(file_manager.clone(), log_file_name.clone())
+                .expect("failed to initialize log manager"),
+        ));
 
         let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             100,

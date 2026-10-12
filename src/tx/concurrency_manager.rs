@@ -130,7 +130,7 @@ impl ConcurrencyManagerV2 {
     }
 
     pub fn release(&mut self) {
-        for (key, value) in self.locks.iter() {
+        for (key, _value) in self.locks.iter() {
             self.lock_table.lock().unwrap().unlock(key);
         }
         self.locks.clear();

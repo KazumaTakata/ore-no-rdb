@@ -22,12 +22,8 @@ mod record;
 mod storage;
 mod tx;
 
-use crate::parser::parser::{
-    parse, CreateIndexNode, CreateViewNode, ErrorResport, Expression, FieldDefNode, FieldType,
-    Predicate, SQLNode, Term,
-};
+use crate::parser::parser::{parse, ErrorResport, TableNameAndFieldName};
 use crate::parser_mapping::sql_node_to_parsed_sql;
-use crate::record::record_page::{TableFieldInfo, TableSchema};
 use clap::Parser;
 use storage::block::BlockId;
 use storage::page::Page;
@@ -35,13 +31,10 @@ use storage::page::Page;
 use crate::database::Database;
 use crate::metadata::metadata_manager::{MetadataManager, ValidateSQLResponse};
 use crate::query::index_update_planner::IndexUpdatePlanner;
-use crate::query::parser::{
-    CreateIndexData, CreateTableData, DeleteData, InsertData, ParsedSQL, QueryData, UpdateData,
-    ViewData,
-};
+use crate::query::parser::{ParsedSQL, QueryData};
 use crate::query::plan_v2::{create_query_plan, execute_create_table};
-use crate::query::predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName};
-use crate::query::predicate_v3::{ExpressionV2, PredicateV2, TermV2};
+use crate::query::predicate::ConstantValue;
+use crate::query::predicate_v3::PredicateV2;
 use crate::query::query_handler::handle_select_query;
 use crate::tx::transaction_v2::TransactionV2;
 
@@ -207,7 +200,7 @@ fn main() -> std::io::Result<()> {
     let database = Database::new(directory_path);
 
     let transaction = database.new_transaction(1);
-    let mut metadata_manager = Rc::new(RefCell::new(
+    let metadata_manager = Rc::new(RefCell::new(
         MetadataManager::new(transaction.clone()).unwrap(),
     ));
 

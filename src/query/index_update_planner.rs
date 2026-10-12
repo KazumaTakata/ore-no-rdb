@@ -1,12 +1,13 @@
-use std::{cell::RefCell, f32::consts::E, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    error::{DatabaseError, UniqueConstraintError, ValueNotFound},
+    error::{DatabaseError, ValueNotFound},
     metadata::metadata_manager::MetadataManager,
+    parser::parser::TableNameAndFieldName,
     query::{
         parser::{DeleteData, InsertData, UpdateData},
         plan_v2::{PlanV2, SelectPlanV2, TablePlanV2},
-        predicate::{Constant, ExpressionValue, TableNameAndFieldName},
+        predicate::{Constant, ExpressionValue},
     },
     tx::transaction_v2::TransactionV2,
 };

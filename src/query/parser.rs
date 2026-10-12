@@ -1,7 +1,10 @@
 use crate::{
-    query::group_by::AggregateFunctionType,
-    query::predicate::{Constant, TableNameAndFieldName},
-    query::predicate_v3::{ExpressionV2, PredicateV2},
+    parser::parser::TableNameAndFieldName,
+    query::{
+        group_by::AggregateFunctionType,
+        predicate::Constant,
+        predicate_v3::{ExpressionV2, PredicateV2},
+    },
     record::record_page::TableSchema,
 };
 

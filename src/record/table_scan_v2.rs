@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     error::ValueNotFound,
-    query::predicate::TableNameAndFieldName,
+    parser::parser::TableNameAndFieldName,
     record::{
         record_page::{Layout, TableFieldInfo},
         record_page_v2::RecordPage,

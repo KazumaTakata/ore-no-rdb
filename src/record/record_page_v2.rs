@@ -89,7 +89,7 @@ impl RecordPage {
 
         let offset = self.layout.get_offset(&field_name).unwrap();
         let record_offset = self.get_offset_of_record(slot_id);
-        let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
+        let _field_type = self.layout.get_field_type(field_name.clone()).unwrap();
 
         self.transaction.borrow_mut().set_string(
             self.block_id.clone(),
@@ -125,7 +125,7 @@ impl RecordPage {
 
         let offset = self.layout.get_offset(&field_name).unwrap();
         let record_offset = self.get_offset_of_record(slot_id);
-        let field_type = self.layout.get_field_type(field_name.clone()).unwrap();
+        let _field_type = self.layout.get_field_type(field_name.clone()).unwrap();
 
         let result = self
             .transaction

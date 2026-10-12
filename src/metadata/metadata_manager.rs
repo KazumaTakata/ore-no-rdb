@@ -2,13 +2,12 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
-    metadata::index_manager::{self, IndexInfo, IndexManager},
+    metadata::index_manager::{IndexInfo, IndexManager},
     metadata::stat_manager_v2::{StatInfoV2, StatManagerV2},
     metadata::table_manager_v2::TableManagerV2,
-    metadata::view_manager::{self, ViewManager},
+    metadata::view_manager::ViewManager,
     query::parser::QueryData,
     record::record_page::{Layout, TableSchema},
-    tx::transaction_v2,
 };
 
 pub struct MetadataManager {

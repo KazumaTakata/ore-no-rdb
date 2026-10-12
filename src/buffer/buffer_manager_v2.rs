@@ -242,7 +242,7 @@ impl BufferListV2 {
             }
         }
 
-        if (should_remove_from_buffers) {
+        if should_remove_from_buffers  {
             self.buffers.remove(&block_id);
         }
     }

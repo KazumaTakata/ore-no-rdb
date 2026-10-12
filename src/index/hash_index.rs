@@ -5,14 +5,14 @@ use std::{
 };
 
 use crate::{
-    index::b_tree_index::BTreeIndex,
     error::ValueNotFound,
-    metadata::index_manager::IndexInfo,
-    query::plan_v2::{PlanTreeNodeForDebug, PlanV2},
-    query::predicate::{Constant, ConstantValue, TableNameAndFieldName},
-    record::record_page::{Layout, TableSchema},
-    record::scan_v2::ScanV2,
-    record::table_scan_v2::{RecordID, TableScan},
+    parser::parser::TableNameAndFieldName,
+    query::predicate::{Constant, ConstantValue},
+    record::{
+        record_page::Layout,
+        scan_v2::ScanV2,
+        table_scan_v2::{RecordID, TableScan},
+    },
     tx::transaction_v2::TransactionV2,
 };
 

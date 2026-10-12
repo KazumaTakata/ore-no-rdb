@@ -2,12 +2,13 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     error::ValueNotFound,
-    query::materialize::TempTable,
-    query::plan_v2::{PlanTreeNodeForDebug, PlanV2},
-    query::predicate::{Constant, TableNameAndFieldName},
-    record::record_page::TableSchema,
-    record::scan_v2::ScanV2,
-    record::table_scan_v2::RecordID,
+    parser::parser::TableNameAndFieldName,
+    query::{
+        materialize::TempTable,
+        plan_v2::{PlanTreeNodeForDebug, PlanV2},
+        predicate::Constant,
+    },
+    record::{record_page::TableSchema, scan_v2::ScanV2, table_scan_v2::RecordID},
     tx::transaction_v2::TransactionV2,
 };
 
@@ -409,19 +410,19 @@ impl ScanV2 for SortScan {
         panic!("SortScan does not support insert operation.");
     }
 
-    fn move_to_record_id(&mut self, record_id: RecordID) {
+    fn move_to_record_id(&mut self, _record_id: RecordID) {
         panic!("SortScan does not support move_to_record_id operation.");
     }
 
-    fn set_integer(&mut self, field_name: String, value: i32) {
+    fn set_integer(&mut self, _field_name: String, _value: i32) {
         panic!("SortScan does not support set_integer operation.");
     }
 
-    fn set_string(&mut self, field_name: String, value: String) {
+    fn set_string(&mut self, _field_name: String, _value: String) {
         panic!("SortScan does not support set_string operation.");
     }
 
-    fn set_value(&mut self, field_name: String, value: crate::query::predicate::ConstantValue) {
+    fn set_value(&mut self, _field_name: String, _value: crate::query::predicate::ConstantValue) {
         panic!("SortScan does not support set_value operation.");
     }
 }
