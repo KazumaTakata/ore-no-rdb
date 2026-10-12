@@ -5,7 +5,7 @@ use crate::{
     metadata::{
         index_manager::IndexInfo, metadata_manager::MetadataManager, stat_manager_v2::StatInfoV2,
     },
-    parser::parser::{parse, ParserError},
+    parser::parser::{parse, ParserError, TableNameAndFieldName},
     parser_mapping::sql_node_to_parsed_sql,
     query::{
         group_by::{
@@ -13,7 +13,7 @@ use crate::{
         },
         index_select_plan::IndexSelectPlan,
         parser::{CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
-        predicate::{ExpressionValue, TableNameAndFieldName},
+        predicate::ExpressionValue,
         predicate_v3::PredicateV2,
         sort_plan::SortPlan,
     },
@@ -162,7 +162,7 @@ impl PlanV2 for SelectPlanV2 {
             } else {
                 let field_name2 = predicate.equate_with_field(field_name.clone());
 
-                if field_name2.is_some()  {
+                if field_name2.is_some() {
                     return min(
                         self.table_plan
                             .get_distinct_value(field_name2.clone().unwrap()),

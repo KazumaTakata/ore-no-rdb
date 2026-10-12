@@ -1,5 +1,7 @@
 use std::fmt;
 
+use comfy_table::Table;
+
 use crate::parser::tokenizer::{self, Token, TokenKind, TokenWithPos, TokenizationError};
 
 #[derive(Debug, PartialEq)]
@@ -28,7 +30,7 @@ pub struct Predicate {
 
 #[derive(Debug, PartialEq)]
 pub struct SelectNode {
-    pub fields: Vec<String>,
+    pub fields: Vec<TableNameAndFieldName>,
     pub tables: Vec<String>,
     pub predicate: Option<Predicate>,
 }
@@ -108,6 +110,21 @@ pub enum ParserError {
 pub struct ErrorResport<'a> {
     pub err: &'a ParserError,
     pub src: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableNameAndFieldName {
+    pub table_name: Option<String>,
+    pub field_name: String,
+}
+
+impl TableNameAndFieldName {
+    pub fn new(table_name: Option<String>, field_name: String) -> Self {
+        TableNameAndFieldName {
+            table_name,
+            field_name,
+        }
+    }
 }
 
 impl fmt::Display for ErrorResport<'_> {
@@ -252,6 +269,67 @@ fn parse_idents(tokens: &[TokenWithPos]) -> Result<(Vec<String>, usize), ParserE
     return Ok((fields_vec, index_1));
 }
 
+fn parse_idents_of_fields(
+    tokens: &[TokenWithPos],
+) -> Result<(Vec<TableNameAndFieldName>, usize), ParserError> {
+    let mut index_1: usize = 0;
+
+    let mut fields_vec: Vec<TableNameAndFieldName> = vec![];
+
+    loop {
+        let token = tokens.get(index_1).ok_or(ParserError::UnexpectedEOL)?;
+
+        match &token.token {
+            Token::IDENT(ident) => {
+                index_1 += 1;
+                let next_token = tokens.get(index_1);
+
+                if let Some(next_token) = next_token {
+                    if next_token.token == Token::DOT {
+                        let next_token =
+                            tokens.get(index_1 + 1).ok_or(ParserError::UnexpectedEOL)?;
+
+                        if let Token::IDENT(ident_2) = &next_token.token {
+                            index_1 += 2;
+                            fields_vec.push(TableNameAndFieldName {
+                                table_name: Some(ident.clone()),
+                                field_name: ident_2.clone(),
+                            })
+                        } else {
+                            fields_vec.push(TableNameAndFieldName {
+                                table_name: None,
+                                field_name: ident.clone(),
+                            })
+                        }
+                    }
+                }
+            }
+            _ => {
+                return Err(ParserError::ParseError(ParseError {
+                    invalid_token: token.token.clone(),
+                    expected_token: vec![TokenKind::IDENT],
+                    position: token.pos,
+                }))
+            }
+        };
+
+        let next_token = tokens.get(index_1);
+
+        if let Some(token) = next_token {
+            let token = &token.token;
+            if *token == Token::COMMA {
+                index_1 = index_1 + 1
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    return Ok((fields_vec, index_1));
+}
+
 fn parse_constants(tokens: &[TokenWithPos]) -> Result<(Vec<Constant>, usize), ParserError> {
     let mut index: usize = 0;
 
@@ -294,7 +372,7 @@ fn parse_constants(tokens: &[TokenWithPos]) -> Result<(Vec<Constant>, usize), Pa
 }
 
 fn parse_select(tokens: &[TokenWithPos]) -> Result<SelectNode, ParserError> {
-    let (fields_vec, index) = parse_idents(tokens)?;
+    let (fields_vec, index) = parse_idents_of_fields(tokens)?;
 
     let token = tokens.get(index).ok_or(ParserError::UnexpectedEOL)?;
 
@@ -859,7 +937,7 @@ mod tests {
         parser::{
             parse, Constant, CreateIndexNode, CreateTableNode, CreateViewNode, DeleteNode,
             ErrorResport, Expression, FieldDefNode, FieldType, InsertNode, ParseError, Predicate,
-            SQLNode, SelectNode, Term, UpdateNode,
+            SQLNode, SelectNode, TableNameAndFieldName, Term, UpdateNode,
         },
         tokenizer::{Token, TokenKind},
     };
@@ -871,7 +949,16 @@ mod tests {
         assert_eq!(
             parsed_select,
             SQLNode::SELECT(SelectNode {
-                fields: vec!["field".to_string(), "field2".to_string()],
+                fields: vec![
+                    TableNameAndFieldName {
+                        table_name: None,
+                        field_name: "field".to_string()
+                    },
+                    TableNameAndFieldName {
+                        table_name: None,
+                        field_name: "field2".to_string()
+                    },
+                ],
                 tables: vec!["table1".to_string(), "table2".to_string()],
                 predicate: Some(Predicate {
                     term: Term {
@@ -1000,7 +1087,10 @@ mod tests {
             SQLNode::CreateViewNode(CreateViewNode {
                 view_name: "view1".to_string(),
                 query: SelectNode {
-                    fields: vec!["field1".to_string()],
+                    fields: vec![TableNameAndFieldName {
+                        table_name: None,
+                        field_name: "field1".to_string()
+                    }],
                     tables: vec!["table1".to_string()],
                     predicate: None
                 }

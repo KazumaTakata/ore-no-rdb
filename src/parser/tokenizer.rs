@@ -34,7 +34,7 @@ pub enum Token {
     AND,
     LeftParen,
     RightParen,
-
+    DOT,
     IDENT(String),
     Number(i32),
     PositiveInteger(usize),
@@ -87,6 +87,7 @@ pub enum TokenKind {
     Equal,
     IDENT,
     Number,
+    Dot,
     Set,
     String,
     Where,
@@ -118,6 +119,7 @@ impl Token {
             Token::Equal => TokenKind::Equal,
             Token::IDENT(_) => TokenKind::IDENT,
             Token::Number(_) => TokenKind::Number,
+            Token::DOT => TokenKind::Dot,
             Token::String(_) => TokenKind::String,
             Token::Where => TokenKind::Where,
             Token::COMMA => TokenKind::COMMA,
@@ -163,6 +165,7 @@ impl error::Error for TokenizationError {
 
 static COMMA_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^,").unwrap());
 static EQUAL_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^=").unwrap());
+static DOT_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\.").unwrap());
 
 fn get_token(input_text: &str, position: usize) -> Result<TokenResponse, TokenizationError> {
     let ident_regex = Regex::new(r"^[A-Za-z_][A-Za-z0-9_]{0,62}\s*").unwrap();
@@ -194,6 +197,13 @@ fn get_token(input_text: &str, position: usize) -> Result<TokenResponse, Tokeniz
     if let Some(value) = number_regex.find(input_text) {
         return Ok(TokenResponse {
             token: Token::Number(value.as_str().to_string().parse().unwrap()),
+            position: value.end(),
+        });
+    }
+
+    if let Some(value) = DOT_REGEX.find(input_text) {
+        return Ok(TokenResponse {
+            token: Token::DOT,
             position: value.end(),
         });
     }
@@ -282,6 +292,41 @@ mod tests {
                 TokenWithPos {
                     token: Token::Table,
                     pos: 20
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_select_tokenize() {
+        let test_data = "  select field.table1 from table  ";
+        let token_vec = tokenize(test_data).expect("Okであることを期待");
+        assert_eq!(
+            token_vec,
+            vec![
+                TokenWithPos {
+                    token: Token::Select,
+                    pos: 2
+                },
+                TokenWithPos {
+                    token: Token::IDENT("field".to_string()),
+                    pos: 9
+                },
+                TokenWithPos {
+                    token: Token::DOT,
+                    pos: 14
+                },
+                TokenWithPos {
+                    token: Token::IDENT("table1".to_string()),
+                    pos: 15
+                },
+                TokenWithPos {
+                    token: Token::From,
+                    pos: 22
+                },
+                TokenWithPos {
+                    token: Token::Table,
+                    pos: 27
                 },
             ]
         );

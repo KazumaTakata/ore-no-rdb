@@ -1,3 +1,5 @@
+use crate::parser::parser::TableNameAndFieldName;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConstantValue {
     String(String),
@@ -84,19 +86,4 @@ impl Constant {
 pub enum ExpressionValue {
     TableNameAndFieldName(TableNameAndFieldName),
     Constant(Constant),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TableNameAndFieldName {
-    pub table_name: Option<String>,
-    pub field_name: String,
-}
-
-impl TableNameAndFieldName {
-    pub fn new(table_name: Option<String>, field_name: String) -> Self {
-        TableNameAndFieldName {
-            table_name,
-            field_name,
-        }
-    }
 }

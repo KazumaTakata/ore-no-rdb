@@ -1,14 +1,16 @@
 use crate::{
     parser::{
         self,
-        parser::{Expression, FieldType, Predicate, SQLNode, SelectNode, Term},
+        parser::{
+            Expression, FieldType, Predicate, SQLNode, SelectNode, TableNameAndFieldName, Term,
+        },
     },
     query::{
         parser::{
             CreateIndexData, CreateTableData, DeleteData, InsertData, ParsedSQL, QueryData,
             UpdateData, ViewData,
         },
-        predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
+        predicate::{Constant, ConstantValue, ExpressionValue},
         predicate_v3::{ExpressionV2, PredicateV2, TermV2},
     },
     record::record_page::{TableFieldInfo, TableSchema},
@@ -97,14 +99,7 @@ fn sql_node_predicate_term_to_parsed_sql_predicate_term(term: Term) -> TermV2 {
 fn sql_select_node_to_parsed_sql(select_node: SelectNode) -> QueryData {
     QueryData {
         table_name_list: select_node.tables,
-        field_name_list: select_node
-            .fields
-            .iter()
-            .map(|field| TableNameAndFieldName {
-                table_name: None,
-                field_name: field.clone(),
-            })
-            .collect(),
+        field_name_list: select_node.fields,
         predicate: select_node
             .predicate
             .map(sql_node_predicate_to_parsed_sql_predicate),
@@ -118,14 +113,7 @@ pub fn sql_node_to_parsed_sql(sql_node: SQLNode) -> ParsedSQL {
     match sql_node {
         SQLNode::SELECT(select_node) => ParsedSQL::Query(QueryData {
             table_name_list: select_node.tables,
-            field_name_list: select_node
-                .fields
-                .iter()
-                .map(|field| TableNameAndFieldName {
-                    table_name: None,
-                    field_name: field.clone(),
-                })
-                .collect(),
+            field_name_list: select_node.fields,
             predicate: select_node
                 .predicate
                 .map(sql_node_predicate_to_parsed_sql_predicate),

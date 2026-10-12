@@ -2,11 +2,12 @@ use std::fmt;
 use std::str::FromStr;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use crate::parser::parser::TableNameAndFieldName;
 use crate::record::record_page::TableFieldInfo;
 use crate::{
     error::ValueNotFound,
     query::plan_v2::{PlanTreeNodeForDebug, PlanV2},
-    query::predicate::{Constant, ConstantValue, TableNameAndFieldName},
+    query::predicate::{Constant, ConstantValue},
     query::sort_plan::SortPlan,
     record::record_page::TableSchema,
     record::scan_v2::ScanV2,
@@ -72,7 +73,7 @@ impl PlanV2 for GroupByPlan {
     }
 
     fn get_distinct_value(&self, field_name: String) -> u32 {
-        if self.get_schema().has_field(field_name.clone())  {
+        if self.get_schema().has_field(field_name.clone()) {
             return self.plan.get_distinct_value(field_name);
         } else {
             return self.records_output();

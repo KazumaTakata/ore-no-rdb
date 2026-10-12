@@ -1,7 +1,7 @@
 use crate::{
     error::ValueNotFound,
-    query::predicate::{ConstantValue, TableNameAndFieldName},
-    query::predicate_v3::PredicateV2,
+    parser::parser::TableNameAndFieldName,
+    query::{predicate::ConstantValue, predicate_v3::PredicateV2},
     record::table_scan_v2::RecordID,
 };
 
@@ -314,17 +314,19 @@ mod tests {
 
     use crate::{
         buffer::buffer_manager_v2::BufferManagerV2,
-        metadata::table_manager_v2::TableManagerV2,
-        metadata::view_manager::ViewManager,
-        query::predicate::{Constant, ConstantValue, ExpressionValue, TableNameAndFieldName},
-        query::predicate_v3::{ExpressionV2, PredicateV2, TermV2},
-        record::record_page::{Layout, TableSchema},
-        record::scan_v2::{ScanV2, SelectScanV2},
-        record::table_scan_v2::TableScan,
-        storage::file_manager::FileManager,
-        storage::log_manager_v2::LogManagerV2,
-        tx::concurrency_manager::LockTable,
-        tx::transaction_v2::TransactionV2,
+        metadata::{table_manager_v2::TableManagerV2, view_manager::ViewManager},
+        parser::parser::TableNameAndFieldName,
+        query::{
+            predicate::{Constant, ConstantValue, ExpressionValue},
+            predicate_v3::{ExpressionV2, PredicateV2, TermV2},
+        },
+        record::{
+            record_page::{Layout, TableSchema},
+            scan_v2::{ScanV2, SelectScanV2},
+            table_scan_v2::TableScan,
+        },
+        storage::{file_manager::FileManager, log_manager_v2::LogManagerV2},
+        tx::{concurrency_manager::LockTable, transaction_v2::TransactionV2},
     };
 
     #[test]

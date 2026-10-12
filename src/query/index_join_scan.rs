@@ -1,6 +1,7 @@
 use crate::{
     index::b_tree_index::BTreeIndex,
-    query::predicate::{Constant, TableNameAndFieldName},
+    parser::parser::TableNameAndFieldName,
+    query::predicate::Constant,
     record::{scan_v2::ScanV2, table_scan_v2::TableScan},
 };
 

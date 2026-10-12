@@ -2,11 +2,13 @@ use std::{cell::RefCell, rc::Rc, sync::Mutex};
 
 use crate::{
     error::ValueNotFound,
+    parser::parser::TableNameAndFieldName,
     query::plan_v2::PlanV2,
-    query::predicate::TableNameAndFieldName,
-    record::record_page::{Layout, TableSchema},
-    record::scan_v2::ScanV2,
-    record::table_scan_v2::TableScan,
+    record::{
+        record_page::{Layout, TableSchema},
+        scan_v2::ScanV2,
+        table_scan_v2::TableScan,
+    },
     tx::transaction_v2::TransactionV2,
 };
 

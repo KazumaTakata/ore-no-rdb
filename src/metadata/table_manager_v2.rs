@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
-    query::predicate::TableNameAndFieldName,
+    parser::parser::TableNameAndFieldName,
     record::{
         record_page::{TableFieldInfo, TableSchema},
         scan_v2::ScanV2,

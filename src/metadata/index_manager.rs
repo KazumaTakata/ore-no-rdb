@@ -7,7 +7,7 @@ use crate::{
         stat_manager_v2::{StatInfoV2, StatManagerV2},
         table_manager_v2::TableManagerV2,
     },
-    query::predicate::TableNameAndFieldName,
+    parser::parser::TableNameAndFieldName,
     record::{
         record_page::{Layout, TableFieldInfo, TableSchema},
         scan_v2::ScanV2,

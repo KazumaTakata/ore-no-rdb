@@ -1,17 +1,15 @@
-use std::{
-    cell::RefCell,
-    rc::Rc,
-};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    index::b_tree_index::BTreeIndex,
     error::ValueNotFound,
+    index::b_tree_index::BTreeIndex,
     metadata::index_manager::IndexInfo,
-    query::plan_v2::{PlanTreeNodeForDebug, PlanV2},
-    query::predicate::{Constant, ConstantValue, TableNameAndFieldName},
-    record::record_page::TableSchema,
-    record::scan_v2::ScanV2,
-    record::table_scan_v2::RecordID,
+    parser::parser::TableNameAndFieldName,
+    query::{
+        plan_v2::{PlanTreeNodeForDebug, PlanV2},
+        predicate::{Constant, ConstantValue},
+    },
+    record::{record_page::TableSchema, scan_v2::ScanV2, table_scan_v2::RecordID},
 };
 
 pub struct IndexSelectPlan {

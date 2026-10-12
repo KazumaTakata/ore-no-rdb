@@ -6,10 +6,13 @@ use std::{
 
 use crate::{
     error::ValueNotFound,
-    query::predicate::{Constant, ConstantValue, TableNameAndFieldName},
-    record::record_page::Layout,
-    record::scan_v2::ScanV2,
-    record::table_scan_v2::{RecordID, TableScan},
+    parser::parser::TableNameAndFieldName,
+    query::predicate::{Constant, ConstantValue},
+    record::{
+        record_page::Layout,
+        scan_v2::ScanV2,
+        table_scan_v2::{RecordID, TableScan},
+    },
     tx::transaction_v2::TransactionV2,
 };
 

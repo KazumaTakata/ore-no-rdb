@@ -2,12 +2,13 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     error::ValueNotFound,
-    query::materialize::TempTable,
-    query::plan_v2::{PlanTreeNodeForDebug, PlanV2},
-    query::predicate::{Constant, TableNameAndFieldName},
-    record::record_page::TableSchema,
-    record::scan_v2::ScanV2,
-    record::table_scan_v2::RecordID,
+    parser::parser::TableNameAndFieldName,
+    query::{
+        materialize::TempTable,
+        plan_v2::{PlanTreeNodeForDebug, PlanV2},
+        predicate::Constant,
+    },
+    record::{record_page::TableSchema, scan_v2::ScanV2, table_scan_v2::RecordID},
     tx::transaction_v2::TransactionV2,
 };
 
