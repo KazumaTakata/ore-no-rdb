@@ -3,12 +3,12 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
     metadata::index_manager::{self, IndexInfo, IndexManager},
-    query::parser::QueryData,
-    record::record_page::{Layout, TableSchema},
     metadata::stat_manager_v2::{StatInfoV2, StatManagerV2},
     metadata::table_manager_v2::TableManagerV2,
-    tx::transaction_v2,
     metadata::view_manager::{self, ViewManager},
+    query::parser::QueryData,
+    record::record_page::{Layout, TableSchema},
+    tx::transaction_v2,
 };
 
 pub struct MetadataManager {
@@ -16,6 +16,12 @@ pub struct MetadataManager {
     stat_manager: Rc<RefCell<StatManagerV2>>,
     index_manager: Rc<RefCell<IndexManager>>,
     view_manager: Rc<RefCell<ViewManager>>,
+}
+
+pub enum ValidateSQLResponse {
+    Ok,
+    TableNotFound(String),
+    FieldNotFound(String),
 }
 
 impl MetadataManager {
@@ -33,11 +39,13 @@ impl MetadataManager {
 
         let index_manager = Rc::new(RefCell::new(_index_manager));
 
-        let view_manager = Rc::new(RefCell::new(crate::metadata::view_manager::ViewManager::new(
-            true,
-            table_manager.clone(),
-            transaction.clone(),
-        )));
+        let view_manager = Rc::new(RefCell::new(
+            crate::metadata::view_manager::ViewManager::new(
+                true,
+                table_manager.clone(),
+                transaction.clone(),
+            ),
+        ));
 
         let copied_table_manager = table_manager.clone();
 
@@ -80,27 +88,52 @@ impl MetadataManager {
         &self,
         query_data: &QueryData,
         transaction: Rc<RefCell<crate::tx::transaction_v2::TransactionV2>>,
-    ) -> bool {
-        self.table_manager
-            .borrow()
-            .check_if_table_exists(query_data.table_name_list[0].clone(), transaction.clone());
+    ) -> ValidateSQLResponse {
+        for table_name in query_data.table_name_list.iter() {
+            let table_exists = self
+                .table_manager
+                .borrow()
+                .check_if_table_exists(table_name, transaction.clone());
 
-        match query_data.field_name_list[0].table_name {
-            Some(ref table_name) => {
-                return self.table_manager.borrow().check_if_field_exists(
-                    table_name.clone(),
-                    query_data.field_name_list[0].field_name.clone(),
-                    transaction.clone(),
-                )
-            }
-            None => {
-                return self.table_manager.borrow().check_if_field_exists(
-                    query_data.table_name_list[0].clone(),
-                    query_data.field_name_list[0].field_name.clone(),
-                    transaction.clone(),
-                );
+            if !table_exists {
+                return ValidateSQLResponse::TableNotFound(table_name.to_string());
             }
         }
+
+        for table_field_name in query_data.field_name_list.iter() {
+            match table_field_name.table_name {
+                Some(ref table_name) => {
+                    let field_exists = self.table_manager.borrow().check_if_field_exists(
+                        &table_name,
+                        table_field_name.field_name.clone(),
+                        transaction.clone(),
+                    );
+
+                    if !field_exists {
+                        return ValidateSQLResponse::FieldNotFound(
+                            table_field_name.field_name.to_string(),
+                        );
+                    }
+                }
+                None => {
+                    for table_name in query_data.table_name_list.iter() {
+                        let field_exists = self.table_manager.borrow().check_if_field_exists(
+                            table_name,
+                            table_field_name.field_name.clone(),
+                            transaction.clone(),
+                        );
+
+                        if !field_exists {
+                            return ValidateSQLResponse::FieldNotFound(
+                                table_field_name.field_name.to_string(),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        return ValidateSQLResponse::Ok;
     }
 
     pub fn create_view(

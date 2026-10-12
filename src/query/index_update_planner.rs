@@ -3,9 +3,11 @@ use std::{cell::RefCell, f32::consts::E, rc::Rc};
 use crate::{
     error::{DatabaseError, UniqueConstraintError, ValueNotFound},
     metadata::metadata_manager::MetadataManager,
-    query::parser::{DeleteData, InsertData, UpdateData},
-    query::plan_v2::{PlanV2, SelectPlanV2, TablePlanV2},
-    query::predicate::{Constant, TableNameAndFieldName},
+    query::{
+        parser::{DeleteData, InsertData, UpdateData},
+        plan_v2::{PlanV2, SelectPlanV2, TablePlanV2},
+        predicate::{Constant, ExpressionValue, TableNameAndFieldName},
+    },
     tx::transaction_v2::TransactionV2,
 };
 
@@ -135,12 +137,28 @@ impl IndexUpdatePlanner {
             let new_value = update_data.new_value.clone();
             let old_value =
                 update_scan.get_value(TableNameAndFieldName::new(None, field_name.clone()));
-            update_scan.set_value(update_data.field_name.clone(), new_value.value.clone());
+
+            match new_value.value.clone() {
+                ExpressionValue::TableNameAndFieldName(_) => {
+                    panic!("set_valueをexpressionに対してできるようにする")
+                }
+                ExpressionValue::Constant(value) => {
+                    update_scan.set_value(update_data.field_name.clone(), value.value)
+                }
+            }
 
             if let Some(idx) = index.as_mut() {
                 let record_id = update_scan.get_record_id();
                 idx.delete(Constant::new(old_value.unwrap()), record_id.clone());
-                idx.insert(new_value, record_id.clone());
+
+                match new_value.value.clone() {
+                    ExpressionValue::TableNameAndFieldName(_) => {
+                        panic!("set_valueをexpressionに対してできるようにする")
+                    }
+                    ExpressionValue::Constant(value) => {
+                        idx.insert(value, record_id.clone());
+                    }
+                }
             }
         }
 
@@ -182,7 +200,10 @@ impl IndexUpdatePlanner {
 mod tests {
     use std::path::Path;
 
-    use crate::{database::Database, query::parser::parse_sql, record::record_page::TableSchema};
+    use crate::{
+        database::Database, parser::parser::parse, parser_mapping::sql_node_to_parsed_sql,
+        record::record_page::TableSchema,
+    };
 
     use super::*;
 
@@ -211,12 +232,15 @@ mod tests {
         );
 
         for i in 0..1000 {
-            let parsed_sql = parse_sql(format!(
+            let insert_sql = format!(
                 "insert into test_table (A, B) values ({}, 'Hello World yay!{}')",
                 i, i
-            ));
+            );
+            let parsed_sql = parse(&insert_sql)
+                .map(|n| sql_node_to_parsed_sql(n))
+                .unwrap();
 
-            let insert_data = match &parsed_sql[0] {
+            let insert_data = match &parsed_sql {
                 crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),
             };
@@ -248,7 +272,9 @@ mod tests {
             // 構築された B-tree を stdout に可視化する
             index.print_tree();
 
-            index.before_first(Constant::new(crate::query::predicate::ConstantValue::Number(55)));
+            index.before_first(Constant::new(
+                crate::query::predicate::ConstantValue::Number(55),
+            ));
             index.next();
             let record_id = index.get_data_record_id();
             let record_id = record_id.unwrap();

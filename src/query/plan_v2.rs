@@ -2,18 +2,26 @@ use std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc};
 
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
-    query::group_by::{AggregateFunction, AggregateFunctionType, AvgFunction, GroupByPlan, MaxFunction},
-    metadata::index_manager::IndexInfo,
-    query::index_select_plan::IndexSelectPlan,
-    metadata::metadata_manager::MetadataManager,
-    query::parser::{parse_sql, CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
-    query::predicate::TableNameAndFieldName,
-    query::predicate_v3::PredicateV2,
-    record::record_page::{Layout, TableSchema},
-    record::scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
-    query::sort_plan::SortPlan,
-    metadata::stat_manager_v2::StatInfoV2,
-    record::table_scan_v2::TableScan,
+    metadata::{
+        index_manager::IndexInfo, metadata_manager::MetadataManager, stat_manager_v2::StatInfoV2,
+    },
+    parser::parser::{parse, ParseError, ParserError},
+    parser_mapping::sql_node_to_parsed_sql,
+    query::{
+        group_by::{
+            AggregateFunction, AggregateFunctionType, AvgFunction, GroupByPlan, MaxFunction,
+        },
+        index_select_plan::IndexSelectPlan,
+        parser::{CreateTableData, DeleteData, InsertData, QueryData, UpdateData},
+        predicate::{ExpressionValue, TableNameAndFieldName},
+        predicate_v3::PredicateV2,
+        sort_plan::SortPlan,
+    },
+    record::{
+        record_page::{Layout, TableSchema},
+        scan_v2::{ProductScanV2, ProjectScanV2, ScanV2, SelectScanV2},
+        table_scan_v2::TableScan,
+    },
     tx::transaction_v2::TransactionV2,
 };
 
@@ -118,11 +126,11 @@ impl PlanV2 for TablePlanV2 {
 pub struct SelectPlanV2 {
     // Fields for the plan
     table_plan: Box<dyn PlanV2>,
-    predicate: PredicateV2,
+    predicate: Option<PredicateV2>,
 }
 
 impl SelectPlanV2 {
-    pub fn new(table_plan: Box<dyn PlanV2>, predicate: PredicateV2) -> Self {
+    pub fn new(table_plan: Box<dyn PlanV2>, predicate: Option<PredicateV2>) -> Self {
         SelectPlanV2 {
             table_plan,
             predicate,
@@ -145,29 +153,36 @@ impl PlanV2 for SelectPlanV2 {
     }
 
     fn get_distinct_value(&self, field_name: String) -> u32 {
-        if self
-            .predicate
-            .equates_with_constant(field_name.clone())
-            .is_some()
-        {
-            return 1;
-        } else {
-            let field_name2 = self.predicate.equate_with_field(field_name.clone());
-
-            if (field_name2.is_some()) {
-                return min(
-                    self.table_plan
-                        .get_distinct_value(field_name2.clone().unwrap()),
-                    self.table_plan.get_distinct_value(field_name.clone()),
-                );
+        if let Some(predicate) = self.predicate.as_ref() {
+            if predicate
+                .equates_with_constant(field_name.clone())
+                .is_some()
+            {
+                return 1;
             } else {
-                return self.table_plan.get_distinct_value(field_name);
+                let field_name2 = predicate.equate_with_field(field_name.clone());
+
+                if (field_name2.is_some()) {
+                    return min(
+                        self.table_plan
+                            .get_distinct_value(field_name2.clone().unwrap()),
+                        self.table_plan.get_distinct_value(field_name.clone()),
+                    );
+                } else {
+                    return self.table_plan.get_distinct_value(field_name);
+                }
             }
+        } else {
+            return self.table_plan.get_distinct_value(field_name);
         }
     }
 
     fn records_output(&self) -> u32 {
-        self.table_plan.records_output() / self.predicate.reduction_factor(self.table_plan.as_ref())
+        if let Some(predicate) = self.predicate.as_ref() {
+            self.table_plan.records_output() / predicate.reduction_factor(self.table_plan.as_ref())
+        } else {
+            self.table_plan.records_output()
+        }
     }
 
     fn get_child_plans(&self) -> PlanTreeNodeForDebug {
@@ -304,7 +319,7 @@ impl PlanV2 for ProductPlanV2 {
 
 fn create_index_select(
     index_info_hash: HashMap<String, IndexInfo>,
-    predicate: PredicateV2,
+    predicate: &PredicateV2,
     table_plan: Box<dyn PlanV2>,
 ) -> Box<dyn PlanV2> {
     for (field_name, index_info) in index_info_hash.iter() {
@@ -335,11 +350,17 @@ pub fn get_optimized_product_plan(plans: &mut Vec<Box<dyn PlanV2>>) -> Box<dyn P
     return plan;
 }
 
+#[derive(Debug)]
+pub enum CreateQueryPlanError {
+    ValueNotFound(ValueNotFound),
+    ParserError(ParserError),
+}
+
 pub fn create_query_plan(
     query_data: &QueryData,
     transaction: Rc<RefCell<TransactionV2>>,
     metadata_manager: &mut MetadataManager,
-) -> Result<Box<dyn PlanV2>, ValueNotFound> {
+) -> Result<Box<dyn PlanV2>, CreateQueryPlanError> {
     let mut plans: Vec<Box<dyn PlanV2>> = Vec::new();
 
     for table_name in query_data.table_name_list.iter() {
@@ -347,12 +368,13 @@ pub fn create_query_plan(
             metadata_manager.get_view_definition(table_name.clone(), transaction.clone());
 
         if let Some(view_def) = view_definition {
-            let parsed_sql_list = parse_sql(view_def.clone());
-            let parsed_sql = &parsed_sql_list[0];
+            let parsed_sql =
+                parse(&view_def.clone()).map_err(|err| CreateQueryPlanError::ParserError(err))?;
+            let parsed_sql = sql_node_to_parsed_sql(parsed_sql);
 
             match parsed_sql {
                 crate::query::parser::ParsedSQL::Query(q) => {
-                    let view_plan = create_query_plan(q, transaction.clone(), metadata_manager)?;
+                    let view_plan = create_query_plan(&q, transaction.clone(), metadata_manager)?;
                     plans.push(view_plan);
                     continue;
                 }
@@ -361,24 +383,27 @@ pub fn create_query_plan(
         }
 
         let table_plan =
-            TablePlanV2::new(table_name.clone(), transaction.clone(), metadata_manager)?;
+            TablePlanV2::new(table_name.clone(), transaction.clone(), metadata_manager)
+                .map_err(|e| CreateQueryPlanError::ValueNotFound(e))?;
         let plan: Box<dyn PlanV2> = Box::new(table_plan);
 
         let index_info_list =
             metadata_manager.get_index_info(table_name.clone(), transaction.clone());
 
-        match index_info_list {
-            Err(_) => {
-                plans.push(plan);
-                continue;
-            }
-            Ok(info) => {
-                let index_select_plan =
-                    create_index_select(info.clone(), query_data.predicate.clone(), plan);
-
-                plans.push(index_select_plan);
-            }
-        };
+        if let Some(predicate) = query_data.predicate.as_ref() {
+            match index_info_list {
+                Err(_) => {
+                    plans.push(plan);
+                    continue;
+                }
+                Ok(info) => {
+                    let index_select_plan = create_index_select(info.clone(), predicate, plan);
+                    plans.push(index_select_plan);
+                }
+            };
+        } else {
+            plans.push(plan);
+        }
     }
 
     // //TODO: productの順番を最適化する
@@ -511,7 +536,13 @@ pub fn execute_update(
     while scan.next()? {
         let field = update_data.field_name.clone();
         let value = update_data.new_value.clone();
-        scan.set_value(field.clone(), value.value);
+        let value = match value.value {
+            ExpressionValue::Constant(constant) => constant.value,
+            ExpressionValue::TableNameAndFieldName(_) => {
+                panic!("あとで直す: update時のvalueをconstだけでなく、他fieldでもできるようにする")
+            }
+        };
+        scan.set_value(field.clone(), value);
     }
 
     scan.close();
@@ -535,8 +566,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        database::Database, metadata::metadata_manager::MetadataManager, query::parser::parse_sql,
-        query::predicate::ConstantValue,
+        database::Database, metadata::metadata_manager::MetadataManager,
+        parser::parser::ErrorResport, query::predicate::ConstantValue,
     };
     use std::path::Path;
 
@@ -549,12 +580,13 @@ mod tests {
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let create_table_sql =
-            "create table test_table_1 (A_1 integer, B_1 varchar(10))".to_string();
+        let create_table_sql = "create table test_table_1 (A_1 INT, B_1 varchar(10))".to_string();
 
-        let parsed_sql_list = parse_sql(create_table_sql.clone());
+        let parsed_sql_list = parse(&create_table_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let create_table_data = match &parsed_sql_list[0] {
+        let create_table_data = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
@@ -569,12 +601,13 @@ mod tests {
             println!("Table already exists");
         }
 
-        let create_table_sql =
-            "create table test_table_2 (A_2 integer, B_2 varchar(10))".to_string();
+        let create_table_sql = "create table test_table_2 (A_2 INT, B_2 varchar(10))".to_string();
 
-        let parsed_sql_list = parse_sql(create_table_sql.clone());
+        let parsed_sql_list = parse(&create_table_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let create_table_data = match &parsed_sql_list[0] {
+        let create_table_data = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
@@ -626,9 +659,10 @@ mod tests {
         ];
 
         for insert_sql in insert_sql_list.iter() {
-            let parsed_sql_list = parse_sql(insert_sql.clone());
-
-            let insert_data = match &parsed_sql_list[0] {
+            let parsed_sql_list = parse(&insert_sql)
+                .map(|n| sql_node_to_parsed_sql(n))
+                .unwrap();
+            let insert_data = match &parsed_sql_list {
                 crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),
             };
@@ -702,12 +736,13 @@ mod tests {
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let create_table_sql =
-            "create table test_table_11 (A_1 integer, B_1 varchar(10))".to_string();
+        let create_table_sql = "create table test_table_11 (A_1 INT, B_1 varchar(10))".to_string();
 
-        let parsed_sql_list = parse_sql(create_table_sql.clone());
+        let parsed_sql_list = parse(&create_table_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let create_table_data = match &parsed_sql_list[0] {
+        let create_table_data = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
@@ -725,9 +760,11 @@ mod tests {
         let insert_sql =
             "insert into test_table_11 (A_1, B_1) values (42, 'Hello World!')".to_string();
 
-        let parsed_sql_list = parse_sql(insert_sql.clone());
+        let parsed_sql_list = parse(&insert_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let insert_data = match &parsed_sql_list[0] {
+        let insert_data = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::Insert(q) => q,
             _ => panic!("Expected a Insert variant from parse_sql"),
         };
@@ -741,9 +778,11 @@ mod tests {
         let insert_sql_2 =
             "insert into test_table_11 (A_1, B_1) values (42, 'Hello World!')".to_string();
 
-        let parsed_sql_list = parse_sql(insert_sql_2.clone());
+        let parsed_sql_list = parse(&insert_sql_2)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let insert_data_2 = match &parsed_sql_list[0] {
+        let insert_data_2 = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::Insert(q) => q,
             _ => panic!("Expected a Insert variant from parse_sql"),
         };
@@ -763,14 +802,16 @@ mod tests {
 
         let create_table_sql = "select A_1, B_1 from test_table_11".to_string();
 
-        let parsed_sql_list = parse_sql(create_table_sql.clone());
+        let parsed_sql_list = parse(&create_table_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let select_query = match &parsed_sql_list[0] {
+        let select_query = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::Query(q) => q,
             _ => panic!("Expected a Query  variant from parse_sql"),
         };
         let mut plan =
-            create_query_plan(&select_query, transaction.clone(), &mut metadata_manager)?;
+            create_query_plan(&select_query, transaction.clone(), &mut metadata_manager).unwrap();
 
         let mut scan = plan.open()?;
         scan.move_to_before_first();
@@ -804,12 +845,13 @@ mod tests {
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let create_table_sql =
-            "create table test_table_1 (A_1 integer, B_1 varchar(10))".to_string();
+        let create_table_sql = "create table test_table_1 (A_1 INT, B_1 varchar(10))".to_string();
 
-        let parsed_sql_list = parse_sql(create_table_sql.clone());
+        let parsed_sql_list = parse(&create_table_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let create_table_data = match &parsed_sql_list[0] {
+        let create_table_data = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
@@ -851,9 +893,11 @@ mod tests {
         transaction: Rc<RefCell<TransactionV2>>,
         metadata_manager: &mut MetadataManager,
     ) {
-        let parsed_sql_list = parse_sql(insert_sql.clone());
+        let parsed_sql_list = parse(&insert_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let insert_data = match &parsed_sql_list[0] {
+        let insert_data = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::Insert(q) => q,
             _ => panic!("Expected a Insert variant from parse_sql"),
         };
@@ -869,12 +913,13 @@ mod tests {
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let create_table_sql =
-            "create table test_table_2 (A_2 integer, B_2 varchar(10))".to_string();
+        let create_table_sql = "create table test_table_2 (A_2 INT, B_2 varchar(10))".to_string();
 
-        let parsed_sql_list = parse_sql(create_table_sql.clone());
+        let parsed_sql_list = parse(&create_table_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let create_table_data = match &parsed_sql_list[0] {
+        let create_table_data = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
@@ -921,8 +966,8 @@ mod tests {
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let parsed_sql =
-            &parse_sql("select A_1, B_1, A_2, B_2 from test_table_1, test_table_2".to_string())[0];
+        let sql = "select A_1, B_1, A_2, B_2 from test_table_1, test_table_2";
+        let parsed_sql = parse(sql).map(|n| sql_node_to_parsed_sql(n)).unwrap();
 
         let query_data = match parsed_sql {
             crate::query::parser::ParsedSQL::Query(q) => q,
@@ -963,7 +1008,8 @@ mod tests {
         let mut test_value_list: Vec<TestValue> =
             vec![test_value_1, test_value_2, test_value_3, test_value_4];
 
-        let mut plan = create_query_plan(&query_data, transaction.clone(), &mut metadata_manager)?;
+        let mut plan =
+            create_query_plan(&query_data, transaction.clone(), &mut metadata_manager).unwrap();
 
         let mut scan = plan.open()?;
         scan.move_to_before_first();
@@ -1010,12 +1056,13 @@ mod tests {
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let create_table_sql =
-            "create table test_table_1 (A_1 integer, B_1 varchar(10))".to_string();
+        let create_table_sql = "create table test_table_1 (A_1 INT, B_1 varchar(10))".to_string();
 
-        let parsed_sql_list = parse_sql(create_table_sql.clone());
+        let parsed_sql = parse(&create_table_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let create_table_data = match &parsed_sql_list[0] {
+        let create_table_data = match &parsed_sql {
             crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
@@ -1098,14 +1145,18 @@ mod tests {
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let parsed_sql = &parse_sql("select A_1, B_1 from test_view where A_1 = 1".to_string())[0];
+        let select_sql = "select A_1, B_1 from test_view where A_1 = 1".to_string();
+        let parsed_sql = parse(&select_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
         let query_data = match parsed_sql {
             crate::query::parser::ParsedSQL::Query(q) => q,
             _ => panic!("Expected a Query variant from parse_sql"),
         };
 
-        let mut plan = create_query_plan(&query_data, transaction.clone(), &mut metadata_manager)?;
+        let mut plan =
+            create_query_plan(&query_data, transaction.clone(), &mut metadata_manager).unwrap();
         let mut scan = plan.open()?;
         scan.move_to_before_first();
         let mut count = 0;

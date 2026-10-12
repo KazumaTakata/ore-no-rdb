@@ -78,7 +78,7 @@ impl PlanV2 for MaterializePlan {
 
         while src.next()? {
             dest.insert();
-            for field in schema.fields.iter() {
+            for field in schema.fields_name_vec.iter() {
                 let value = src.get_value(TableNameAndFieldName {
                     table_name: None,
                     field_name: field.clone(),
@@ -130,9 +130,12 @@ mod tests {
     use crate::{
         database::Database,
         metadata::metadata_manager::MetadataManager,
-        query::parser::parse_sql,
-        query::plan_v2::{execute_create_table, execute_insert, TablePlanV2},
-        query::predicate::ConstantValue,
+        parser::parser::parse,
+        parser_mapping::sql_node_to_parsed_sql,
+        query::{
+            plan_v2::{execute_create_table, execute_insert, TablePlanV2},
+            predicate::ConstantValue,
+        },
     };
 
     use super::*;
@@ -143,12 +146,13 @@ mod tests {
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let create_table_sql =
-            "create table test_table_1 (A_1 integer, B_1 varchar(10))".to_string();
+        let create_table_sql = "create table test_table_1 (A_1 INT, B_1 varchar(10))".to_string();
 
-        let parsed_sql_list = parse_sql(create_table_sql.clone());
+        let parsed_sql_list = parse(&create_table_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let create_table_data = match &parsed_sql_list[0] {
+        let create_table_data = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
@@ -163,12 +167,13 @@ mod tests {
             println!("Table already exists");
         }
 
-        let create_table_sql =
-            "create table test_table_2 (A_2 integer, B_2 varchar(10))".to_string();
+        let create_table_sql = "create table test_table_2 (A_2 INT, B_2 varchar(10))".to_string();
 
-        let parsed_sql_list = parse_sql(create_table_sql.clone());
+        let parsed_sql_list = parse(&create_table_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let create_table_data = match &parsed_sql_list[0] {
+        let create_table_data = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
@@ -198,9 +203,11 @@ mod tests {
         ];
 
         for insert_sql in insert_sql_list.iter() {
-            let parsed_sql_list = parse_sql(insert_sql.clone());
+            let parsed_sql_list = parse(&insert_sql)
+                .map(|n| sql_node_to_parsed_sql(n))
+                .unwrap();
 
-            let insert_data = match &parsed_sql_list[0] {
+            let insert_data = match &parsed_sql_list {
                 crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),
             };

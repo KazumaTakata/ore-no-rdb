@@ -1,47 +1,22 @@
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TableFieldInfo {
-    pub field_type: TableFieldType,
-    pub field_length: i32,
-}
-
-impl TableFieldInfo {
-    pub fn new(field_type: TableFieldType, field_length: i32) -> TableFieldInfo {
-        TableFieldInfo {
-            field_type,
-            field_length,
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum TableFieldType {
+pub enum TableFieldInfo {
     INTEGER,
-    VARCHAR,
+    VARCHAR(usize),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TableSchema {
-    pub fields: Vec<String>,
-    pub field_infos: HashMap<String, TableFieldInfo>,
+    pub fields_name_vec: Vec<String>,
+    pub fields: HashMap<String, TableFieldInfo>,
 }
 
-impl Into<i32> for TableFieldType {
-    fn into(self) -> i32 {
-        match self {
-            TableFieldType::INTEGER => 0,
-            TableFieldType::VARCHAR => 1,
-        }
-    }
-}
-
-impl From<i32> for TableFieldType {
-    fn from(value: i32) -> Self {
-        match value {
-            0 => TableFieldType::INTEGER,
-            1 => TableFieldType::VARCHAR,
-            _ => panic!("Invalid field type"),
+impl From<&TableFieldInfo> for i32 {
+    fn from(info: &TableFieldInfo) -> i32 {
+        match info {
+            TableFieldInfo::INTEGER => 0,
+            TableFieldInfo::VARCHAR(_) => 1,
         }
     }
 }
@@ -49,90 +24,72 @@ impl From<i32> for TableFieldType {
 impl TableSchema {
     pub fn new() -> TableSchema {
         TableSchema {
-            fields: Vec::new(),
-            field_infos: HashMap::new(),
+            fields_name_vec: vec![],
+            fields: HashMap::new(),
         }
     }
 
-    pub fn add_field(&mut self, field_name: String, field_type: TableFieldType, field_length: i32) {
-        self.fields.push(field_name.clone());
-        self.field_infos.insert(
-            field_name,
-            TableFieldInfo {
-                field_type,
-                field_length,
-            },
-        );
+    pub fn add_field(&mut self, field_name: String, field_type: TableFieldInfo) {
+        self.fields_name_vec.push(field_name.clone());
+        self.fields.insert(field_name, field_type);
     }
 
     pub fn add_integer_field(&mut self, field_name: String) {
-        self.add_field(field_name, TableFieldType::INTEGER, 0);
+        self.add_field(field_name, TableFieldInfo::INTEGER);
     }
 
     pub fn add_string_field(&mut self, field_name: String, field_length: i32) {
-        self.add_field(field_name, TableFieldType::VARCHAR, field_length);
+        self.add_field(field_name, TableFieldInfo::VARCHAR(field_length as usize));
     }
 
     pub fn add(&mut self, field_name: String, schema: TableSchema) {
         let field_type = schema.get_field_type(field_name.clone());
-        let field_length = schema.get_field_length(field_name.clone());
-        self.add_field(field_name, field_type.unwrap(), field_length.unwrap());
+        self.add_field(field_name, field_type.unwrap().clone());
     }
 
     pub fn add_all(&mut self, schema: TableSchema) {
-        for field in schema.clone().fields {
+        for field in schema.clone().fields_name_vec {
             self.add(field.clone(), schema.clone());
         }
     }
 
     pub fn fields(&self) -> &Vec<String> {
-        &self.fields
+        return &self.fields_name_vec;
     }
 
     fn add_from_schema(&mut self, field_name: String, schema: TableSchema) {
-        let field_info = schema.field_infos.get(&field_name).unwrap();
-        self.add_field(
-            field_name,
-            field_info.field_type.clone(),
-            field_info.field_length,
-        );
+        let field_info = schema.fields.get(&field_name).unwrap();
+        self.add_field(field_name, field_info.clone());
     }
 
     fn add_all_from_schema(&mut self, schema: TableSchema) {
-        for field in schema.fields {
-            let field_info = schema.field_infos.get(&field).unwrap();
-            self.add_field(
-                field,
-                field_info.field_type.clone(),
-                field_info.field_length,
-            );
+        for field in schema.fields_name_vec {
+            let field_info = schema.fields.get(&field).unwrap();
+            self.add_field(field, field_info.clone());
         }
     }
 
-    pub fn get_field_type(&self, field_name: String) -> Option<TableFieldType> {
-        let field_info = self.field_infos.get(&field_name);
-        // field_infoが存在しない場合はNoneを返す
-
-        if let Some(field_info) = field_info {
-            return Some(field_info.field_type.clone());
-        }
-
-        return None;
+    pub fn get_field_type(&self, field_name: String) -> Option<&TableFieldInfo> {
+        let field_info = self.fields.get(&field_name);
+        return field_info;
     }
 
     pub fn get_field_length(&self, field_name: String) -> Option<i32> {
-        let field_info = self.field_infos.get(&field_name);
+        let field_info = self.fields.get(&field_name);
         // field_infoが存在しない場合はNoneを返す
 
         if let Some(field_info) = field_info {
-            return Some(field_info.field_length);
+            return match field_info {
+                TableFieldInfo::INTEGER => Some(0),
+                TableFieldInfo::VARCHAR(size) => Some(size.clone() as i32),
+            };
         }
 
         return None;
     }
 
     pub fn has_field(&self, field_name: String) -> bool {
-        self.field_infos.contains_key(&field_name)
+        self.fields.contains_key(&field_name)
     }
 }
 
@@ -150,7 +107,7 @@ impl Layout {
         // RecordTypeの分
         let mut slot_size = 4;
 
-        for field in &schema.fields {
+        for field in &schema.fields_name_vec {
             offsets.insert(field.clone(), slot_size);
             slot_size += Layout::get_length_in_bytes(&schema, field.clone());
         }
@@ -177,8 +134,8 @@ impl Layout {
     fn get_length_in_bytes(schema: &TableSchema, field_name: String) -> i32 {
         let field_type = schema.get_field_type(field_name.clone()).unwrap();
         match field_type {
-            TableFieldType::INTEGER => 4,
-            TableFieldType::VARCHAR => schema.get_field_length(field_name).unwrap() * 4 + 4,
+            &TableFieldInfo::INTEGER => 4,
+            &TableFieldInfo::VARCHAR(length) => length as i32 * 4 + 4,
         }
     }
 
@@ -197,7 +154,7 @@ impl Layout {
         return None;
     }
 
-    pub fn get_field_type(&self, field_name: String) -> Option<TableFieldType> {
+    pub fn get_field_type(&self, field_name: String) -> Option<&TableFieldInfo> {
         self.schema.get_field_type(field_name)
     }
 

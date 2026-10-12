@@ -3,9 +3,11 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     error::{TableAlreadyExists, ValueNotFound},
     query::predicate::TableNameAndFieldName,
-    record::record_page::{self, TableFieldType, TableSchema},
-    record::scan_v2::ScanV2,
-    record::table_scan_v2::TableScan,
+    record::{
+        record_page::{self, TableFieldInfo, TableSchema},
+        scan_v2::ScanV2,
+        table_scan_v2::TableScan,
+    },
     tx::transaction_v2::TransactionV2,
 };
 
@@ -26,7 +28,8 @@ impl TableManagerV2 {
         table_catalog_schema.add_string_field("table_name".to_string(), 20);
         table_catalog_schema.add_integer_field("slot_size".to_string());
 
-        let table_catalog_layout = crate::record::record_page::Layout::new(table_catalog_schema.clone());
+        let table_catalog_layout =
+            crate::record::record_page::Layout::new(table_catalog_schema.clone());
 
         let mut field_catalog_schema = TableSchema::new();
         field_catalog_schema.add_string_field("table_name".to_string(), 20);
@@ -34,7 +37,8 @@ impl TableManagerV2 {
         field_catalog_schema.add_integer_field("field_type".to_string());
         field_catalog_schema.add_integer_field("field_length".to_string());
         field_catalog_schema.add_integer_field("field_offset".to_string());
-        let table_field_schema = crate::record::record_page::Layout::new(field_catalog_schema.clone());
+        let table_field_schema =
+            crate::record::record_page::Layout::new(field_catalog_schema.clone());
 
         let table_manager = TableManagerV2 {
             table_catalog_layout,
@@ -60,7 +64,7 @@ impl TableManagerV2 {
 
     pub fn check_if_field_exists(
         &self,
-        table_name: String,
+        table_name: &String,
         field_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
     ) -> bool {
@@ -78,7 +82,7 @@ impl TableManagerV2 {
 
             match t_name {
                 Some(t_name) => {
-                    if t_name == table_name {
+                    if t_name == *table_name {
                         match f_name {
                             Some(f_name) => {
                                 if f_name == field_name {
@@ -99,7 +103,7 @@ impl TableManagerV2 {
 
     pub fn check_if_table_exists(
         &self,
-        table_name: String,
+        table_name: &String,
         transaction: Rc<RefCell<TransactionV2>>,
     ) -> bool {
         let mut table_scan = TableScan::new(
@@ -114,7 +118,7 @@ impl TableManagerV2 {
 
             match name {
                 Some(name) => {
-                    if name == table_name {
+                    if name == *table_name {
                         table_scan.close();
                         return true;
                     }
@@ -140,7 +144,7 @@ impl TableManagerV2 {
             self.table_catalog_layout.clone(),
         );
 
-        if self.check_if_table_exists(table_name.clone(), transaction.clone()) {
+        if self.check_if_table_exists(&table_name, transaction.clone()) {
             table_scan.close();
             return Err(TableAlreadyExists::new(table_name));
         }
@@ -163,15 +167,15 @@ impl TableManagerV2 {
         );
 
         // schemaのfieldsをループして、各フィールドの情報を挿入
-        for (_, field_name) in schema.fields.iter().enumerate() {
-            let field_type = schema.get_field_type(field_name.to_string()).unwrap();
-            let field_length = schema.get_field_length(field_name.to_string()).unwrap();
-            let field_offset = layout.get_offset(&field_name).unwrap();
-
+        for (_, field) in schema.fields_name_vec.iter().enumerate() {
+            let field_type = schema.get_field_type(field.to_string()).unwrap();
+            let field_length = schema.get_field_length(field.to_string()).unwrap();
+            let field_offset = layout.get_offset(&field).unwrap();
+            let field_type_value: i32 = field_type.into();
             field_scan.insert();
             field_scan.set_string("table_name".to_string(), table_name.clone());
-            field_scan.set_string("field_name".to_string(), field_name.clone());
-            field_scan.set_integer("field_type".to_string(), field_type.into());
+            field_scan.set_string("field_name".to_string(), field.clone());
+            field_scan.set_integer("field_type".to_string(), field_type_value);
             field_scan.set_integer("field_length".to_string(), field_length);
             field_scan.set_integer("field_offset".to_string(), field_offset);
         }
@@ -262,11 +266,13 @@ impl TableManagerV2 {
                             "field_offset".to_string(),
                         ));
                         offsets.insert(field_name.clone().unwrap(), field_offset.unwrap());
-                        table_schema.add_field(
-                            field_name.unwrap(),
-                            TableFieldType::from(field_type.unwrap()),
-                            field_length.unwrap() as i32,
-                        );
+
+                        let table_field_info = match field_type.unwrap() {
+                            0 => TableFieldInfo::INTEGER,
+                            1 => TableFieldInfo::VARCHAR(field_length.unwrap() as usize),
+                            _ => panic!("Invalid field type"),
+                        };
+                        table_schema.add_field(field_name.unwrap(), table_field_info);
                     }
                 }
                 None => continue,
@@ -275,11 +281,13 @@ impl TableManagerV2 {
 
         field_scan.close();
 
-        return Ok(crate::record::record_page::Layout::new_with_offset_and_size(
-            table_schema,
-            offsets,
-            slot_size,
-        ));
+        return Ok(
+            crate::record::record_page::Layout::new_with_offset_and_size(
+                table_schema,
+                offsets,
+                slot_size,
+            ),
+        );
     }
 }
 
@@ -294,8 +302,9 @@ mod tests {
     };
 
     use crate::{
-        buffer::buffer_manager_v2::BufferManagerV2, tx::concurrency_manager::LockTable,
-        storage::file_manager::FileManager, storage::log_manager_v2::LogManagerV2, record::record_page::TableSchema,
+        buffer::buffer_manager_v2::BufferManagerV2, record::record_page::TableSchema,
+        storage::file_manager::FileManager, storage::log_manager_v2::LogManagerV2,
+        tx::concurrency_manager::LockTable,
     };
 
     use super::*;
@@ -308,10 +317,10 @@ mod tests {
         let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
 
         let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
-        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
-            file_manager.clone(),
-            log_file_name.clone(),
-        ).expect("failed to initialize log manager")));
+        let log_manager = Arc::new(Mutex::new(
+            LogManagerV2::new(file_manager.clone(), log_file_name.clone())
+                .expect("failed to initialize log manager"),
+        ));
 
         let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             3,
@@ -346,7 +355,7 @@ mod tests {
         println!("Layout for test_table:");
         println!("Slot Size: {}", layout.get_slot_size());
 
-        for (i, field) in layout.schema.fields.iter().enumerate() {
+        for (i, field) in layout.schema.fields_name_vec.iter().enumerate() {
             println!("Field: {}", field);
             let offset = layout.get_offset(field).unwrap();
             println!("Offset: {}", offset);
@@ -358,17 +367,17 @@ mod tests {
             if i == 0 {
                 assert_eq!(field, "A");
                 assert_eq!(offset, 4);
-                assert_eq!(field_type, TableFieldType::INTEGER);
+                assert_eq!(*field_type, TableFieldInfo::INTEGER);
                 assert_eq!(field_length, 0);
             } else if i == 1 {
                 assert_eq!(field, "B");
                 assert_eq!(offset, 8);
-                assert_eq!(field_type, TableFieldType::VARCHAR);
+                assert_eq!(*field_type, TableFieldInfo::VARCHAR(9));
                 assert_eq!(field_length, 9);
             } else if i == 2 {
                 assert_eq!(field, "C");
                 assert_eq!(offset, 48);
-                assert_eq!(field_type, TableFieldType::INTEGER);
+                assert_eq!(*field_type, TableFieldInfo::INTEGER);
                 assert_eq!(field_length, 0);
             }
         }

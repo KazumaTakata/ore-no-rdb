@@ -1,14 +1,18 @@
 use std::{cell::RefCell, rc::Rc, vec};
 
 use crate::{
-    storage::block::BlockId,
     error::ValueNotFound,
-    query::materialize::{MaterializePlan, TempTable},
-    query::plan_v2::{PlanTreeNodeForDebug, PlanV2},
-    query::predicate::{ConstantValue, TableNameAndFieldName},
-    record::record_page::{Layout, TableFieldType, TableSchema},
-    record::record_page_v2::RecordPage,
-    record::scan_v2::{ProductScanV2, ScanV2},
+    query::{
+        materialize::TempTable,
+        plan_v2::{PlanTreeNodeForDebug, PlanV2},
+        predicate::{ConstantValue, TableNameAndFieldName},
+    },
+    record::{
+        record_page::{Layout, TableFieldInfo, TableSchema},
+        record_page_v2::RecordPage,
+        scan_v2::{ProductScanV2, ScanV2},
+    },
+    storage::block::BlockId,
     tx::transaction_v2::TransactionV2,
 };
 
@@ -132,7 +136,10 @@ impl ScanV2 for ChunkScan {
         return Ok(true);
     }
 
-    fn get_integer(&mut self, field_name: crate::query::predicate::TableNameAndFieldName) -> Option<i32> {
+    fn get_integer(
+        &mut self,
+        field_name: crate::query::predicate::TableNameAndFieldName,
+    ) -> Option<i32> {
         let current_slot_id = self.current_slot_id;
         let record_page = self.get_current_record_page();
         record_page.get_integer(field_name.field_name, current_slot_id)
@@ -167,7 +174,7 @@ impl ScanV2 for ChunkScan {
             .layout
             .schema
             .get_field_type(field_name.field_name.clone())
-            == Some(TableFieldType::INTEGER)
+            == Some(&TableFieldInfo::INTEGER)
         {
             let int_value = self.get_integer(field_name)?;
             return Some(ConstantValue::Number(int_value));
@@ -425,7 +432,10 @@ impl ScanV2 for MultiBufferProductScan {
         return Ok(true);
     }
 
-    fn get_integer(&mut self, field_name: crate::query::predicate::TableNameAndFieldName) -> Option<i32> {
+    fn get_integer(
+        &mut self,
+        field_name: crate::query::predicate::TableNameAndFieldName,
+    ) -> Option<i32> {
         let product_scan = self.product_scan.as_mut().unwrap();
         product_scan.get_integer(field_name)
     }
@@ -501,9 +511,9 @@ mod tests {
     use crate::{
         database::Database,
         metadata::metadata_manager::MetadataManager,
-        query::parser::parse_sql,
-        query::plan_v2::{execute_create_table, execute_insert, get_optimized_product_plan, TablePlanV2},
-        query::predicate::ConstantValue,
+        parser::parser::parse,
+        parser_mapping::sql_node_to_parsed_sql,
+        query::plan_v2::{execute_create_table, execute_insert, TablePlanV2},
     };
     use std::path::Path;
 
@@ -516,12 +526,13 @@ mod tests {
         let transaction = database.new_transaction(1);
         let mut metadata_manager = MetadataManager::new(transaction.clone())?;
 
-        let create_table_sql =
-            "create table test_table_1 (A_1 integer, B_1 varchar(10))".to_string();
+        let create_table_sql = "create table test_table_1 (A_1 INT, B_1 varchar(10))".to_string();
 
-        let parsed_sql_list = parse_sql(create_table_sql.clone());
+        let parsed_sql_list = parse(&create_table_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let create_table_data = match &parsed_sql_list[0] {
+        let create_table_data = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
@@ -536,12 +547,13 @@ mod tests {
             println!("Table already exists");
         }
 
-        let create_table_sql =
-            "create table test_table_2 (A_2 integer, B_2 varchar(10))".to_string();
+        let create_table_sql = "create table test_table_2 (A_2 INT, B_2 varchar(10))".to_string();
 
-        let parsed_sql_list = parse_sql(create_table_sql.clone());
+        let parsed_sql_list = parse(&create_table_sql)
+            .map(|n| sql_node_to_parsed_sql(n))
+            .unwrap();
 
-        let create_table_data = match &parsed_sql_list[0] {
+        let create_table_data = match &parsed_sql_list {
             crate::query::parser::ParsedSQL::CreateTable(q) => q,
             _ => panic!("Expected a CreateTable variant from parse_sql"),
         };
@@ -576,9 +588,11 @@ mod tests {
             .collect::<Vec<String>>();
 
         for insert_sql in insert_sql_list_for_table_1.iter() {
-            let parsed_sql_list = parse_sql(insert_sql.clone());
+            let parsed_sql_list = parse(&insert_sql)
+                .map(|n| sql_node_to_parsed_sql(n))
+                .unwrap();
 
-            let insert_data = match &parsed_sql_list[0] {
+            let insert_data = match &parsed_sql_list {
                 crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),
             };
@@ -591,9 +605,11 @@ mod tests {
         }
 
         for insert_sql in insert_sql_list_for_table_2.iter() {
-            let parsed_sql_list = parse_sql(insert_sql.clone());
+            let parsed_sql_list = parse(&insert_sql)
+                .map(|n| sql_node_to_parsed_sql(n))
+                .unwrap();
 
-            let insert_data = match &parsed_sql_list[0] {
+            let insert_data = match &parsed_sql_list {
                 crate::query::parser::ParsedSQL::Insert(q) => q,
                 _ => panic!("Expected a Insert variant from parse_sql"),
             };

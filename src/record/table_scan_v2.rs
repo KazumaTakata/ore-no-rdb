@@ -1,12 +1,14 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    storage::block::BlockId,
     error::ValueNotFound,
     query::predicate::TableNameAndFieldName,
-    record::record_page::{Layout, TableFieldType},
-    record::record_page_v2::RecordPage,
-    record::scan_v2::ScanV2,
+    record::{
+        record_page::{Layout, TableFieldInfo},
+        record_page_v2::RecordPage,
+        scan_v2::ScanV2,
+    },
+    storage::block::BlockId,
     tx::transaction_v2::TransactionV2,
 };
 
@@ -261,7 +263,7 @@ impl ScanV2 for TableScan {
         match field_type {
             None => return None,
             Some(table_field_type) => match table_field_type {
-                TableFieldType::INTEGER => {
+                TableFieldInfo::INTEGER => {
                     let integer_value = self.get_integer(field_name);
                     if let Some(value) = integer_value {
                         return Some(crate::query::predicate::ConstantValue::Number(value));
@@ -269,7 +271,7 @@ impl ScanV2 for TableScan {
                         return Some(crate::query::predicate::ConstantValue::Null);
                     }
                 }
-                TableFieldType::VARCHAR => {
+                TableFieldInfo::VARCHAR(_) => {
                     let string_value = self.get_string(field_name);
                     if let Some(value) = string_value {
                         return Some(crate::query::predicate::ConstantValue::String(value));
@@ -328,8 +330,9 @@ mod tests {
     use rand::Rng;
 
     use crate::{
-        buffer::buffer_manager_v2::BufferManagerV2, tx::concurrency_manager::LockTable,
-        storage::file_manager::FileManager, storage::log_manager_v2::LogManagerV2, record::record_page::TableSchema,
+        buffer::buffer_manager_v2::BufferManagerV2, record::record_page::TableSchema,
+        storage::file_manager::FileManager, storage::log_manager_v2::LogManagerV2,
+        tx::concurrency_manager::LockTable,
     };
 
     use super::*;
@@ -341,10 +344,10 @@ mod tests {
         let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
 
         let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
-        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
-            file_manager.clone(),
-            log_file_name.clone(),
-        ).expect("failed to initialize log manager")));
+        let log_manager = Arc::new(Mutex::new(
+            LogManagerV2::new(file_manager.clone(), log_file_name.clone())
+                .expect("failed to initialize log manager"),
+        ));
 
         let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
             3,

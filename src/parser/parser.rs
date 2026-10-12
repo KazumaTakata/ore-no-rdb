@@ -6,90 +6,90 @@ use pest::pratt_parser::Op;
 use crate::parser::tokenizer::{self, Token, TokenKind, TokenWithPos, TokenizationError};
 
 #[derive(Debug, PartialEq)]
-enum Constant {
+pub enum Constant {
     String(String),
     Integer(i32),
 }
 
 #[derive(Debug, PartialEq)]
-enum Expression {
+pub enum Expression {
     Field(String),
     Constant(Constant),
 }
 
 #[derive(Debug, PartialEq)]
-struct Term {
-    left_expression: Expression,
-    right_expression: Expression,
+pub struct Term {
+    pub left_expression: Expression,
+    pub right_expression: Expression,
 }
 
 #[derive(Debug, PartialEq)]
-struct Predicate {
-    term: Term,
-    next_predicate: Option<Box<Predicate>>,
+pub struct Predicate {
+    pub term: Term,
+    pub next_predicate: Option<Box<Predicate>>,
 }
 
 #[derive(Debug, PartialEq)]
-struct SelectNode {
-    fields: Vec<String>,
-    tables: Vec<String>,
-    predicate: Option<Predicate>,
+pub struct SelectNode {
+    pub fields: Vec<String>,
+    pub tables: Vec<String>,
+    pub predicate: Option<Predicate>,
 }
 
 #[derive(Debug, PartialEq)]
-struct InsertNode {
-    fields: Vec<String>,
-    table: String,
-    constants: Vec<Constant>,
+pub struct InsertNode {
+    pub fields: Vec<String>,
+    pub table: String,
+    pub constants: Vec<Constant>,
 }
 
 #[derive(Debug, PartialEq)]
-struct DeleteNode {
-    table: String,
-    predicate: Option<Predicate>,
+pub struct DeleteNode {
+    pub table: String,
+    pub predicate: Option<Predicate>,
 }
 
 #[derive(Debug, PartialEq)]
-struct UpdateNode {
-    table: String,
-    field: String,
-    value: Expression,
-    predicate: Option<Predicate>,
+pub struct UpdateNode {
+    pub table: String,
+    pub field: String,
+    pub value: Expression,
+    pub predicate: Option<Predicate>,
 }
 
 #[derive(Debug, PartialEq)]
-struct FieldDefNode {
-    field_type: FieldType,
-    field_name: String,
+pub struct FieldDefNode {
+    pub field_type: FieldType,
+    pub field_name: String,
 }
 
 #[derive(Debug, PartialEq)]
-struct CreateTableNode {
-    table_name: String,
-    field_defs: Vec<FieldDefNode>,
+pub struct CreateTableNode {
+    pub table_name: String,
+    pub field_defs: Vec<FieldDefNode>,
 }
 
 #[derive(Debug, PartialEq)]
-struct CreateIndexNode {
-    table_name: String,
-    field_name: String,
-    index_name: String,
+pub struct CreateIndexNode {
+    pub table_name: String,
+    pub field_name: String,
+    pub index_name: String,
 }
 
 #[derive(Debug, PartialEq)]
-struct CreateViewNode {
-    view_name: String,
-    query: SelectNode,
+pub struct CreateViewNode {
+    pub view_name: String,
+    pub query: SelectNode,
 }
 
 #[derive(Debug, PartialEq)]
-enum FieldType {
+pub enum FieldType {
     INTEGER,
     VARCHAR(usize),
 }
 
 #[derive(Debug, PartialEq)]
-enum SQLNode {
+pub enum SQLNode {
     SELECT(SelectNode),
     INSERT(InsertNode),
     DELETE(DeleteNode),
@@ -109,8 +109,8 @@ pub enum ParserError {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ErrorResport<'a> {
-    err: &'a ParserError,
-    src: &'a str,
+    pub err: &'a ParserError,
+    pub src: &'a str,
 }
 
 impl fmt::Display for ErrorResport<'_> {
@@ -120,6 +120,12 @@ impl fmt::Display for ErrorResport<'_> {
                 writeln!(f, "error: expected {:?}", x.expected_token);
                 writeln!(f, "{}", self.src);
                 write!(f, "{:w$}^", "", w = x.position);
+                return Ok(());
+            }
+            ParserError::UnexpectedEOL => {
+                writeln!(f, "error: unexpected EOL");
+                writeln!(f, "{}", self.src);
+                write!(f, "{:w$}^", "", w = self.src.len());
                 return Ok(());
             }
             _ => write!(f, ""),
@@ -146,7 +152,7 @@ impl From<TokenizationError> for ParserError {
     }
 }
 
-fn parse(input_text: &str) -> Result<SQLNode, ParserError> {
+pub fn parse(input_text: &str) -> Result<SQLNode, ParserError> {
     let tokens = tokenizer::tokenize(input_text)?;
     let token = tokens.get(0).ok_or(ParserError::UnexpectedEOL)?;
     match token.token {
@@ -210,17 +216,16 @@ fn parse_idents(tokens: &[TokenWithPos]) -> Result<(Vec<String>, usize), ParserE
 
     loop {
         let token = tokens.get(index_1).ok_or(ParserError::UnexpectedEOL)?;
-        let token = &token.token;
 
         let next_token = tokens.get(index_1 + 1);
 
-        match token {
+        match &token.token {
             Token::IDENT(ident) => fields_vec.push(ident.clone()),
             _ => {
                 return Err(ParserError::ParseError(ParseError {
-                    invalid_token: token.clone(),
+                    invalid_token: token.token.clone(),
                     expected_token: vec![TokenKind::IDENT],
-                    position: 1,
+                    position: token.pos,
                 }))
             }
         };
@@ -351,9 +356,27 @@ fn parse_insert(tokens: &[TokenWithPos]) -> Result<InsertNode, ParserError> {
         }))
     }?;
 
-    let (fields_vec, index) = parse_idents(&tokens[2..])?;
+    let token = tokens.get(2).ok_or(ParserError::UnexpectedEOL)?;
+    if token.token != Token::LeftParen {
+        return Err(ParserError::ParseError(ParseError {
+            invalid_token: token.token.clone(),
+            expected_token: vec![TokenKind::LeftParen],
+            position: token.pos,
+        }));
+    }
 
-    let token = tokens.get(index + 2).ok_or(ParserError::UnexpectedEOL)?;
+    let (fields_vec, index) = parse_idents(&tokens[3..])?;
+
+    let token = tokens.get(index + 3).ok_or(ParserError::UnexpectedEOL)?;
+    if token.token != Token::RightParen {
+        return Err(ParserError::ParseError(ParseError {
+            invalid_token: token.token.clone(),
+            expected_token: vec![TokenKind::LeftParen],
+            position: token.pos,
+        }));
+    }
+
+    let token = tokens.get(index + 4).ok_or(ParserError::UnexpectedEOL)?;
 
     if token.token != Token::Values {
         return Err(ParserError::ParseError(ParseError {
@@ -363,7 +386,27 @@ fn parse_insert(tokens: &[TokenWithPos]) -> Result<InsertNode, ParserError> {
         }));
     }
 
-    let (constants_vec, index) = parse_constants(&tokens[index + 3..])?;
+    let token = tokens.get(index + 5).ok_or(ParserError::UnexpectedEOL)?;
+    if token.token != Token::LeftParen {
+        return Err(ParserError::ParseError(ParseError {
+            invalid_token: token.token.clone(),
+            expected_token: vec![TokenKind::LeftParen],
+            position: token.pos,
+        }));
+    }
+
+    let (constants_vec, index_2) = parse_constants(&tokens[index + 6..])?;
+
+    let token = tokens
+        .get(index + index_2 + 6)
+        .ok_or(ParserError::UnexpectedEOL)?;
+    if token.token != Token::RightParen {
+        return Err(ParserError::ParseError(ParseError {
+            invalid_token: token.token.clone(),
+            expected_token: vec![TokenKind::RightParen],
+            position: token.pos,
+        }));
+    }
 
     return Ok(InsertNode {
         constants: constants_vec,
@@ -784,7 +827,7 @@ fn parse_term(tokens: &[TokenWithPos]) -> Result<(Term, usize), ParserError> {
     } else {
         return Err(ParserError::ParseError(ParseError {
             invalid_token: next_token.token.clone(),
-            expected_token: vec![TokenKind::AND],
+            expected_token: vec![TokenKind::Equal],
             position: next_token.pos,
         }));
     }
@@ -844,7 +887,7 @@ mod tests {
 
     #[test]
     fn test_insert_sql_parse() {
-        let test_data = "insert into table1 field1, field2 values 'const1', 11";
+        let test_data = "insert into table1 (field1, field2) values ('const1', 11)";
         let parsed_select = parse(test_data).expect("");
         assert_eq!(
             parsed_select,
@@ -915,6 +958,28 @@ mod tests {
                     FieldDefNode {
                         field_type: FieldType::VARCHAR(3),
                         field_name: "field2".to_string()
+                    }
+                ]
+            })
+        );
+    }
+
+    #[test]
+    fn test_create_table_sql_parse_2() {
+        let test_data = "create table posts (page_number INT, title varchar(10))";
+        let parsed_update = parse(test_data).expect("");
+        assert_eq!(
+            parsed_update,
+            SQLNode::CreateTable(CreateTableNode {
+                table_name: "posts".to_string(),
+                field_defs: vec![
+                    FieldDefNode {
+                        field_type: FieldType::INTEGER,
+                        field_name: "page_number".to_string()
+                    },
+                    FieldDefNode {
+                        field_type: FieldType::VARCHAR(10),
+                        field_name: "title".to_string()
                     }
                 ]
             })
