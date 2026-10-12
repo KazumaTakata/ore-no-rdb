@@ -1,4 +1,3 @@
-
 use crate::{
     index::b_tree_index::BTreeIndex,
     query::predicate::{Constant, TableNameAndFieldName},
@@ -138,12 +137,16 @@ impl ScanV2 for IndexJoinScan {
 mod tests {
 
     use crate::{
-        query::predicate::ConstantValue, storage::file_manager::FileManager,
+        metadata::metadata_manager::MetadataManager,
+        query::{
+            index_update_planner::IndexUpdatePlanner, parser::InsertData, predicate::ConstantValue,
+        },
+        storage::file_manager::FileManager,
         tx::transaction_v2::TransactionV2,
     };
 
     use super::*;
-    use std::path::Path;
+    use std::{cell::RefCell, path::Path, rc::Rc};
 
     #[test]
     fn test_view_mgr() {

@@ -1,6 +1,5 @@
 use std::fmt;
 
-
 use crate::parser::tokenizer::{self, Token, TokenKind, TokenWithPos, TokenizationError};
 
 #[derive(Debug, PartialEq)]
@@ -126,6 +125,14 @@ impl fmt::Display for ErrorResport<'_> {
                 write!(f, "{:w$}^", "", w = self.src.len());
                 return Ok(());
             }
+            ParserError::TokenizationError(tokenizationError) => match tokenizationError {
+                TokenizationError::InvalidCharacter(ch) => {
+                    writeln!(f, "error: invalid character exists");
+                    writeln!(f, "{}", self.src);
+                    write!(f, "{:w$}^", "", w = ch.position);
+                    return Ok(());
+                }
+            },
             _ => write!(f, ""),
         }
     }

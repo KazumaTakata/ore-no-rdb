@@ -136,8 +136,8 @@ struct TokenResponse {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct InvalidCharacterError {
-    position: usize,
+pub struct InvalidCharacterError {
+    pub position: usize,
 }
 
 #[derive(Debug, PartialEq, Eq)]
