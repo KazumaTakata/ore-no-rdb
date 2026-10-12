@@ -6,6 +6,7 @@ use crate::storage::file_manager::FileManager;
 use crate::storage::page::Page;
 use crate::{storage::block::BlockId, storage::log_manager_v2::LogManagerV2};
 
+#[derive(Debug)]
 pub struct BufferV2 {
     page: Page,
     block_id: Option<BlockId>,
@@ -92,6 +93,7 @@ impl BufferV2 {
     }
 }
 
+#[derive(Debug)]
 pub struct BufferManagerV2 {
     buffer_pool: Vec<Arc<Mutex<BufferV2>>>,
     number_of_available: i32,
@@ -203,6 +205,7 @@ impl BufferManagerV2 {
     }
 }
 
+#[derive(Debug)]
 pub struct BufferListV2 {
     buffers: HashMap<BlockId, Arc<Mutex<BufferV2>>>,
     pins: Vec<BlockId>,
@@ -242,7 +245,7 @@ impl BufferListV2 {
             }
         }
 
-        if should_remove_from_buffers  {
+        if should_remove_from_buffers {
             self.buffers.remove(&block_id);
         }
     }

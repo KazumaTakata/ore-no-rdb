@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::storage::block::BlockId;
 
+#[derive(Debug)]
 pub struct LockTable {
     locks: HashMap<BlockId, i32>,
 }
@@ -63,6 +64,7 @@ impl LockTable {
     }
 }
 
+#[derive(Debug)]
 pub struct ConcurrencyManagerV2 {
     locks: HashMap<BlockId, String>,
     lock_table: Arc<Mutex<LockTable>>,

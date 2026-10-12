@@ -127,7 +127,7 @@ impl IndexManager {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct IndexInfo {
     index_name: String,
     field_name: String,
@@ -292,15 +292,15 @@ mod tests {
             TableScan::new("student".to_string(), transaction.clone(), student_layout);
 
         table_scan.insert();
-        table_scan.set_string("sid".to_string(), "1".to_string());
+        table_scan.set_integer("sid".to_string(), 1);
         table_scan.set_string("name".to_string(), "Alice".to_string());
 
         table_scan.insert();
-        table_scan.set_string("sid".to_string(), "2".to_string());
+        table_scan.set_integer("sid".to_string(), 2);
         table_scan.set_string("name".to_string(), "Alice2".to_string());
 
         table_scan.insert();
-        table_scan.set_string("sid".to_string(), "3".to_string());
+        table_scan.set_integer("sid".to_string(), 3);
         table_scan.set_string("name".to_string(), "Alice4".to_string());
 
         table_scan.close();
@@ -348,11 +348,14 @@ mod tests {
             }
 
             println!(
-                "Index on field: {}, blocks accessed: {}, records output: {}, distinct values: {}",
+                "Index on field: {}, blocks accessed: {}, records output: {}, distinct values: {}, block_size: {}, slot_size: {}, num_records: {}",
                 field_name,
                 index_info.blocks_accessed(),
                 index_info.records_output(),
-                index_info.distinct_values(field_name)
+                index_info.distinct_values(field_name),
+                index_info.transaction.borrow().get_block_size(),
+                index_info.index_layout.get_slot_size(),
+                index_info.stat_info.get_num_records()
             );
         }
     }

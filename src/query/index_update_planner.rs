@@ -277,8 +277,7 @@ mod tests {
                 crate::query::predicate::ConstantValue::Number(55),
             ));
             index.next();
-            let record_id = index.get_data_record_id();
-            let record_id = record_id.unwrap();
+            let record_id = index.get_data_record_id().unwrap();
 
             // assert_eq!(record_id.get_block_number(), 6);
 
@@ -295,8 +294,22 @@ mod tests {
             let b_value = table_scan.get_string(TableNameAndFieldName::new(None, "B".to_string()));
             println!("Retrieved record: A = {:?}, B = {:?}", a_value, b_value);
 
-            // assert_eq!(a_value, Some(50));
-            // assert_eq!(b_value, Some("Hello World yay!50".to_string()));
+            assert_eq!(a_value, Some(55));
+            assert_eq!(b_value, Some("Hello World yay!55".to_string()));
+
+            index.before_first(Constant::new(
+                crate::query::predicate::ConstantValue::Number(791),
+            ));
+            index.next();
+            let record_id = index.get_data_record_id().unwrap();
+
+            table_scan.move_to_record_id(record_id);
+            let a_value = table_scan.get_integer(TableNameAndFieldName::new(None, "A".to_string()));
+            let b_value = table_scan.get_string(TableNameAndFieldName::new(None, "B".to_string()));
+            println!("Retrieved record: A = {:?}, B = {:?}", a_value, b_value);
+
+            assert_eq!(a_value, Some(791));
+            assert_eq!(b_value, Some("Hello World yay!791".to_string()));
         }
 
         return Ok(());

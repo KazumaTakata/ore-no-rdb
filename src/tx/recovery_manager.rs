@@ -366,6 +366,7 @@ impl LogRecord for RollbackRecord {
     }
 }
 
+#[derive(Debug)]
 pub struct RecoveryManager {
     transaction_number: i32,
     buffer_manager: Arc<Mutex<BufferManagerV2>>,
