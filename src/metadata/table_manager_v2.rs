@@ -64,7 +64,7 @@ impl TableManagerV2 {
 
     pub fn check_if_field_exists(
         &self,
-        table_name: String,
+        table_name: &String,
         field_name: String,
         transaction: Rc<RefCell<TransactionV2>>,
     ) -> bool {
@@ -82,7 +82,7 @@ impl TableManagerV2 {
 
             match t_name {
                 Some(t_name) => {
-                    if t_name == table_name {
+                    if t_name == *table_name {
                         match f_name {
                             Some(f_name) => {
                                 if f_name == field_name {
@@ -103,7 +103,7 @@ impl TableManagerV2 {
 
     pub fn check_if_table_exists(
         &self,
-        table_name: String,
+        table_name: &String,
         transaction: Rc<RefCell<TransactionV2>>,
     ) -> bool {
         let mut table_scan = TableScan::new(
@@ -118,7 +118,7 @@ impl TableManagerV2 {
 
             match name {
                 Some(name) => {
-                    if name == table_name {
+                    if name == *table_name {
                         table_scan.close();
                         return true;
                     }
@@ -144,7 +144,7 @@ impl TableManagerV2 {
             self.table_catalog_layout.clone(),
         );
 
-        if self.check_if_table_exists(table_name.clone(), transaction.clone()) {
+        if self.check_if_table_exists(&table_name, transaction.clone()) {
             table_scan.close();
             return Err(TableAlreadyExists::new(table_name));
         }

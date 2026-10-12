@@ -122,6 +122,12 @@ impl fmt::Display for ErrorResport<'_> {
                 write!(f, "{:w$}^", "", w = x.position);
                 return Ok(());
             }
+            ParserError::UnexpectedEOL => {
+                writeln!(f, "error: unexpected EOL");
+                writeln!(f, "{}", self.src);
+                write!(f, "{:w$}^", "", w = self.src.len());
+                return Ok(());
+            }
             _ => write!(f, ""),
         }
     }
@@ -821,7 +827,7 @@ fn parse_term(tokens: &[TokenWithPos]) -> Result<(Term, usize), ParserError> {
     } else {
         return Err(ParserError::ParseError(ParseError {
             invalid_token: next_token.token.clone(),
-            expected_token: vec![TokenKind::AND],
+            expected_token: vec![TokenKind::Equal],
             position: next_token.pos,
         }));
     }
@@ -952,6 +958,28 @@ mod tests {
                     FieldDefNode {
                         field_type: FieldType::VARCHAR(3),
                         field_name: "field2".to_string()
+                    }
+                ]
+            })
+        );
+    }
+
+    #[test]
+    fn test_create_table_sql_parse_2() {
+        let test_data = "create table posts (page_number INT, title varchar(10))";
+        let parsed_update = parse(test_data).expect("");
+        assert_eq!(
+            parsed_update,
+            SQLNode::CreateTable(CreateTableNode {
+                table_name: "posts".to_string(),
+                field_defs: vec![
+                    FieldDefNode {
+                        field_type: FieldType::INTEGER,
+                        field_name: "page_number".to_string()
+                    },
+                    FieldDefNode {
+                        field_type: FieldType::VARCHAR(10),
+                        field_name: "title".to_string()
                     }
                 ]
             })

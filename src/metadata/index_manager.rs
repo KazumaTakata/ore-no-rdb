@@ -28,9 +28,10 @@ impl IndexManager {
         stat_manager: Rc<RefCell<StatManagerV2>>,
         transaction: Rc<RefCell<TransactionV2>>,
     ) -> Result<Self, ValueNotFound> {
+        let catalog_table_name = "index_catalog";
         let table_exists = table_manager
             .borrow()
-            .check_if_table_exists("index_catalog".to_string(), transaction.clone());
+            .check_if_table_exists(&catalog_table_name.to_string(), transaction.clone());
 
         if !table_exists {
             let field_length = 20; // Example field length

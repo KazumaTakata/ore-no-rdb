@@ -33,7 +33,7 @@ use storage::block::BlockId;
 use storage::page::Page;
 
 use crate::database::Database;
-use crate::metadata::metadata_manager::MetadataManager;
+use crate::metadata::metadata_manager::{MetadataManager, ValidateSQLResponse};
 use crate::query::index_update_planner::IndexUpdatePlanner;
 use crate::query::parser::{
     CreateIndexData, CreateTableData, DeleteData, InsertData, ParsedSQL, QueryData, UpdateData,
@@ -66,9 +66,16 @@ fn handle_parsed_sql(
             let table_exist =
                 metadata_manager.validate_select_sql(&query_data, transaction.clone());
 
-            if !table_exist {
-                println!("Table or field does not exist");
-                return;
+            match table_exist {
+                ValidateSQLResponse::FieldNotFound(field_name) => {
+                    println!("field {} does not exists", field_name);
+                    return;
+                }
+                ValidateSQLResponse::TableNotFound(table_name) => {
+                    println!("table {} does not exists", table_name);
+                    return;
+                }
+                ValidateSQLResponse::Ok => {}
             }
 
             let plan =
