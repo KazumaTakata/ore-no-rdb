@@ -122,10 +122,11 @@ impl BTreeIndex {
     }
 
     pub fn next(&mut self) -> bool {
-        if let Some(leaf) = &mut self.leaf {
+        if let Some(leaf) = self.leaf.as_mut() {
             return leaf.next();
         }
-        false
+
+        panic!("self.leaf should not be None")
     }
 
     pub fn close(&mut self) {
