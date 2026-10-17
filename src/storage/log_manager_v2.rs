@@ -4,6 +4,8 @@ use crate::storage::error::LogError;
 use crate::storage::file_manager::FileManager;
 use crate::storage::page::Page;
 use crate::{constant::INTEGER_BYTE_SIZE, storage::block::BlockId};
+
+#[derive(Debug)]
 pub struct LogManagerV2 {
     current_block_id: BlockId,
     log_file_name: String,

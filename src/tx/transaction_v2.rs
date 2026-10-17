@@ -11,6 +11,7 @@ use crate::{
 };
 use crate::{storage::file_manager::FileManager, tx::concurrency_manager::ConcurrencyManagerV2};
 
+#[derive(Debug)]
 pub struct InnerTransactionV2 {
     tx_num: i32,
     buffer_manager: Arc<Mutex<BufferManagerV2>>,
@@ -20,6 +21,7 @@ pub struct InnerTransactionV2 {
     file_manager: Arc<Mutex<FileManager>>,
 }
 
+#[derive(Debug)]
 pub struct TransactionV2 {
     inner: InnerTransactionV2,
     recovery_manager: RecoveryManager,
