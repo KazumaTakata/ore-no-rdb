@@ -35,6 +35,23 @@ pub struct SelectNode {
     pub predicate: Option<Predicate>,
 }
 
+impl fmt::Display for SelectNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "select ")?;
+        for (i, col) in self.fields.iter().enumerate() {
+            if i > 0 {
+                f.write_str(", ")?;
+            }
+            if let Some(table_name) = col.table_name.as_ref() {
+                write!(f, "{}.{}", table_name, col.field_name)?;
+            } else {
+                write!(f, "{}", col.field_name)?;
+            }
+        }
+        write!(f, " from {}", self.tables.join(", "))
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct InsertNode {
     pub fields: Vec<String>,
@@ -1135,5 +1152,17 @@ mod tests {
             parsed_select,
             Err(crate::parser::parser::ParserError::UnexpectedEOL)
         )
+    }
+
+    #[test]
+    fn test_select_sql_to_string() {
+        let test_data = "select field, field2 from table1";
+        let parsed_select = parse(test_data).unwrap();
+
+        if let SQLNode::SELECT(select_node) = parsed_select {
+            println!("{}", select_node);
+            let select_node = select_node.to_string();
+            println!("{}", select_node)
+        }
     }
 }
