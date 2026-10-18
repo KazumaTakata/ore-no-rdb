@@ -57,3 +57,6 @@ jobs:
 
       - name: Run index_update_planner tests
         run: RUSTFLAGS="-A warnings" cargo test index_update_planner::tests
+
+      - name: Run parser tests
+        run: RUSTFLAGS="-A warnings" cargo test parser::tests

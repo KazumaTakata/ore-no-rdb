@@ -22,7 +22,7 @@ impl ViewManager {
             view_manager_schema.add_string_field("view_name".to_string(), 10);
             view_manager_schema.add_string_field("view_definition".to_string(), 30);
             let _ = table_manager.borrow_mut().create_table(
-                "view_catelog".to_string(),
+                "view_catalog".to_string(),
                 &view_manager_schema,
                 transaction,
             );
@@ -39,11 +39,11 @@ impl ViewManager {
         let layout = self
             .table_manager
             .borrow()
-            .get_layout("view_catelog".to_string(), transaction.clone())
+            .get_layout("view_catalog".to_string(), transaction.clone())
             .unwrap();
 
         let mut table_scan =
-            TableScan::new("view_catelog".to_string(), transaction.clone(), layout);
+            TableScan::new("view_catalog".to_string(), transaction.clone(), layout);
         table_scan.insert();
         table_scan.set_string("view_name".to_string(), view_name);
         table_scan.set_string("view_definition".to_string(), view_definition);
@@ -59,11 +59,11 @@ impl ViewManager {
         let layout = self
             .table_manager
             .borrow()
-            .get_layout("view_catelog".to_string(), transaction.clone())
+            .get_layout("view_catalog".to_string(), transaction.clone())
             .unwrap();
 
         let mut table_scan =
-            TableScan::new("view_catelog".to_string(), transaction.clone(), layout);
+            TableScan::new("view_catalog".to_string(), transaction.clone(), layout);
         while table_scan.next().unwrap() {
             if table_scan.get_string(TableNameAndFieldName::new(None, "view_name".to_string()))
                 == Some(view_name.clone())
