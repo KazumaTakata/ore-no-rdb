@@ -2,10 +2,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::index::b_tree_page::BTreePage;
-use crate::storage::block::BlockId;
 use crate::query::predicate::Constant;
 use crate::record::record_page::Layout;
 use crate::record::table_scan_v2::RecordID;
+use crate::storage::block::BlockId;
 use crate::tx::transaction_v2::TransactionV2;
 
 pub struct DirectoryEntry {
@@ -19,6 +19,7 @@ pub struct BTreeLeaf {
     search_key: Constant,
     contents: BTreePage,
     current_slot: i32,
+    filename: String,
 }
 
 impl BTreeLeaf {
@@ -28,8 +29,8 @@ impl BTreeLeaf {
         search_key: Constant,
         block_id: BlockId,
     ) -> BTreeLeaf {
+        let filename = block_id.get_file_name().to_string();
         let contents = BTreePage::new(transaction.clone(), block_id, layout.clone());
-
         let current_slot = contents.find_slot_before(search_key.clone());
 
         BTreeLeaf {
@@ -38,6 +39,7 @@ impl BTreeLeaf {
             search_key,
             contents,
             current_slot,
+            filename,
         }
     }
 
@@ -80,7 +82,19 @@ impl BTreeLeaf {
     fn try_overflow(&mut self) -> bool {
         // TODO: Handle overflow by checking if there is a directory entry for the next block and
         // moving to it if necessary
-        true
+        let first_key = self.contents.get_data_value(0);
+        let flag = self.contents.get_flag();
+
+        if !self.search_key.equals(first_key.value) || flag < 0 {
+            return false;
+        }
+
+        self.contents.close();
+        let next_block = BlockId::new(self.filename.clone(), flag as u64);
+        self.contents = BTreePage::new(self.transaction.clone(), next_block, self.layout.clone());
+        self.current_slot = 0;
+
+        return true;
     }
 
     pub fn insert(&mut self, record_id: RecordID) -> Option<DirectoryEntry> {

@@ -9,6 +9,7 @@ use std::{
 use crate::BlockId;
 use crate::Page;
 
+#[derive(Debug)]
 pub struct FileManager {
     pub block_size: usize,
     open_files: Mutex<HashMap<String, Arc<Mutex<File>>>>,

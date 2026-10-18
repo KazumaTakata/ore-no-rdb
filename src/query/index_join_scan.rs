@@ -150,7 +150,7 @@ mod tests {
     use std::{cell::RefCell, path::Path, rc::Rc};
 
     #[test]
-    fn test_view_mgr() {
+    fn test_index_json_scan() {
         let test_dir_name = format!("test_data_{}", uuid::Uuid::new_v4());
         let test_dir = Path::new(&test_dir_name);
         let block_size = 400;

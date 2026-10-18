@@ -1,5 +1,6 @@
 use crate::constant::{INTEGER_BYTE_SIZE, MAX_BYTE_SIZE_PER_CHAR};
 
+#[derive(Debug)]
 pub struct Page {
     data: Vec<u8>,
 }
