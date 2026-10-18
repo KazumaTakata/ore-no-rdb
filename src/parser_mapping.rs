@@ -176,6 +176,7 @@ pub fn sql_node_to_parsed_sql(sql_node: SQLNode) -> ParsedSQL {
         }),
         SQLNode::CreateViewNode(create_view) => ParsedSQL::CreateView(ViewData {
             view_name: create_view.view_name,
+            view_definition_string: create_view.query.to_string(),
             view_definition: sql_select_node_to_parsed_sql(create_view.query),
         }),
     }

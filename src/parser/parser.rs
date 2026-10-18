@@ -35,6 +35,18 @@ pub struct SelectNode {
     pub predicate: Option<Predicate>,
 }
 
+impl fmt::Display for Expression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Expression::Field(field_name) => write!(f, "{}", field_name),
+            Expression::Constant(constant) => match constant {
+                Constant::Integer(value) => write!(f, "{}", value),
+                Constant::String(value) => write!(f, "{}", value),
+            },
+        }
+    }
+}
+
 impl fmt::Display for SelectNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "select ")?;
@@ -48,7 +60,16 @@ impl fmt::Display for SelectNode {
                 write!(f, "{}", col.field_name)?;
             }
         }
-        write!(f, " from {}", self.tables.join(", "))
+        write!(f, " from {}", self.tables.join(", "))?;
+
+        if let Some(predicate) = self.predicate.as_ref() {
+            write!(f, " where ")?;
+            write!(f, "{}", predicate.term.left_expression.to_string())?;
+            write!(f, " = ")?;
+            write!(f, "{}", predicate.term.right_expression.to_string())?;
+        }
+
+        fmt::Result::Ok(())
     }
 }
 
@@ -313,11 +334,17 @@ fn parse_idents_of_fields(
                                 field_name: ident_2.clone(),
                             })
                         } else {
-                            fields_vec.push(TableNameAndFieldName {
-                                table_name: None,
-                                field_name: ident.clone(),
-                            })
+                            return Err(ParserError::ParseError(ParseError {
+                                invalid_token: next_token.token.clone(),
+                                expected_token: vec![TokenKind::IDENT],
+                                position: next_token.pos,
+                            }));
                         }
+                    } else {
+                        fields_vec.push(TableNameAndFieldName {
+                            table_name: None,
+                            field_name: ident.clone(),
+                        })
                     }
                 }
             }
@@ -1145,7 +1172,7 @@ mod tests {
 
     #[test]
     fn test_select_sql_parse_error_2() {
-        let test_data = "select field, field2 from table where a = ";
+        let test_data = "select field, field2 from table1 where a = ";
         let parsed_select = parse(test_data);
         println!("{:?}", parsed_select);
         assert_eq!(
@@ -1156,13 +1183,30 @@ mod tests {
 
     #[test]
     fn test_select_sql_to_string() {
-        let test_data = "select field, field2 from table1";
+        let test_data = "select field,         field2 from table1";
         let parsed_select = parse(test_data).unwrap();
 
         if let SQLNode::SELECT(select_node) = parsed_select {
-            println!("{}", select_node);
             let select_node = select_node.to_string();
-            println!("{}", select_node)
+            assert_eq!(select_node, "select field, field2 from table1")
+        } else {
+            panic!("expected SelectNode got: {:?}", parsed_select)
+        }
+    }
+
+    #[test]
+    fn test_select_sql_to_string_2() {
+        let test_data = "select field,         field2 from table1  where field = 3";
+        let parsed_select = parse(test_data).unwrap();
+
+        if let SQLNode::SELECT(select_node) = parsed_select {
+            let select_node = select_node.to_string();
+            assert_eq!(
+                select_node,
+                "select field, field2 from table1 where field = 3"
+            )
+        } else {
+            panic!("expected SelectNode got: {:?}", parsed_select)
         }
     }
 }

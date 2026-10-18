@@ -119,15 +119,11 @@ fn handle_parsed_sql(
             };
         }
         ParsedSQL::CreateView(create_view_data) => {
-            //
-            // let result = metadata_manager.create_view(
-            //
-            //     create_view_data.view_name,
-            //
-            //     create_view_data.view_definition,
-            //     transaction.clone(),
-            // );
-            //
+            let _result = metadata_manager.create_view(
+                create_view_data.view_name.to_string(),
+                create_view_data.view_definition_string.to_string(),
+                transaction.clone(),
+            );
         }
         ParsedSQL::Update(update_data) => {
             // handle_update_query(update_data.clone(), metadata_manager, transaction.clone());
