@@ -210,13 +210,19 @@ pub struct AggregateFunctionInfo {
 pub struct ViewData {
     pub view_name: String,
     pub view_definition: QueryData,
+    pub view_definition_string: String,
 }
 
 impl ViewData {
-    pub fn new(view_name: String, view_definition: QueryData) -> Self {
+    pub fn new(
+        view_name: String,
+        view_definition: QueryData,
+        view_definition_string: String,
+    ) -> Self {
         ViewData {
             view_name,
             view_definition,
+            view_definition_string,
         }
     }
 

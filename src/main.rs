@@ -118,6 +118,13 @@ fn handle_parsed_sql(
                 return;
             };
         }
+        ParsedSQL::CreateView(create_view_data) => {
+            let _result = metadata_manager.create_view(
+                create_view_data.view_name.to_string(),
+                create_view_data.view_definition_string.to_string(),
+                transaction.clone(),
+            );
+        }
         ParsedSQL::Update(update_data) => {
             // handle_update_query(update_data.clone(), metadata_manager, transaction.clone());
             let result = index_update_planner.execute_modify(
@@ -189,7 +196,6 @@ fn handle_parsed_sql(
                 }
             }
         }
-        _ => panic!("Expected a Query variant from parse_sql"),
     };
     // ここにParsedSQLを処理するコードを追加
 }
