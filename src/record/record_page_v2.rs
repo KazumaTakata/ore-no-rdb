@@ -211,7 +211,7 @@ mod tests {
         fs::remove_file,
         path::Path,
         rc::Rc,
-        sync::{Arc, Mutex},
+        sync::{Arc, Condvar, Mutex},
     };
 
     use rand::Rng;
@@ -251,6 +251,7 @@ mod tests {
             buffer_manager.clone(),
             lock_table.clone(),
             log_manager.clone(),
+            Arc::new(Condvar::new()),
         )));
 
         let mut schema = TableSchema::new();

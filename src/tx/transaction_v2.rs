@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 
 use crate::buffer::error::BufferError;
 use crate::storage::block::BlockId;
@@ -33,8 +33,9 @@ impl InnerTransactionV2 {
         file_manager: Arc<Mutex<FileManager>>,
         buffer_manager: Arc<Mutex<BufferManagerV2>>,
         lock_table: Arc<Mutex<LockTable>>,
+        condvar: Arc<Condvar>,
     ) -> InnerTransactionV2 {
-        let concurrency_manager = ConcurrencyManagerV2::new(lock_table.clone());
+        let concurrency_manager = ConcurrencyManagerV2::new(lock_table.clone(), condvar);
         let buffer_list = BufferListV2::new(buffer_manager.clone());
 
         InnerTransactionV2 {
@@ -170,12 +171,19 @@ impl TransactionV2 {
         buffer_manager: Arc<Mutex<BufferManagerV2>>,
         lock_table: Arc<Mutex<LockTable>>,
         log_manager: Arc<Mutex<LogManagerV2>>,
+        condvar: Arc<Condvar>,
     ) -> TransactionV2 {
         let recovery_manager =
             RecoveryManager::new(tx_num, buffer_manager.clone(), log_manager.clone());
 
         TransactionV2 {
-            inner: InnerTransactionV2::new(tx_num, file_manager, buffer_manager, lock_table),
+            inner: InnerTransactionV2::new(
+                tx_num,
+                file_manager,
+                buffer_manager,
+                lock_table,
+                condvar,
+            ),
             recovery_manager,
         }
     }
@@ -243,9 +251,15 @@ impl TransactionV2 {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::remove_file, path::Path};
+    use std::{
+        fs::remove_file,
+        path::Path,
+        sync::Condvar,
+        thread::{self, sleep},
+        time::Duration,
+    };
 
-    use crate::storage::log_manager_v2::LogManagerV2;
+    use crate::storage::{file_manager, log_manager_v2::LogManagerV2};
 
     use super::*;
 
@@ -276,6 +290,7 @@ mod tests {
             buffer_manager.clone(),
             lock_table.clone(),
             log_manager.clone(),
+            Arc::new(Condvar::new()),
         );
 
         let block_id_1 = BlockId::new(test_file_name.clone(), 1);
@@ -298,6 +313,7 @@ mod tests {
             buffer_manager.clone(),
             lock_table.clone(),
             log_manager.clone(),
+            Arc::new(Condvar::new()),
         );
 
         transaction2.pin(block_id_1.clone());
@@ -318,6 +334,7 @@ mod tests {
             buffer_manager.clone(),
             lock_table.clone(),
             log_manager.clone(),
+            Arc::new(Condvar::new()),
         );
 
         transaction3.pin(block_id_1.clone());
@@ -336,6 +353,7 @@ mod tests {
             buffer_manager.clone(),
             lock_table.clone(),
             log_manager.clone(),
+            Arc::new(Condvar::new()),
         );
 
         transaction4.pin(block_id_1.clone());
@@ -347,5 +365,166 @@ mod tests {
         remove_file(test_dir.join(log_file_name)).unwrap();
 
         Ok(())
+    }
+
+    #[test]
+    fn test_transaction_concurrent() -> Result<(), LogError> {
+        let test_dir = Path::new("test_data");
+
+        let log_file_name = format!("log_file_{}.txt", uuid::Uuid::new_v4());
+
+        let block_size = 400;
+        let file_manager = Arc::new(Mutex::new(FileManager::new(test_dir, block_size)));
+        let log_manager = Arc::new(Mutex::new(LogManagerV2::new(
+            file_manager.clone(),
+            log_file_name.clone(),
+        )?));
+        let buffer_manager = Arc::new(Mutex::new(BufferManagerV2::new(
+            10,
+            file_manager.clone(),
+            log_manager.clone(),
+        )));
+        let lock_table = Arc::new(Mutex::new(LockTable::new()));
+
+        let test_file_name = format!("test_file_{}.txt", uuid::Uuid::new_v4());
+
+        let condvar = Arc::new(Condvar::new());
+
+        let mut threads = vec![];
+
+        {
+            let file_manager = file_manager.clone();
+            let buffer_manager = buffer_manager.clone();
+            let lock_table = lock_table.clone();
+            let log_manager = log_manager.clone();
+            let condvar = condvar.clone();
+
+            let test_file_name = test_file_name.clone();
+
+            let thread1 = thread::spawn(move || {
+                let mut transaction = TransactionV2::new(
+                    1,
+                    file_manager,
+                    buffer_manager,
+                    lock_table,
+                    log_manager,
+                    condvar,
+                );
+
+                let block_id_1 = BlockId::new(test_file_name.clone(), 0);
+                let block_id_2 = BlockId::new(test_file_name.clone(), 1);
+
+                transaction.pin(block_id_1.clone());
+                transaction.pin(block_id_2.clone());
+
+                println!("Tx 1: request slock 1");
+                let value_1 = transaction.get_integer(block_id_1.clone(), 0);
+                println!("Tx 1: receive slock 1: {}", value_1);
+
+                sleep(Duration::from_secs(1));
+
+                println!("Tx 1: request slock 2");
+                let value_2 = transaction.get_integer(block_id_2.clone(), 0);
+                println!("Tx 1: receive slock 2: {}", value_2);
+
+                transaction.commit();
+            });
+
+            threads.push(thread1);
+        }
+
+        {
+            let file_manager = file_manager.clone();
+            let buffer_manager = buffer_manager.clone();
+            let lock_table = lock_table.clone();
+            let log_manager = log_manager.clone();
+            let condvar = condvar.clone();
+
+            let test_file_name = test_file_name.clone();
+
+            let thread1 = thread::spawn(move || {
+                let mut transaction = TransactionV2::new(
+                    2,
+                    file_manager,
+                    buffer_manager,
+                    lock_table,
+                    log_manager,
+                    condvar,
+                );
+
+                let block_id_1 = BlockId::new(test_file_name.clone(), 0);
+                let block_id_2 = BlockId::new(test_file_name.clone(), 1);
+
+                transaction.pin(block_id_1.clone());
+                transaction.pin(block_id_2.clone());
+
+                sleep(Duration::from_millis(500));
+
+                println!("Tx 2: request slock 1");
+                transaction.set_integer(block_id_1.clone(), 0, 3, false);
+                println!("Tx 2: receive slock 1");
+
+                sleep(Duration::from_secs(5));
+
+                println!("Tx 2: request slock 2");
+                transaction.set_integer(block_id_2.clone(), 0, 5, false);
+                println!("Tx 2: receive slock 2");
+
+                transaction.commit();
+            });
+
+            threads.push(thread1);
+        }
+
+        {
+            let file_manager = file_manager.clone();
+            let buffer_manager = buffer_manager.clone();
+            let lock_table = lock_table.clone();
+            let log_manager = log_manager.clone();
+            let condvar = condvar.clone();
+
+            let test_file_name = test_file_name.clone();
+
+            let thread1 = thread::spawn(move || {
+                sleep(Duration::from_secs(4));
+
+                let mut transaction = TransactionV2::new(
+                    1,
+                    file_manager,
+                    buffer_manager,
+                    lock_table,
+                    log_manager,
+                    condvar,
+                );
+
+                let block_id_1 = BlockId::new(test_file_name.clone(), 0);
+                let block_id_2 = BlockId::new(test_file_name.clone(), 1);
+
+                transaction.pin(block_id_1.clone());
+                transaction.pin(block_id_2.clone());
+
+                println!("Tx 3: request slock 1");
+                let value_1 = transaction.get_integer(block_id_1.clone(), 0);
+                assert_eq!(value_1, 3);
+                println!("Tx 3: receive slock 1: {}", value_1);
+
+                sleep(Duration::from_secs(1));
+
+                println!("Tx 3: request slock 2");
+                let value_2 = transaction.get_integer(block_id_2.clone(), 0);
+                assert_eq!(value_2, 5);
+                println!("Tx 3: receive slock 2: {}", value_2);
+
+                transaction.commit();
+            });
+
+            threads.push(thread1);
+        }
+
+        for thread in threads {
+            thread.join().unwrap();
+        }
+
+        return Ok(());
     }
 }
