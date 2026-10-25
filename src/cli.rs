@@ -1,0 +1,348 @@
+use nu_ansi_term::{Color, Style};
+use reedline::{
+    default_vi_insert_keybindings, default_vi_normal_keybindings, ColumnarMenu, DefaultCompleter,
+    DefaultHinter, DefaultPrompt, ExampleHighlighter, FileBackedHistory, KeyCode, KeyModifiers,
+    MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Signal, Vi,
+};
+use std::cell::RefCell;
+use std::io::Result;
+use std::path::Path;
+use std::rc::Rc;
+use std::vec;
+
+use crate::parser::parser::{parse, ErrorResport, TableNameAndFieldName};
+use crate::parser_mapping::sql_node_to_parsed_sql;
+use crate::Args;
+use clap::{Arg, Parser};
+
+use crate::database::Database;
+use crate::metadata::metadata_manager::{MetadataManager, ValidateSQLResponse};
+use crate::query::index_update_planner::IndexUpdatePlanner;
+use crate::query::parser::{ParsedSQL, QueryData};
+use crate::query::plan_v2::{create_query_plan, execute_create_table};
+use crate::query::predicate::ConstantValue;
+use crate::query::predicate_v3::PredicateV2;
+use crate::query::query_handler::handle_select_query;
+use crate::tx::transaction_v2::TransactionV2;
+
+pub fn handle_parsed_sql(
+    parsed_sql: &ParsedSQL,
+    metadata_manager: &mut MetadataManager,
+    transaction: Rc<RefCell<TransactionV2>>,
+    index_update_planner: &mut IndexUpdatePlanner,
+) -> () {
+    match parsed_sql {
+        ParsedSQL::Query(select_query) => {
+            handle_select_query(select_query.clone(), metadata_manager, transaction.clone());
+        }
+        ParsedSQL::Explain(query_data) => {
+            let table_exist =
+                metadata_manager.validate_select_sql(&query_data, transaction.clone());
+
+            match table_exist {
+                ValidateSQLResponse::FieldNotFound(field_name) => {
+                    println!("field {} does not exists", field_name);
+                    return;
+                }
+                ValidateSQLResponse::TableNotFound(table_name) => {
+                    println!("table {} does not exists", table_name);
+                    return;
+                }
+                ValidateSQLResponse::Ok => {}
+            }
+
+            let plan =
+                create_query_plan(&query_data, transaction.clone(), metadata_manager).unwrap();
+
+            let plan_tree = plan.get_child_plans();
+            println!("Query Plan:");
+            plan_tree.print_tree();
+        }
+        ParsedSQL::Insert(insert_data) => {
+            // execute_insert(transaction.clone(), metadata_manager, insert_data.clone());
+            let result = index_update_planner.execute_insert(
+                insert_data.clone(),
+                transaction.clone(),
+                metadata_manager,
+            );
+
+            let Ok(()) = result else {
+                eprintln!("Error executing insert: {:?}", result.err());
+                return;
+            };
+
+            transaction.borrow_mut().commit();
+        }
+        ParsedSQL::Delete(delete_data) => {
+            let result = index_update_planner.execute_delete(
+                delete_data.clone(),
+                transaction.clone(),
+                metadata_manager,
+            );
+
+            let Ok(()) = result else {
+                eprintln!("Error executing delete: {:?}", result.err());
+                return;
+            };
+
+            transaction.borrow_mut().commit();
+        }
+        ParsedSQL::CreateTable(create_table_data) => {
+            let result = execute_create_table(
+                transaction.clone(),
+                metadata_manager,
+                create_table_data.clone(),
+            );
+            let Ok(()) = result else {
+                eprintln!("Error executing create table: {:?}", result.err());
+                return;
+            };
+        }
+        ParsedSQL::CreateView(create_view_data) => {
+            let _result = metadata_manager.create_view(
+                create_view_data.view_name.to_string(),
+                create_view_data.view_definition_string.to_string(),
+                transaction.clone(),
+            );
+        }
+        ParsedSQL::Update(update_data) => {
+            // handle_update_query(update_data.clone(), metadata_manager, transaction.clone());
+            let result = index_update_planner.execute_modify(
+                update_data.clone(),
+                transaction.clone(),
+                metadata_manager,
+            );
+            let Ok(()) = result else {
+                eprintln!("Error executing update: {:?}", result.err());
+                return;
+            };
+        }
+        ParsedSQL::DescribeTable { table_name } => {
+            let layout = metadata_manager
+                .get_layout(table_name.clone(), transaction.clone())
+                .unwrap();
+
+            println!("schema for table '{:?}'", layout.schema);
+        }
+        ParsedSQL::CreateIndex(create_index_data) => {
+            metadata_manager.create_index(
+                create_index_data.index_name.clone(),
+                create_index_data.table_name.clone(),
+                create_index_data.field_name.clone(),
+                transaction.clone(),
+            );
+        }
+
+        ParsedSQL::ShowTables => {
+            let select_query = QueryData::new(
+                vec!["table_catalog".to_string()],
+                vec![TableNameAndFieldName::new(None, "table_name".to_string())],
+                Some(PredicateV2::new(vec![])),
+                vec![],
+                vec![],
+                vec![],
+            );
+
+            let mut plan =
+                create_query_plan(&select_query, transaction.clone(), metadata_manager).unwrap();
+            let mut scan = plan.open().unwrap();
+            scan.move_to_before_first();
+            while scan.next().unwrap() {
+                let results = select_query
+                    .field_name_list
+                    .iter()
+                    .map(|field_name| {
+                        let value = scan.get_value(field_name.clone());
+                        return value;
+                    })
+                    .filter(|v| {
+                        if let Some(constant_value) = v {
+                            return match constant_value.clone() {
+                                ConstantValue::String(s) => {
+                                    s != "table_catalog"
+                                        && s != "field_catalog"
+                                        && s != "index_catalog"
+                                }
+                                _ => true,
+                            };
+                        }
+                        return false;
+                    })
+                    // 空になったvectorは除外
+                    .collect::<Vec<_>>();
+
+                if results.len() == 0 {
+                    continue;
+                }
+            }
+        }
+    };
+    // ここにParsedSQLを処理するコードを追加
+}
+pub fn handle_cli(args: Args) -> Result<()> {
+    let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+    let directory_path = Path::new(&directory_path_name);
+    let database = Database::new(directory_path);
+
+    let transaction = database.new_transaction(1);
+    let metadata_manager = Rc::new(RefCell::new(
+        MetadataManager::new(transaction.clone()).unwrap(),
+    ));
+
+    let mut index_update_planner = crate::query::index_update_planner::IndexUpdatePlanner::new();
+
+    if let Some(file_path) = args.file {
+        let sql = std::fs::read_to_string(file_path).expect("Failed to read SQL file");
+        let sql_node = parse(&sql).unwrap();
+        let parsed_sql = sql_node_to_parsed_sql(sql_node);
+        handle_parsed_sql(
+            &parsed_sql,
+            &mut metadata_manager.borrow_mut(),
+            transaction.clone(),
+            &mut index_update_planner,
+        );
+        return Ok(());
+    }
+
+    let commands = vec![
+        "select".into(),
+        "insert".into(),
+        "update".into(),
+        "delete".into(),
+        "create".into(),
+        "table".into(),
+        "index".into(),
+        "view".into(),
+        "from".into(),
+        "into".into(),
+        "where".into(),
+        "values".into(),
+        "set".into(),
+        "and".into(),
+        "or".into(),
+        "on".into(),
+        "as".into(),
+        "order".into(),
+        "by".into(),
+        "group".into(),
+        "having".into(),
+        "integer".into(),
+        "varchar".into(),
+        "show".into(),
+        "tables".into(),
+        "describe".into(),
+        "max".into(),
+        "min".into(),
+        "count".into(),
+        "sum".into(),
+        "avg".into(),
+    ];
+
+    // 2. 補完器(単純なprefix一致)
+    let completer = Box::new(DefaultCompleter::new_with_wordlen(commands.clone(), 2));
+
+    // 3. 補完メニュー(Tabで開くカラム表示)
+    let completion_menu = Box::new(
+        ColumnarMenu::default()
+            .with_name("completion_menu")
+            .with_columns(2)
+            .with_column_padding(2),
+    );
+
+    // 4. シンタックスハイライト
+    let highlighter = Box::new(ExampleHighlighter::new(commands));
+
+    // 5. 履歴ベースのオートサジェスト(fish風の灰色予測)
+    let hinter =
+        Box::new(DefaultHinter::default().with_style(Style::new().italic().fg(Color::DarkGray)));
+
+    // 6. ファイルに保存される履歴
+    let history = Box::new(
+        FileBackedHistory::with_file(1000, "history.txt".into())
+            .expect("Error configuring history"),
+    );
+
+    // 7. Vi モードのキーバインド (insert / normal の2モード)
+    let mut insert_keybindings = default_vi_insert_keybindings();
+    let normal_keybindings = default_vi_normal_keybindings();
+
+    // Tab で補完メニューを開く / 開いている時は次候補へ (insert モードのみ)
+    insert_keybindings.add_binding(
+        KeyModifiers::NONE,
+        KeyCode::Tab,
+        ReedlineEvent::UntilFound(vec![
+            ReedlineEvent::Menu("completion_menu".to_string()),
+            ReedlineEvent::MenuNext,
+        ]),
+    );
+
+    let edit_mode = Box::new(Vi::new(insert_keybindings, normal_keybindings));
+
+    // 8. すべてを組み立てる
+    let mut line_editor = Reedline::create()
+        .with_completer(completer)
+        .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
+        .with_highlighter(highlighter)
+        .with_hinter(hinter)
+        .with_history(history)
+        .with_edit_mode(edit_mode)
+        .with_quick_completions(true) // 一意な候補を即補完
+        .with_partial_completions(true) // 共通部分まで補完
+        .with_ansi_colors(true);
+
+    let prompt = DefaultPrompt::default();
+
+    loop {
+        match line_editor.read_line(&prompt) {
+            Ok(Signal::Success(buffer)) => {
+                let buffer = buffer.trim();
+                if buffer == "quit" {
+                    break;
+                }
+
+                if buffer.is_empty() {
+                    continue;
+                }
+
+                let parsed_sql = parse(buffer);
+
+                match parsed_sql {
+                    Ok(sql) => {
+                        let parsed_sql = sql_node_to_parsed_sql(sql);
+                        handle_parsed_sql(
+                            &parsed_sql,
+                            &mut metadata_manager.borrow_mut(),
+                            transaction.clone(),
+                            &mut index_update_planner,
+                        );
+                    }
+                    Err(err) => {
+                        let error_report = ErrorResport {
+                            err: &err,
+                            src: buffer,
+                        };
+                        println!("{}", error_report);
+                    }
+                }
+            }
+            Ok(Signal::CtrlC) => {
+                // 入力中の文字列は reedline が破棄して空のバッファで戻ってくるので、
+                // そのまま次のプロンプトへ進めば良い
+                continue;
+            }
+            Ok(Signal::CtrlD) => {
+                println!("終了します");
+                break;
+            }
+            Ok(_) => {
+                break;
+            }
+            Err(e) => {
+                eprintln!("エラー: {e}");
+                break;
+            }
+        }
+    }
+    Ok(())
+    // log_manager.flush();
+}
