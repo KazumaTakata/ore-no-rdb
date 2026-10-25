@@ -1,11 +1,11 @@
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::{cell::RefCell, rc::Rc};
 
 use crate::storage::file_manager::FileManager;
 use crate::{
-    buffer::buffer_manager_v2::BufferManagerV2, tx::concurrency_manager::LockTable,
-    storage::log_manager_v2::LogManagerV2, tx::transaction_v2::TransactionV2,
+    buffer::buffer_manager_v2::BufferManagerV2, storage::log_manager_v2::LogManagerV2,
+    tx::concurrency_manager::LockTable, tx::transaction_v2::TransactionV2,
 };
 
 pub struct Database {
@@ -13,6 +13,7 @@ pub struct Database {
     log_manager: Arc<Mutex<LogManagerV2>>,
     buffer_manager: Arc<Mutex<BufferManagerV2>>,
     file_manager: Arc<Mutex<FileManager>>,
+    condvar: Arc<Condvar>,
 }
 
 impl Database {
@@ -36,6 +37,7 @@ impl Database {
             log_manager,
             buffer_manager,
             file_manager,
+            condvar: Arc::new(Condvar::new()),
         }
     }
 
@@ -46,6 +48,7 @@ impl Database {
             self.buffer_manager.clone(),
             self.lock_table.clone(),
             self.log_manager.clone(),
+            self.condvar.clone(),
         )))
     }
 }

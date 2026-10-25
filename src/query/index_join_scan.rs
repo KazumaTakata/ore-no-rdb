@@ -147,7 +147,7 @@ mod tests {
     };
 
     use super::*;
-    use std::{cell::RefCell, path::Path, rc::Rc};
+    use std::{cell::RefCell, path::Path, rc::Rc, sync::Condvar};
 
     #[test]
     fn test_index_json_scan() {
@@ -177,6 +177,7 @@ mod tests {
             buffer_manager.clone(),
             lock_table.clone(),
             log_manager.clone(),
+            Arc::new(Condvar::new()),
         )));
 
         let table_manager = TableManagerV2::new(transaction.clone(), true);

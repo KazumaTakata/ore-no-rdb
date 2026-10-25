@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::Duration;
 
 use crate::storage::block::BlockId;
 
@@ -20,13 +21,11 @@ impl LockTable {
         }
 
         let lock = self.get_lock_value(&block_id);
+        println!("lock value: {}", lock);
         self.locks.insert(block_id, lock + 1);
     }
 
     pub fn x_lock(&mut self, block_id: BlockId) {
-        if self.has_other_slock(&block_id) || self.has_xlock(&block_id) {
-            panic!("lock conflict");
-        }
         self.locks.insert(block_id, -1);
     }
 
@@ -38,13 +37,14 @@ impl LockTable {
         return self.get_lock_value(block_id) > 1;
     }
 
-    pub fn unlock(&mut self, block_id: &BlockId) {
+    pub fn unlock(&mut self, block_id: &BlockId, condvar: &Condvar) {
         let val = self.get_lock_value(block_id);
 
         if val > 1 {
             self.locks.insert(block_id.clone(), val - 1);
         } else {
             self.locks.remove(block_id);
+            condvar.notify_all();
         }
     }
 
@@ -68,32 +68,36 @@ impl LockTable {
 pub struct ConcurrencyManagerV2 {
     locks: HashMap<BlockId, String>,
     lock_table: Arc<Mutex<LockTable>>,
+    condvar: Arc<Condvar>,
 }
 
 impl ConcurrencyManagerV2 {
-    pub fn new(lock_table: Arc<Mutex<LockTable>>) -> ConcurrencyManagerV2 {
+    pub fn new(lock_table: Arc<Mutex<LockTable>>, condvar: Arc<Condvar>) -> ConcurrencyManagerV2 {
         let locks: HashMap<BlockId, String> = HashMap::new();
-        ConcurrencyManagerV2 { locks, lock_table }
+        ConcurrencyManagerV2 {
+            locks,
+            lock_table,
+            condvar,
+        }
     }
 
     pub fn s_lock(&mut self, block_id: BlockId) {
         let lock_value = self.locks.get(&block_id);
-        let current_time = std::time::Instant::now();
         if lock_value.is_none() {
-            loop {
-                {
-                    let mut lock_table = self.lock_table.lock().unwrap();
-                    if !lock_table.has_xlock(&block_id) {
-                        lock_table.s_lock(block_id.clone());
-                        self.locks.insert(block_id, "S".to_string());
-                        return;
-                    }
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                if self.lock_table.lock().unwrap().wait_too_long(current_time) {
-                    panic!("lock wait timeout");
-                }
+            let current_time = std::time::Instant::now();
+            let mut lock_table = self.lock_table.lock().unwrap();
+            while lock_table.has_xlock(&block_id) && !lock_table.wait_too_long(current_time) {
+                (lock_table, _) = self
+                    .condvar
+                    .wait_timeout(lock_table, Duration::from_millis(1000))
+                    .unwrap();
             }
+            if lock_table.has_xlock(&block_id) {
+                panic!("failed to slock")
+            }
+            lock_table.s_lock(block_id.clone());
+            self.locks.insert(block_id, "S".to_string());
+            return;
         }
     }
 
@@ -102,20 +106,23 @@ impl ConcurrencyManagerV2 {
             self.s_lock(block_id.clone());
             let current_time = std::time::Instant::now();
 
-            loop {
-                {
-                    let mut lock_table = self.lock_table.lock().unwrap();
-                    if !lock_table.has_other_slock(&block_id) {
-                        lock_table.x_lock(block_id.clone());
-                        self.locks.insert(block_id, "X".to_string());
-                        return;
-                    }
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                if self.lock_table.lock().unwrap().wait_too_long(current_time) {
-                    panic!("lock wait timeout");
-                }
+            let mut lock_table = self.lock_table.lock().unwrap();
+
+            while lock_table.has_other_slock(&block_id) && !lock_table.wait_too_long(current_time) {
+                (lock_table, _) = self
+                    .condvar
+                    .wait_timeout(lock_table, Duration::from_millis(1000))
+                    .unwrap();
             }
+
+            if lock_table.has_other_slock(&block_id) {
+                panic!("failed to xlock")
+            }
+
+            lock_table.x_lock(block_id.clone());
+            self.locks.insert(block_id, "X".to_string());
+
+            return;
         }
     }
 
@@ -133,7 +140,7 @@ impl ConcurrencyManagerV2 {
 
     pub fn release(&mut self) {
         for (key, _value) in self.locks.iter() {
-            self.lock_table.lock().unwrap().unlock(key);
+            self.lock_table.lock().unwrap().unlock(key, &self.condvar);
         }
         self.locks.clear();
     }

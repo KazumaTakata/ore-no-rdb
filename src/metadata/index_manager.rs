@@ -229,7 +229,7 @@ mod tests {
         cell::RefCell,
         path::Path,
         rc::Rc,
-        sync::{Arc, Mutex},
+        sync::{Arc, Condvar, Mutex},
     };
 
     use crate::{
@@ -269,6 +269,7 @@ mod tests {
             buffer_manager.clone(),
             lock_table.clone(),
             log_manager.clone(),
+            Arc::new(Condvar::new()),
         )));
 
         let table_manager = Rc::new(RefCell::new(TableManagerV2::new(transaction.clone(), true)));
