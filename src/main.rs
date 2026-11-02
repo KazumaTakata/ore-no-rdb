@@ -1,14 +1,3 @@
-use nu_ansi_term::{Color, Style};
-use reedline::{
-    default_vi_insert_keybindings, default_vi_normal_keybindings, ColumnarMenu, DefaultCompleter,
-    DefaultHinter, DefaultPrompt, ExampleHighlighter, FileBackedHistory, KeyCode, KeyModifiers,
-    MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Signal, Vi,
-};
-use std::cell::RefCell;
-use std::path::Path;
-use std::rc::Rc;
-use std::vec;
-
 mod buffer;
 mod cli;
 mod constant;
@@ -20,35 +9,39 @@ mod parser;
 mod parser_mapping;
 mod query;
 mod record;
+mod serve;
 mod storage;
 mod tx;
 
+use std::path::Path;
+
 use crate::cli::handle_cli;
-use crate::parser::parser::{parse, ErrorResport, TableNameAndFieldName};
-use crate::parser_mapping::sql_node_to_parsed_sql;
+use crate::database::Database;
+use crate::serve::handle_serve;
 use clap::Parser;
 use storage::block::BlockId;
 use storage::page::Page;
-
-use crate::database::Database;
-use crate::metadata::metadata_manager::{MetadataManager, ValidateSQLResponse};
-use crate::query::index_update_planner::IndexUpdatePlanner;
-use crate::query::parser::{ParsedSQL, QueryData};
-use crate::query::plan_v2::{create_query_plan, execute_create_table};
-use crate::query::predicate::ConstantValue;
-use crate::query::predicate_v3::PredicateV2;
-use crate::query::query_handler::handle_select_query;
-use crate::tx::transaction_v2::TransactionV2;
 
 #[derive(Parser)]
 struct Args {
     /// 名前を指定
     #[arg(short, long)]
     file: Option<String>,
+    #[arg(short, long)]
+    cli: Option<bool>,
 }
 
 fn main() -> std::io::Result<()> {
     let args = Args::parse();
+    let cli = args.cli;
 
-    handle_cli(args)
+    let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
+    let directory_path = Path::new(&directory_path_name);
+    let database = Database::new(directory_path);
+
+    if let Some(_) = cli {
+        return handle_cli(args, &database);
+    }
+
+    return handle_serve(&database);
 }

@@ -1,6 +1,5 @@
 use std::fmt;
 
-use comfy_table::Table;
 
 use crate::parser::tokenizer::{self, Token, TokenKind, TokenWithPos, TokenizationError};
 

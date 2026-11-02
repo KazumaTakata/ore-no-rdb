@@ -1,3 +1,4 @@
+use comfy_table::Table;
 use nu_ansi_term::{Color, Style};
 use reedline::{
     default_vi_insert_keybindings, default_vi_normal_keybindings, ColumnarMenu, DefaultCompleter,
@@ -13,7 +14,6 @@ use std::vec;
 use crate::parser::parser::{parse, ErrorResport, TableNameAndFieldName};
 use crate::parser_mapping::sql_node_to_parsed_sql;
 use crate::Args;
-use clap::{Arg, Parser};
 
 use crate::database::Database;
 use crate::metadata::metadata_manager::{MetadataManager, ValidateSQLResponse};
@@ -33,7 +33,27 @@ pub fn handle_parsed_sql(
 ) -> () {
     match parsed_sql {
         ParsedSQL::Query(select_query) => {
-            handle_select_query(select_query.clone(), metadata_manager, transaction.clone());
+            let (headers, result_vec) =
+                handle_select_query(&select_query, metadata_manager, transaction.clone()).unwrap();
+            let mut table = Table::new();
+            table.set_header(headers);
+
+            for result in result_vec {
+                let result = result.iter().map(|result| {
+                    if let Some(value) = result {
+                        match value {
+                            ConstantValue::Number(n) => n.to_string(),
+                            ConstantValue::String(s) => s.to_string(),
+                            ConstantValue::Null => "".to_string(),
+                        }
+                    } else {
+                        "".to_string()
+                    }
+                });
+                table.add_row(result);
+            }
+
+            println!("{table}");
         }
         ParsedSQL::Explain(query_data) => {
             let table_exist =
@@ -179,11 +199,7 @@ pub fn handle_parsed_sql(
     };
     // ここにParsedSQLを処理するコードを追加
 }
-pub fn handle_cli(args: Args) -> Result<()> {
-    let directory_path_name = format!("test_data_{}", uuid::Uuid::new_v4());
-    let directory_path = Path::new(&directory_path_name);
-    let database = Database::new(directory_path);
-
+pub fn handle_cli(args: Args, database: &Database) -> Result<()> {
     let transaction = database.new_transaction(1);
     let metadata_manager = Rc::new(RefCell::new(
         MetadataManager::new(transaction.clone()).unwrap(),
