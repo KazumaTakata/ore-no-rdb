@@ -68,6 +68,7 @@ impl TableScan {
                 .expect("failed to append block to table file");
             let mut record_page = RecordPage::new(transaction.clone(), layout.clone(), block_id);
             record_page.format();
+
             return TableScan {
                 file_name,
                 table_name,

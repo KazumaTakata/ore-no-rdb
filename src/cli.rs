@@ -52,6 +52,7 @@ pub fn handle_parsed_sql(
                 });
                 table.add_row(result);
             }
+            transaction.borrow_mut().commit();
 
             println!("{table}");
         }

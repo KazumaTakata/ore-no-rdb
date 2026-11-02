@@ -217,6 +217,8 @@ fn handle_connection(stream: TcpStream, database: &Database) -> Result<()> {
                             }
                         };
 
+                        transaction.borrow_mut().commit();
+
                         // let query = read_cstring(&body)?;
                         let row_desc_fields = headers
                             .iter()
