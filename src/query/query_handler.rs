@@ -1,29 +1,28 @@
-use std::{cell::RefCell, rc::Rc, vec};
-
-use comfy_table::Table;
+use std::{cell::RefCell, rc::Rc, string, vec};
 
 use crate::{
     metadata::metadata_manager::{MetadataManager, ValidateSQLResponse},
     parser::parser::TableNameAndFieldName,
     query::{parser::QueryData, plan_v2::create_query_plan, predicate::ConstantValue},
+    record::scan_v2::ScanV2,
     tx::transaction_v2::TransactionV2,
 };
 
 pub fn handle_select_query(
-    select_query: QueryData,
+    select_query: &QueryData,
     metadata_manager: &mut MetadataManager,
     transaction: Rc<RefCell<TransactionV2>>,
-) {
+) -> Result<(Vec<String>, Vec<Vec<Option<ConstantValue>>>), ()> {
     let table_exist = metadata_manager.validate_select_sql(&select_query, transaction.clone());
 
     match table_exist {
         ValidateSQLResponse::FieldNotFound(field_name) => {
             println!("field {} does not exists", field_name);
-            return;
+            return Err(());
         }
         ValidateSQLResponse::TableNotFound(table_name) => {
             println!("table {} does not exists", table_name);
-            return;
+            return Err(());
         }
         ValidateSQLResponse::Ok => {}
     }
@@ -37,7 +36,6 @@ pub fn handle_select_query(
     let mut scan = plan.open().unwrap();
     scan.move_to_before_first();
 
-    let mut result_vec = vec![];
     let mut headers = select_query
         .field_name_list
         .iter()
@@ -66,6 +64,8 @@ pub fn handle_select_query(
 
     headers.extend(aggregate_function_headers);
 
+    let mut result_vec = vec![];
+
     loop {
         match scan.next() {
             Ok(has_next) => {
@@ -79,15 +79,7 @@ pub fn handle_select_query(
                         let value = scan.get_value(field_name.clone());
                         return value;
                     })
-                    .map(|value| match value {
-                        Some(value) => match value {
-                            ConstantValue::String(s) => s,
-                            ConstantValue::Number(i) => i.to_string(),
-                            ConstantValue::Null => "".to_string(),
-                        },
-                        None => "".to_string(),
-                    })
-                    .collect::<Vec<String>>();
+                    .collect::<Vec<Option<ConstantValue>>>();
 
                 result_vec.push(results);
 
@@ -103,15 +95,7 @@ pub fn handle_select_query(
                         ));
                         return value;
                     })
-                    .map(|value| match value {
-                        Some(value) => match value {
-                            ConstantValue::String(s) => s,
-                            ConstantValue::Number(i) => i.to_string(),
-                            ConstantValue::Null => "".to_string(),
-                        },
-                        None => "".to_string(),
-                    })
-                    .collect::<Vec<String>>();
+                    .collect::<Vec<Option<ConstantValue>>>();
 
                 result_vec
                     .last_mut()
@@ -125,14 +109,7 @@ pub fn handle_select_query(
         }
     }
 
-    let mut table = Table::new();
-    table.set_header(headers);
-
-    for result in result_vec {
-        table.add_row(result);
-    }
-
-    println!("{table}");
+    return Ok((headers, result_vec));
 }
 
 #[cfg(test)]
@@ -179,7 +156,7 @@ mod tests {
             aggregate_functions: vec![],
         };
 
-        handle_select_query(select_query, &mut metadata_manager, transaction);
+        handle_select_query(&select_query, &mut metadata_manager, transaction);
     }
     #[test]
     fn test_handle_select_query_2() {
@@ -210,7 +187,7 @@ mod tests {
             aggregate_functions: vec![],
         };
 
-        handle_select_query(select_query, &mut metadata_manager, transaction);
+        handle_select_query(&select_query, &mut metadata_manager, transaction);
     }
 
     #[test]
@@ -245,7 +222,7 @@ mod tests {
             aggregate_functions: vec![],
         };
 
-        handle_select_query(select_query, &mut metadata_manager, transaction);
+        handle_select_query(&select_query, &mut metadata_manager, transaction);
     }
 
     #[test]
@@ -276,12 +253,7 @@ mod tests {
             aggregate_functions: vec![],
         };
 
-        handle_select_query(
-            select_query.clone(),
-            &mut metadata_manager,
-            transaction.clone(),
-        );
-        handle_select_query(select_query.clone(), &mut metadata_manager, transaction);
+        handle_select_query(&select_query, &mut metadata_manager, transaction.clone());
     }
 
     fn delete_temp_files() {
@@ -331,7 +303,7 @@ mod tests {
         };
 
         handle_select_query(
-            select_query.clone(),
+            &select_query.clone(),
             &mut metadata_manager,
             transaction.clone(),
         );
@@ -376,7 +348,7 @@ mod tests {
         };
 
         handle_select_query(
-            select_query.clone(),
+            &select_query.clone(),
             &mut metadata_manager,
             transaction.clone(),
         );

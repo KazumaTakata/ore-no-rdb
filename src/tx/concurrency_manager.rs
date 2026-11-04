@@ -1,3 +1,4 @@
+use std::backtrace::Backtrace;
 use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
@@ -21,11 +22,15 @@ impl LockTable {
         }
 
         let lock = self.get_lock_value(&block_id);
-        println!("lock value: {}", lock);
+        println!("lock value: {}, block_id: {:?}", lock, block_id);
         self.locks.insert(block_id, lock + 1);
     }
 
     pub fn x_lock(&mut self, block_id: BlockId) {
+        if block_id.get_file_name() == "view_catalog.tbl" {
+            println!("x_lock :{}", Backtrace::force_capture());
+        }
+
         self.locks.insert(block_id, -1);
     }
 
@@ -93,7 +98,7 @@ impl ConcurrencyManagerV2 {
                     .unwrap();
             }
             if lock_table.has_xlock(&block_id) {
-                panic!("failed to slock")
+                panic!("failed to slock: {:?}", block_id)
             }
             lock_table.s_lock(block_id.clone());
             self.locks.insert(block_id, "S".to_string());
