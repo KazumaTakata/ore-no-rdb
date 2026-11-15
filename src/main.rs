@@ -1,5 +1,6 @@
 mod buffer;
 mod cli;
+mod cluster;
 mod constant;
 mod database;
 mod error;
@@ -29,6 +30,10 @@ struct Args {
     file: Option<String>,
     #[arg(short, long)]
     cli: Option<bool>,
+    #[arg(short, long)]
+    cluster: Option<bool>,
+    #[arg(short, long)]
+    test_cluster_client: Option<bool>,
 }
 
 fn main() -> std::io::Result<()> {
@@ -41,6 +46,14 @@ fn main() -> std::io::Result<()> {
 
     if let Some(_) = cli {
         return handle_cli(args, &database);
+    }
+
+    if let Some(_) = args.cluster {
+        return handle_cluster();
+    }
+
+    if let Some(_) = args.test_cluster_client {
+        return handle_cluster_client();
     }
 
     return handle_serve(&database);
