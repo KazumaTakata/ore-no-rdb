@@ -17,6 +17,7 @@ mod tx;
 use std::path::Path;
 
 use crate::cli::handle_cli;
+use crate::cluster::{handle_cluster, handle_cluster_test_clinet};
 use crate::database::Database;
 use crate::serve::handle_serve;
 use clap::Parser;
@@ -30,10 +31,10 @@ struct Args {
     file: Option<String>,
     #[arg(short, long)]
     cli: Option<bool>,
-    #[arg(short, long)]
+    #[arg(long)]
     cluster: Option<bool>,
-    #[arg(short, long)]
-    test_cluster_client: Option<bool>,
+    #[arg(long)]
+    cluster_client: Option<bool>,
 }
 
 fn main() -> std::io::Result<()> {
@@ -49,11 +50,13 @@ fn main() -> std::io::Result<()> {
     }
 
     if let Some(_) = args.cluster {
-        return handle_cluster();
+        handle_cluster().unwrap();
+        return Ok(());
     }
 
-    if let Some(_) = args.test_cluster_client {
-        return handle_cluster_client();
+    if let Some(_) = args.cluster_client {
+        handle_cluster_test_clinet().unwrap();
+        return Ok(());
     }
 
     return handle_serve(&database);
