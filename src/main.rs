@@ -9,6 +9,7 @@ mod metadata;
 mod parser;
 mod parser_mapping;
 mod query;
+mod raft;
 mod record;
 mod serve;
 mod storage;
