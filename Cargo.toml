@@ -15,3 +15,11 @@ uuid = { version = "1.19.0", features = ["v4"] }
 reedline = "0.47.0"
 nu-ansi-term = "0.50"
 regex = "1.13.1"
+tonic = "*"
+prost = "0.14"
+tonic-prost = "*"
+chrono = "*"
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+
+[build-dependencies]
+tonic-prost-build = "*"
